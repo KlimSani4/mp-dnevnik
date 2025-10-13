@@ -44,4 +44,4 @@
 
 Данный проект был создан в рамках проектной деятелььности под руководством Чернова В. М.
 Идея и реализация: 
-@thehaffk[https://github.com/thehaffk], @whynotfu[https://github.com/whynotfu] @plaguess[https://github.com/plaguess]
+[thehaffk](https://github.com/thehaffk), [whynotfu](https://github.com/whynotfu) [plaguess](https://github.com/plaguess)
