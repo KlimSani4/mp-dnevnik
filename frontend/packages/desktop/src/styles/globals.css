@@ -5,6 +5,7 @@
 @layer base {
   html {
     @apply antialiased;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -14,11 +15,13 @@
 }
 
 @layer components {
+  /* Buttons */
   .btn {
     @apply inline-flex items-center justify-center gap-2;
-    @apply px-4 py-2 rounded-lg font-medium;
+    @apply px-4 py-2 rounded-lg font-medium text-sm;
     @apply transition-colors duration-150;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply active:scale-[0.98];
   }
 
   .btn-primary {
@@ -34,16 +37,120 @@
     @apply dark:hover:bg-surface-700;
   }
 
+  .btn-ghost {
+    @apply text-surface-600 hover:bg-surface-100;
+    @apply dark:text-surface-400 dark:hover:bg-surface-800;
+  }
+
+  .btn-danger {
+    @apply bg-danger-500 text-white;
+    @apply hover:bg-danger-600;
+  }
+
+  .btn-success {
+    @apply bg-success-500 text-white;
+    @apply hover:bg-success-600;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  .btn-icon {
+    @apply p-2;
+  }
+
+  /* Cards */
   .card {
-    @apply bg-white rounded-xl border border-surface-200;
+    @apply bg-white rounded-xl border border-surface-200 p-4;
     @apply dark:bg-surface-800 dark:border-surface-700;
   }
 
+  .card-hover {
+    @apply card cursor-pointer;
+    @apply hover:border-surface-300 hover:shadow-sm;
+    @apply dark:hover:border-surface-600;
+    @apply transition-all duration-150;
+  }
+
+  /* Inputs */
   .input {
-    @apply w-full px-3 py-2 rounded-lg;
+    @apply w-full px-3 py-2 rounded-lg text-sm;
     @apply bg-surface-50 border border-surface-200;
     @apply placeholder:text-surface-400;
     @apply focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500;
     @apply dark:bg-surface-800 dark:border-surface-700;
+    @apply dark:placeholder:text-surface-500;
+  }
+
+  /* Badges / Tags */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+
+  .badge-urgent {
+    @apply bg-danger-100 text-danger-600;
+  }
+
+  .badge-high {
+    @apply bg-warning-100 text-warning-600;
+  }
+
+  .badge-normal {
+    @apply bg-info-100 text-info-600;
+  }
+
+  .badge-success {
+    @apply bg-success-100 text-success-600;
+  }
+
+  .badge-verified {
+    @apply bg-success-50 text-success-700 border border-success-500/20;
+  }
+
+  /* Mobile tap target */
+  .tap-target {
+    @apply min-w-[44px] min-h-[44px];
+  }
+
+  /* Scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.surface.300') transparent;
+  }
+
+  .dark .scrollbar-thin {
+    scrollbar-color: theme('colors.surface.600') transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: theme('colors.surface.300');
+    border-radius: 3px;
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: theme('colors.surface.600');
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply h-2 bg-surface-100 rounded-full overflow-hidden;
+    @apply dark:bg-surface-700;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-500;
   }
 }

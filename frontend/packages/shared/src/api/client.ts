@@ -22,7 +22,8 @@ export class ApiClient {
     path: string,
     options: {
       body?: unknown
-      params?: Record<string, string | number | boolean | undefined>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      params?: Record<string, any>
       auth?: boolean
     } = {}
   ): Promise<T> {
@@ -78,7 +79,8 @@ export class ApiClient {
     return data as T
   }
 
-  get<T>(path: string, params?: Record<string, string | number | boolean | undefined>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  get<T>(path: string, params?: Record<string, any>) {
     return this.request<T>('GET', path, { params })
   }
 
