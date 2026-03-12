@@ -6,6 +6,7 @@ import {
   createScheduleApi,
   createAssignmentsApi,
   createTasksApi,
+  createDashboardApi,
 } from './endpoints'
 
 export { ApiClient, ApiClientError, ValidationClientError } from './client'
@@ -21,6 +22,7 @@ export function createNexoraApi(config: ApiClientConfig) {
     schedule: createScheduleApi(client),
     assignments: createAssignmentsApi(client),
     tasks: createTasksApi(client),
+    dashboard: createDashboardApi(client),
   }
 }
 

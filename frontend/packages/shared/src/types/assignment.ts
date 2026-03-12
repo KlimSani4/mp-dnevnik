@@ -45,6 +45,8 @@ export interface AssignmentSearchParams {
   group_id: string
   subject_id?: string
   upcoming_only?: boolean
+  search?: string
+  priority?: string
   offset?: number
   limit?: number
 }
@@ -63,4 +65,13 @@ export interface TaskUpdateRequest {
 export interface TaskSearchParams {
   group_id: string
   state?: TaskState
+}
+
+export interface BulkTaskUpdateItem {
+  assignment_id: string
+  state: TaskState
+}
+
+export interface BulkTaskUpdateRequest {
+  updates: BulkTaskUpdateItem[]
 }

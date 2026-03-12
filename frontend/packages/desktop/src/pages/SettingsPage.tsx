@@ -74,7 +74,7 @@ export function SettingsPage() {
                     : 'text-surface-600 hover:bg-surface-100 dark:text-surface-400 dark:hover:bg-surface-700'
                 )}
               >
-                <SIcon className="w-4.5 h-4.5" />
+                <SIcon className="w-4 h-4" />
                 {label}
               </button>
             ))}

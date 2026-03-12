@@ -11,6 +11,7 @@ import type {
   GroupCreateRequest,
   GroupUpdateRequest,
   GroupSearchParams,
+  Subject,
   DaySchedule,
   ScheduleEntry,
   ScheduleParams,
@@ -23,12 +24,18 @@ import type {
   Task,
   TaskUpdateRequest,
   TaskSearchParams,
+  BulkTaskUpdateRequest,
+  DashboardResponse,
+  DashboardParams,
 } from '../types'
 
 export function createAuthApi(client: ApiClient) {
   return {
     loginWithTelegram(data: TelegramAuthRequest) {
       return client.post<AuthTokens>('/auth/telegram', data)
+    },
+    devLogin(data: { telegram_id: string }) {
+      return client.post<AuthTokens>('/auth/dev', data)
     },
     refresh(data: RefreshTokenRequest) {
       return client.post<AuthTokens>('/auth/refresh', data)
@@ -78,6 +85,9 @@ export function createGroupsApi(client: ApiClient) {
     },
     verify(code: string, userId: string) {
       return client.post<void>(`/groups/${code}/verify/${userId}`)
+    },
+    getSubjects(code: string) {
+      return client.get<Subject[]>(`/groups/${code}/subjects`)
     },
   }
 }
@@ -132,6 +142,17 @@ export function createTasksApi(client: ApiClient) {
     },
     update(assignmentId: string, data: TaskUpdateRequest) {
       return client.patch<Task>(`/tasks/${assignmentId}`, data)
+    },
+    bulkUpdate(data: BulkTaskUpdateRequest) {
+      return client.patch<Task[]>('/tasks/bulk', data)
+    },
+  }
+}
+
+export function createDashboardApi(client: ApiClient) {
+  return {
+    get(params: DashboardParams) {
+      return client.get<DashboardResponse>('/dashboard', params)
     },
   }
 }

@@ -7,6 +7,7 @@ import {
   createScheduleApi,
   createAssignmentsApi,
   createTasksApi,
+  createDashboardApi,
 } from '../api/endpoints'
 import { useAuthStore } from '../stores/auth'
 
@@ -34,6 +35,7 @@ export function useApi() {
       schedule: createScheduleApi(client),
       assignments: createAssignmentsApi(client),
       tasks: createTasksApi(client),
+      dashboard: createDashboardApi(client),
     }),
     [client]
   )

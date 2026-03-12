@@ -7,6 +7,7 @@ import type {
   AssignmentVoteRequest,
   TaskUpdateRequest,
   TaskSearchParams,
+  BulkTaskUpdateRequest,
 } from '../types'
 
 export function useAssignments(params: AssignmentSearchParams) {
@@ -99,6 +100,21 @@ export function useUpdateTask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       queryClient.invalidateQueries({ queryKey: ['assignments'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+export function useBulkUpdateTasks() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: BulkTaskUpdateRequest) => api.tasks.bulkUpdate(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['assignments'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
 }

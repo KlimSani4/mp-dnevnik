@@ -4,6 +4,9 @@ import { format, formatDistanceToNow, differenceInMinutes, isBefore, addDays } f
 import { ru } from 'date-fns/locale'
 import clsx from 'clsx'
 import { Card, Badge, ProgressBar, Button, Icon, Avatar } from '../components/ui'
+import { useCurrentUser, useTodaySchedule, useTasks, useGroupContext, useDashboard } from '@nexora/shared'
+
+const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -519,10 +522,53 @@ function TaskItem({ task, onToggle }: { task: Task; onToggle: (id: string) => vo
 // ────────────────────────────────────────────────────────
 
 export function HomePage() {
-  const greeting = getGreeting()
-  const pairCount = MOCK_SCHEDULE.length
+  // ── API hooks (always called unconditionally) ──
+  const { groupId, groupCode } = useGroupContext()
+  const currentUserQuery = useCurrentUser()
+  const todayScheduleQuery = useTodaySchedule(SKIP_AUTH ? undefined : (groupCode ?? undefined))
+  const tasksQuery = useTasks({ group_id: SKIP_AUTH ? '' : (groupId ?? '') })
+  const dashboardQuery = useDashboard(
+    !SKIP_AUTH && groupId && groupCode ? { group_id: groupId, group_code: groupCode } : undefined
+  )
 
-  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS)
+  const isApiLoading = !SKIP_AUTH && (todayScheduleQuery.isLoading || tasksQuery.isLoading)
+
+  // ── Data sources ──
+  const greeting = getGreeting()
+  const userName = SKIP_AUTH
+    ? MOCK_USER.first_name
+    : (currentUserQuery.data?.display_name?.split(' ')[0] ?? 'Студент')
+
+  // Map API schedule entries to local ScheduleEntry format
+  const apiScheduleToLocal = (entry: any): ScheduleEntry => ({
+    id: entry.id,
+    pair_number: entry.pair_number,
+    start_time: entry.start_time,
+    end_time: entry.end_time,
+    location: entry.location,
+    room: entry.room,
+    teacher: entry.teacher,
+    lesson_type: entry.room === 'Онлайн' ? 'онлайн' : entry.room === 'Вебинар' ? 'вебинар' : 'очно',
+    subject: entry.subject,
+    link: undefined,
+  })
+
+  const scheduleEntries: ScheduleEntry[] = SKIP_AUTH
+    ? MOCK_SCHEDULE
+    : (todayScheduleQuery.data?.entries ?? []).map(apiScheduleToLocal)
+
+  const pairCount = scheduleEntries.length
+
+  // Tasks
+  const [mockTasks, setMockTasks] = useState<Task[]>(MOCK_TASKS)
+  const activeTasks: Task[] = SKIP_AUTH ? mockTasks : (tasksQuery.data ?? [])
+
+  // Assignments for deadlines — derive from tasks in API mode
+  const assignments: Assignment[] = SKIP_AUTH
+    ? MOCK_ASSIGNMENTS
+    : activeTasks
+        .filter((t) => t.state !== 'done')
+        .map((t) => t.assignment)
 
   // Live clock for countdown updates
   const [, setTick] = useState(0)
@@ -532,7 +578,8 @@ export function HomePage() {
   }, [])
 
   const handleToggleTask = (id: string) => {
-    setTasks((prev) =>
+    if (!SKIP_AUTH) return
+    setMockTasks((prev) =>
       prev.map((t) =>
         t.id === id
           ? { ...t, state: t.state === 'done' ? 'todo' : 'done' }
@@ -544,7 +591,7 @@ export function HomePage() {
   // Build schedule list with windows
   const scheduleWithGaps = useMemo(() => {
     const items: Array<{ type: 'entry'; entry: ScheduleEntry } | { type: 'gap'; minutes: number }> = []
-    const sorted = [...MOCK_SCHEDULE].sort((a, b) => a.pair_number - b.pair_number)
+    const sorted = [...scheduleEntries].sort((a, b) => a.pair_number - b.pair_number)
 
     for (let i = 0; i < sorted.length; i++) {
       items.push({ type: 'entry', entry: sorted[i] })
@@ -560,28 +607,54 @@ export function HomePage() {
     }
 
     return items
-  }, [])
+  }, [scheduleEntries])
 
   // Deadlines sorted by closeness
   const burningDeadlines = useMemo(() => {
-    return [...MOCK_ASSIGNMENTS].sort(
+    return [...assignments].sort(
       (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime(),
     )
-  }, [])
+  }, [assignments])
 
-  // Task stats
-  const completedCount = tasks.filter((t) => t.state === 'done').length
-  const totalCount = tasks.length
+  // Task stats — prefer dashboard aggregated data if available
+  const dashProgress = dashboardQuery.data?.progress
+  const completedCount = dashProgress ? dashProgress.done : activeTasks.filter((t) => t.state === 'done').length
+  const totalCount = dashProgress ? dashProgress.total : activeTasks.length
   const completionPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
   const todayFormatted = format(today, "d MMMM, EEEE", { locale: ru })
+
+  if (isApiLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="mb-6">
+          <div className="h-7 w-64 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+          <div className="h-4 w-48 bg-surface-200 dark:bg-surface-700 rounded animate-pulse mt-2" />
+        </div>
+        <div className="hidden md:grid grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="space-y-3">
+              {[1, 2, 3].map((j) => (
+                <div key={j} className="h-28 bg-surface-200 dark:bg-surface-700 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="md:hidden space-y-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 bg-surface-200 dark:bg-surface-700 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
       {/* Greeting — visible on both mobile and desktop */}
       <div className="mb-6">
         <h1 className="text-xl md:text-2xl font-semibold text-surface-900 dark:text-surface-50">
-          {greeting}, {MOCK_USER.first_name}!
+          {greeting}, {userName}!
         </h1>
         <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
           {getPairCountText(pairCount)} &middot; {todayFormatted}
@@ -674,7 +747,7 @@ export function HomePage() {
             </span>
           </div>
           <Card>
-            {tasks.map((task) => (
+            {activeTasks.map((task) => (
               <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
             ))}
           </Card>
@@ -761,7 +834,7 @@ export function HomePage() {
             </span>
           </div>
           <Card>
-            {tasks.map((task) => (
+            {activeTasks.map((task) => (
               <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
             ))}
           </Card>

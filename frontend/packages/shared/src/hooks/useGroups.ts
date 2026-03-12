@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
-import type { GroupCreateRequest, GroupSearchParams, GroupUpdateRequest } from '../types'
+import type { GroupCreateRequest, GroupSearchParams, GroupUpdateRequest, Subject } from '../types'
 
 export function useMyGroups() {
   const api = useApi()
@@ -53,6 +53,17 @@ export function useJoinGroup() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] })
     },
+  })
+}
+
+export function useGroupSubjects(code?: string) {
+  const api = useApi()
+
+  return useQuery({
+    queryKey: ['groups', code, 'subjects'],
+    queryFn: () => api.groups.getSubjects(code!),
+    enabled: !!code,
+    staleTime: 1000 * 60 * 10,
   })
 }
 

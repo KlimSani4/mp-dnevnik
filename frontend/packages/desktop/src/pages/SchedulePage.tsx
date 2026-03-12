@@ -9,6 +9,7 @@ import {
   parse,
 } from 'date-fns'
 import { ru } from 'date-fns/locale'
+import { useWeekSchedule, useGroupContext } from '@nexora/shared'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -737,6 +738,8 @@ function WeeklyView({
 // ---------------------------------------------------------------------------
 
 export function SchedulePage() {
+  const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
+
   const isMobile = useIsMobile()
 
   const [viewMode, setViewMode] = useState<'daily' | 'weekly'>(
@@ -750,19 +753,32 @@ export function SchedulePage() {
     setViewMode(isMobile ? 'daily' : 'weekly')
   }, [isMobile])
 
-  // Generate mock data for the current context
+  // API hooks (inactive when SKIP_AUTH — groupCode will be null so queries won't fire)
+  const { groupCode } = useGroupContext()
+  const weekScheduleQuery = useWeekSchedule(
+    SKIP_AUTH ? undefined : (groupCode ?? undefined),
+    weekOffset,
+  )
+
+  // Build week data from either mocks or API
   const weekData = useMemo(() => {
-    if (viewMode === 'weekly') {
-      const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
-      const targetWeekStart = addDays(currentWeekStart, weekOffset * 7)
-      return createMockWeek(targetWeekStart)
-    } else {
-      // For daily view, find the week that contains the target day
-      const targetDate = addDays(new Date(), dayOffset)
-      const targetWeekStart = startOfWeek(targetDate, { weekStartsOn: 1 })
-      return createMockWeek(targetWeekStart)
+    if (SKIP_AUTH) {
+      // Mock mode — existing logic
+      if (viewMode === 'weekly') {
+        const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
+        const targetWeekStart = addDays(currentWeekStart, weekOffset * 7)
+        return createMockWeek(targetWeekStart)
+      } else {
+        const targetDate = addDays(new Date(), dayOffset)
+        const targetWeekStart = startOfWeek(targetDate, { weekStartsOn: 1 })
+        return createMockWeek(targetWeekStart)
+      }
     }
-  }, [viewMode, weekOffset, dayOffset])
+    // API mode — use data from query
+    return (weekScheduleQuery.data as DaySchedule[] | undefined) ?? []
+  }, [SKIP_AUTH, viewMode, weekOffset, dayOffset, weekScheduleQuery.data])
+
+  const isLoading = !SKIP_AUTH && weekScheduleQuery.isLoading
 
   return (
     <div>
@@ -788,7 +804,14 @@ export function SchedulePage() {
         </div>
       )}
 
-      {viewMode === 'daily' ? (
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-sm text-surface-500 dark:text-surface-400">
+            Загрузка расписания...
+          </p>
+        </div>
+      ) : viewMode === 'daily' ? (
         <DailyView
           dayOffset={dayOffset}
           onPrev={() => setDayOffset((d) => d - 1)}

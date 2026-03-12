@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Button, Card, Input } from '../components/ui'
+import { useLoginWithTelegram, useSearchGroups, useJoinGroup, useAuthStore, useApi } from '@nexora/shared'
+
+const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
 
 type Step = 'welcome' | 'group' | 'subgroup' | 'schedule' | 'done'
 
@@ -34,8 +37,42 @@ export function OnboardingPage() {
   const [subgroup, setSubgroup] = useState<1 | 2 | null>(null)
   const [scheduleConfirmed, setScheduleConfirmed] = useState(false)
 
+  // API hooks (only active when SKIP_AUTH=false)
+  const api = useApi()
+  const setTokens = useAuthStore((s) => s.setTokens)
+  const loginMutation = useLoginWithTelegram()
+  const searchGroupsQuery = useSearchGroups(
+    !SKIP_AUTH && groupCode.length >= 2 ? { search: groupCode } : undefined
+  )
+  const joinGroupMutation = useJoinGroup()
+  const setSelectedGroupStore = useAuthStore((s) => s.setSelectedGroup)
+
+  // Computed group list: mock filtering vs API results
+  const displayedGroups = SKIP_AUTH
+    ? filteredGroups
+    : (searchGroupsQuery.data?.map((g) => g.code) ?? [])
+
+  const [devLoginPending, setDevLoginPending] = useState(false)
+  const handleDevLogin = async () => {
+    setDevLoginPending(true)
+    try {
+      const tokens = await api.auth.devLogin({ telegram_id: '12345' })
+      setTokens(tokens)
+      goNext()
+    } catch (err) {
+      console.error('Dev login failed:', err)
+    } finally {
+      setDevLoginPending(false)
+    }
+  }
+
+  // Effective group: either selected from dropdown or typed manually
+  const effectiveGroup = selectedGroup || groupCode.trim()
+  const isValidGroup = /^\d{2,3}-\d{2,3}$/.test(effectiveGroup)
+
   const handleGroupInput = useCallback((value: string) => {
     setGroupCode(value)
+    setSelectedGroup('') // reset dropdown selection on manual edit
     if (value.length >= 2) {
       setFilteredGroups(
         GROUP_SUGGESTIONS.filter((g) => g.toLowerCase().includes(value.toLowerCase()))
@@ -63,7 +100,15 @@ export function OnboardingPage() {
     if (idx > 0) setStep(steps[idx - 1])
   }
 
-  const finish = () => {
+  const finish = async () => {
+    if (!SKIP_AUTH && effectiveGroup) {
+      try {
+        const membership = await joinGroupMutation.mutateAsync(effectiveGroup)
+        setSelectedGroupStore(membership.group.id, membership.group.code)
+      } catch {
+        // group might already be joined, proceed anyway
+      }
+    }
     navigate('/')
   }
 
@@ -111,7 +156,8 @@ export function OnboardingPage() {
               variant="primary"
               size="lg"
               className="w-full max-w-xs mx-auto"
-              onClick={goNext}
+              onClick={SKIP_AUTH ? goNext : handleDevLogin}
+              disabled={!SKIP_AUTH && devLoginPending}
             >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
@@ -149,9 +195,9 @@ export function OnboardingPage() {
                 className="text-lg"
               />
 
-              {filteredGroups.length > 0 && !selectedGroup && (
+              {displayedGroups.length > 0 && !selectedGroup && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                  {filteredGroups.map((g) => (
+                  {displayedGroups.map((g) => (
                     <button
                       key={g}
                       onClick={() => selectGroup(g)}
@@ -169,7 +215,7 @@ export function OnboardingPage() {
               size="lg"
               className="w-full mt-6"
               onClick={goNext}
-              disabled={!selectedGroup}
+              disabled={!isValidGroup}
             >
               Продолжить
             </Button>
@@ -193,7 +239,7 @@ export function OnboardingPage() {
               Выбери подгруппу
             </h2>
             <p className="text-surface-500 dark:text-surface-400 mb-6">
-              Группа {selectedGroup} — выбери свою подгруппу для лабораторных
+              Группа {effectiveGroup} — выбери свою подгруппу для лабораторных
             </p>
 
             <div className="grid grid-cols-2 gap-4 mb-6">
@@ -256,7 +302,7 @@ export function OnboardingPage() {
               Вот твоё расписание
             </h2>
             <p className="text-surface-500 dark:text-surface-400 mb-6">
-              Группа {selectedGroup}{subgroup ? `, подгруппа ${subgroup}` : ''} — понедельник
+              Группа {effectiveGroup}{subgroup ? `, подгруппа ${subgroup}` : ''} — понедельник
             </p>
 
             <div className="space-y-3 mb-6">
@@ -321,7 +367,7 @@ export function OnboardingPage() {
               Готово!
             </h2>
             <p className="text-surface-500 dark:text-surface-400 mb-2">
-              Ты в группе <span className="font-semibold text-surface-900 dark:text-surface-50">{selectedGroup}</span>
+              Ты в группе <span className="font-semibold text-surface-900 dark:text-surface-50">{effectiveGroup}</span>
             </p>
             <p className="text-surface-400 dark:text-surface-500 text-sm mb-8">
               Расписание импортировано, можно начинать
@@ -332,6 +378,7 @@ export function OnboardingPage() {
               size="lg"
               className="w-full max-w-xs mx-auto"
               onClick={finish}
+              disabled={joinGroupMutation.isPending}
             >
               Перейти к дашборду
             </Button>

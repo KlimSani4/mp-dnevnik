@@ -1,4 +1,12 @@
 import { useState, useMemo, useCallback } from 'react'
+import {
+  useTasks,
+  useUpdateTask,
+  useVoteAssignment,
+  useCreateAssignment,
+  useGroupContext,
+  useGroupSubjects,
+} from '@nexora/shared'
 import clsx from 'clsx'
 import { startOfDay, addDays, isBefore } from 'date-fns'
 import {
@@ -80,14 +88,16 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
         </div>
       )}
 
-      <div className={clsx('px-2.5 py-2 pl-4', (isDone || isExpired) && 'opacity-75')}>
+      <div className={clsx('px-2.5 py-2 pl-4', isDone && 'opacity-70')}>
         {/* Row 1: Subject chip + Verified + Link */}
         <div className="flex items-center gap-1 mb-1">
           <span className={clsx(
             'text-[10px] font-medium px-1.5 py-0.5 rounded truncate max-w-[70%]',
             isDone
               ? 'text-surface-500 dark:text-surface-400 bg-surface-100 dark:bg-surface-700/50'
-              : 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10',
+              : isExpired
+                ? 'text-danger-600 dark:text-danger-400 bg-danger-50 dark:bg-danger-500/10'
+                : 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-500/10',
           )}>
             {assignment.subject.name}
           </span>
@@ -112,7 +122,9 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
           'text-[13px] font-semibold leading-snug line-clamp-2 mb-1',
           isDone
             ? 'text-surface-500 dark:text-surface-400 line-through decoration-surface-300 dark:decoration-surface-600'
-            : 'text-surface-900 dark:text-surface-50',
+            : isExpired
+              ? 'text-danger-800 dark:text-danger-300'
+              : 'text-surface-900 dark:text-surface-50',
         )}>
           {assignment.title}
         </h3>
@@ -132,9 +144,9 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
                 : 'text-surface-500 dark:text-surface-400',
             )}
           >
-            <Icon name="clock" size={10} />
+            <Icon name={overdue ? 'alert-triangle' : 'clock'} size={10} />
             {overdue ? (
-              <span>Просрочено {Math.abs(days)} {getDayWord(days)}</span>
+              <span className="font-bold">Просрочено {Math.abs(days)} {getDayWord(days)}</span>
             ) : days <= 0 ? (
               <span>Сегодня</span>
             ) : burning ? (
@@ -503,7 +515,21 @@ function CreateAssignmentModal({ open, onClose, onSubmit }: CreateAssignmentModa
 /* ─── Main Component ─── */
 
 export function AssignmentsPage() {
-  const [tasks, setTasks] = useState<Task[]>(createMockTasks)
+  const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
+
+  // ─── API hooks (always called, conditional use) ───
+  const { groupId, groupCode } = useGroupContext()
+  const tasksQuery = useTasks({ group_id: SKIP_AUTH ? '' : (groupId ?? '') })
+  const updateTaskMutation = useUpdateTask()
+  const voteAssignmentMutation = useVoteAssignment()
+  const createAssignmentMutation = useCreateAssignment()
+  const groupSubjectsQuery = useGroupSubjects(SKIP_AUTH ? undefined : (groupCode ?? undefined))
+
+  // Mock state (only used when SKIP_AUTH)
+  const [mockTasks, setMockTasks] = useState<Task[]>(createMockTasks)
+
+  // The active tasks source
+  const tasks = SKIP_AUTH ? mockTasks : (tasksQuery.data ?? [])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -572,64 +598,86 @@ export function AssignmentsPage() {
   // ─── Actions ───
 
   const moveTask = useCallback((taskId: string, newState: TaskState) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId ? { ...t, state: newState, updated_at: new Date().toISOString() } : t,
-      ),
-    )
-  }, [])
+    if (SKIP_AUTH) {
+      setMockTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId ? { ...t, state: newState, updated_at: new Date().toISOString() } : t,
+        ),
+      )
+    } else {
+      updateTaskMutation.mutate({ assignmentId: taskId, data: { state: newState } })
+    }
+  }, [SKIP_AUTH, updateTaskMutation])
 
   const toggleVote = useCallback(
     (assignmentId: string, direction: 'up' | 'down') => {
-      const current = userVotes[assignmentId] ?? null
-      setUserVotes((prev) => ({
-        ...prev,
-        [assignmentId]: current === direction ? null : direction,
-      }))
-      setTasks((prev) =>
-        prev.map((t) => {
-          if (t.assignment.id !== assignmentId) return t
-          const a = { ...t.assignment }
-          if (current === 'up') a.votes_up -= 1
-          if (current === 'down') a.votes_down -= 1
-          if (current !== direction) {
-            if (direction === 'up') a.votes_up += 1
-            if (direction === 'down') a.votes_down += 1
-          }
-          return { ...t, assignment: a }
-        }),
-      )
+      if (SKIP_AUTH) {
+        const current = userVotes[assignmentId] ?? null
+        setUserVotes((prev) => ({
+          ...prev,
+          [assignmentId]: current === direction ? null : direction,
+        }))
+        setMockTasks((prev) =>
+          prev.map((t) => {
+            if (t.assignment.id !== assignmentId) return t
+            const a = { ...t.assignment }
+            if (current === 'up') a.votes_up -= 1
+            if (current === 'down') a.votes_down -= 1
+            if (current !== direction) {
+              if (direction === 'up') a.votes_up += 1
+              if (direction === 'down') a.votes_down += 1
+            }
+            return { ...t, assignment: a }
+          }),
+        )
+      } else {
+        voteAssignmentMutation.mutate({
+          id: assignmentId,
+          data: { vote: direction === 'up' ? 1 : -1 },
+        })
+      }
     },
-    [userVotes],
+    [SKIP_AUTH, userVotes, voteAssignmentMutation],
   )
 
   const handleCreateTask = useCallback(
     (data: { subjectId: string; title: string; description: string; deadline: string; priority: Priority }) => {
-      const subject = SUBJECTS.find((s) => s.id === data.subjectId)
-      if (!subject) return
-      const newTask: Task = {
-        id: `t${Date.now()}`,
-        state: 'todo',
-        updated_at: new Date().toISOString(),
-        assignment: {
-          id: `a${Date.now()}`,
+      if (SKIP_AUTH) {
+        const subject = SUBJECTS.find((s) => s.id === data.subjectId)
+        if (!subject) return
+        const newTask: Task = {
+          id: `t${Date.now()}`,
+          state: 'todo',
+          updated_at: new Date().toISOString(),
+          assignment: {
+            id: `a${Date.now()}`,
+            title: data.title,
+            description: data.description,
+            deadline: new Date(data.deadline).toISOString(),
+            priority: data.priority,
+            link: null,
+            votes_up: 0,
+            votes_down: 0,
+            is_verified: false,
+            author_id: 'a1',
+            subject,
+            created_at: new Date().toISOString(),
+          },
+        }
+        setMockTasks((prev) => [newTask, ...prev])
+      } else {
+        createAssignmentMutation.mutate({
+          group_id: groupId!,
+          subject_id: data.subjectId,
           title: data.title,
           description: data.description,
           deadline: new Date(data.deadline).toISOString(),
           priority: data.priority,
-          link: null,
-          votes_up: 0,
-          votes_down: 0,
-          is_verified: false,
-          author_id: 'a1',
-          subject,
-          created_at: new Date().toISOString(),
-        },
+        })
       }
-      setTasks((prev) => [newTask, ...prev])
       setCreateModalOpen(false)
     },
-    [],
+    [SKIP_AUTH, groupId, createAssignmentMutation],
   )
 
   // ─── DnD Handlers ───
@@ -711,9 +759,9 @@ export function AssignmentsPage() {
         const oldIndex = columnTasks.findIndex((t) => t.id === activeTaskId)
         const newIndex = columnTasks.findIndex((t) => t.id === overId)
 
-        if (oldIndex !== -1 && newIndex !== -1) {
+        if (oldIndex !== -1 && newIndex !== -1 && SKIP_AUTH) {
           const reordered = arrayMove(columnTasks, oldIndex, newIndex)
-          setTasks((prev) => {
+          setMockTasks((prev) => {
             const otherTasks = prev.filter((t) => t.state !== targetColumn)
             return [...otherTasks, ...reordered]
           })
@@ -730,9 +778,13 @@ export function AssignmentsPage() {
 
   // ─── Render ───
 
+  const apiSubjects = groupSubjectsQuery.data ?? []
   const subjectOptions = [
     { value: '', label: 'Все предметы' },
-    ...SUBJECTS.map((s) => ({ value: s.id, label: s.name })),
+    ...(SKIP_AUTH
+      ? SUBJECTS.map((s) => ({ value: s.id, label: s.name }))
+      : apiSubjects.map((s) => ({ value: s.id, label: s.name }))
+    ),
   ]
 
   return (
@@ -776,90 +828,129 @@ export function AssignmentsPage() {
         </div>
       </div>
 
-      {/* Mobile: Column Tabs */}
-      <div className="flex md:hidden gap-1 p-1 bg-surface-100 dark:bg-surface-800 rounded-lg mb-4">
-        {COLUMNS.map((col) => {
-          const count = tasksByColumn[col.key].length
-          return (
-            <button
-              key={col.key}
-              onClick={() => setActiveColumn(col.key)}
-              className={clsx(
-                'flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                activeColumn === col.key
-                  ? 'bg-white dark:bg-surface-700 text-surface-900 dark:text-surface-50 shadow-sm'
-                  : 'text-surface-500 dark:text-surface-400',
-              )}
+      {/* API Loading State */}
+      {!SKIP_AUTH && tasksQuery.isLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          {COLUMNS.map((col) => (
+            <div key={col.key} className="rounded-lg bg-surface-50 dark:bg-surface-800/50 p-3 space-y-2">
+              <div className="h-4 w-24 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="rounded-md border border-surface-200 dark:border-surface-700 p-3 space-y-2">
+                  <div className="h-3 w-16 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+                  <div className="h-4 w-full bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+                  <div className="h-3 w-20 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* API Error State */}
+      {!SKIP_AUTH && tasksQuery.error && (
+        <div className="rounded-lg border border-danger-200 dark:border-danger-800/50 bg-danger-50/50 dark:bg-danger-950/20 p-6 text-center">
+          <Icon name="alert-triangle" size={32} className="mx-auto text-danger-400 dark:text-danger-500 mb-2" />
+          <p className="text-sm font-medium text-danger-700 dark:text-danger-300 mb-1">
+            Не удалось загрузить задания
+          </p>
+          <p className="text-xs text-danger-500 dark:text-danger-400 mb-3">
+            {tasksQuery.error instanceof Error ? tasksQuery.error.message : 'Произошла ошибка'}
+          </p>
+          <Button variant="secondary" onClick={() => tasksQuery.refetch()}>
+            Попробовать снова
+          </Button>
+        </div>
+      )}
+
+      {/* Board content — hidden when API is loading or errored */}
+      {(SKIP_AUTH || (!tasksQuery.isLoading && !tasksQuery.error)) && (
+        <>
+          {/* Mobile: Column Tabs */}
+          <div className="flex md:hidden gap-1 p-1 bg-surface-100 dark:bg-surface-800 rounded-lg mb-4">
+            {COLUMNS.map((col) => {
+              const count = tasksByColumn[col.key].length
+              return (
+                <button
+                  key={col.key}
+                  onClick={() => setActiveColumn(col.key)}
+                  className={clsx(
+                    'flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                    activeColumn === col.key
+                      ? 'bg-white dark:bg-surface-700 text-surface-900 dark:text-surface-50 shadow-sm'
+                      : 'text-surface-500 dark:text-surface-400',
+                  )}
+                >
+                  {col.label}
+                  {count > 0 && (
+                    <span className="ml-1.5 text-xs text-surface-400 dark:text-surface-500">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Mobile: Single column (no DnD) */}
+          <div className="md:hidden space-y-3">
+            {tasksByColumn[activeColumn].length === 0 ? (
+              <div className="rounded-xl border-2 border-dashed border-surface-200 dark:border-surface-700 p-8 text-center">
+                <Icon name="clipboard" size={32} className="mx-auto text-surface-300 dark:text-surface-600 mb-2" />
+                <p className="text-sm text-surface-400 dark:text-surface-500">Нет заданий</p>
+              </div>
+            ) : (
+              tasksByColumn[activeColumn].map((task) => (
+                <MobileCard
+                  key={task.id}
+                  task={task}
+                  columnState={activeColumn}
+                  onMove={moveTask}
+                  userVote={userVotes[task.assignment.id] ?? null}
+                  onVote={toggleVote}
+                  onClick={() => setSelectedTask(task)}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Desktop: 3-column kanban with DnD */}
+          <div className="hidden md:block">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
             >
-              {col.label}
-              {count > 0 && (
-                <span className="ml-1.5 text-xs text-surface-400 dark:text-surface-500">
-                  {count}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+              <div className="grid grid-cols-4 gap-3">
+                {COLUMNS.map((col) => (
+                  <BoardColumn
+                    key={col.key}
+                    state={col.key}
+                    label={col.label}
+                    tasks={tasksByColumn[col.key]}
+                    userVotes={userVotes}
+                    onVote={toggleVote}
+                    onTaskClick={setSelectedTask}
+                    isOver={overColumnId === col.key}
+                  />
+                ))}
+              </div>
 
-      {/* Mobile: Single column (no DnD) */}
-      <div className="md:hidden space-y-3">
-        {tasksByColumn[activeColumn].length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-surface-200 dark:border-surface-700 p-8 text-center">
-            <Icon name="clipboard" size={32} className="mx-auto text-surface-300 dark:text-surface-600 mb-2" />
-            <p className="text-sm text-surface-400 dark:text-surface-500">Нет заданий</p>
+              <DragOverlay>
+                {activeTask ? (
+                  <BoardCard
+                    task={activeTask}
+                    userVote={userVotes[activeTask.assignment.id] ?? null}
+                    onVote={() => {}}
+                    isDragOverlay
+                  />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
-        ) : (
-          tasksByColumn[activeColumn].map((task) => (
-            <MobileCard
-              key={task.id}
-              task={task}
-              columnState={activeColumn}
-              onMove={moveTask}
-              userVote={userVotes[task.assignment.id] ?? null}
-              onVote={toggleVote}
-              onClick={() => setSelectedTask(task)}
-            />
-          ))
-        )}
-      </div>
-
-      {/* Desktop: 3-column kanban with DnD */}
-      <div className="hidden md:block">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="grid grid-cols-4 gap-3">
-            {COLUMNS.map((col) => (
-              <BoardColumn
-                key={col.key}
-                state={col.key}
-                label={col.label}
-                tasks={tasksByColumn[col.key]}
-                userVotes={userVotes}
-                onVote={toggleVote}
-                onTaskClick={setSelectedTask}
-                isOver={overColumnId === col.key}
-              />
-            ))}
-          </div>
-
-          <DragOverlay>
-            {activeTask ? (
-              <BoardCard
-                task={activeTask}
-                userVote={userVotes[activeTask.assignment.id] ?? null}
-                onVote={() => {}}
-                isDragOverlay
-              />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      </div>
+        </>
+      )}
 
       {/* Assignment Detail Modal */}
       <AssignmentDetailModal
