@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useMemo } from 'react'
 import { ApiClient } from '../api/client'
 import {
@@ -8,6 +9,7 @@ import {
   createAssignmentsApi,
   createTasksApi,
   createDashboardApi,
+  createNotificationsApi,
 } from '../api/endpoints'
 import { useAuthStore } from '../stores/auth'
 
@@ -22,7 +24,9 @@ export function useApi() {
       new ApiClient({
         baseUrl: API_BASE_URL,
         getToken: getAccessToken,
+        getRefreshToken: () => useAuthStore.getState().refreshToken,
         onUnauthorized: logout,
+        onTokensRefreshed: (tokens) => useAuthStore.getState().setTokens(tokens),
       }),
     [getAccessToken, logout]
   )
@@ -36,6 +40,7 @@ export function useApi() {
       assignments: createAssignmentsApi(client),
       tasks: createTasksApi(client),
       dashboard: createDashboardApi(client),
+      notifications: createNotificationsApi(client),
     }),
     [client]
   )

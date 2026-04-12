@@ -23,3 +23,4 @@ export {
 } from './useGroups'
 export { useGroupContext } from './useGroupContext'
 export { useDashboard } from './useDashboard'
+export { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from './useNotifications'

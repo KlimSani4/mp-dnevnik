@@ -27,6 +27,8 @@ import type {
   BulkTaskUpdateRequest,
   DashboardResponse,
   DashboardParams,
+  NotificationListResponse,
+  NotificationListParams,
 } from '../types'
 
 export function createAuthApi(client: ApiClient) {
@@ -153,6 +155,20 @@ export function createDashboardApi(client: ApiClient) {
   return {
     get(params: DashboardParams) {
       return client.get<DashboardResponse>('/dashboard', params)
+    },
+  }
+}
+
+export function createNotificationsApi(client: ApiClient) {
+  return {
+    getList(params?: NotificationListParams) {
+      return client.get<NotificationListResponse>('/notifications', params as Record<string, unknown>)
+    },
+    markRead(id: string) {
+      return client.patch<void>(`/notifications/${id}`, { is_read: true })
+    },
+    markAllRead() {
+      return client.patch<void>('/notifications/read-all', {})
     },
   }
 }
