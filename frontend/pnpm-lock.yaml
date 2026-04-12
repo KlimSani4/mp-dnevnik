@@ -145,6 +145,9 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+      vite:
+        specifier: ^5.4.21
+        version: 5.4.21
 
 packages:
 

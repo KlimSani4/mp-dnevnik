@@ -1,20 +1,74 @@
-import type { ApiError, ValidationError } from '../types'
+import type { ApiError, ValidationError, AuthTokens } from '../types'
 
 export interface ApiClientConfig {
   baseUrl: string
   getToken?: () => string | null
+  getRefreshToken?: () => string | null
   onUnauthorized?: () => void
+  onTokensRefreshed?: (tokens: AuthTokens) => void
 }
 
 export class ApiClient {
   private baseUrl: string
   private getToken: () => string | null
+  private getRefreshToken: (() => string | null) | undefined
   private onUnauthorized: () => void
+  private onTokensRefreshed: ((tokens: AuthTokens) => void) | undefined
+  private isRefreshing = false
+  private refreshSubscribers: Array<(token: string) => void> = []
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '')
     this.getToken = config.getToken ?? (() => null)
+    this.getRefreshToken = config.getRefreshToken
     this.onUnauthorized = config.onUnauthorized ?? (() => {})
+    this.onTokensRefreshed = config.onTokensRefreshed
+  }
+
+  private async handleUnauthorized(retryRequest: () => Promise<Response>): Promise<Response> {
+    if (this.isRefreshing) {
+      return new Promise((resolve, reject) => {
+        this.refreshSubscribers.push((_token: string) => {
+          retryRequest().then(resolve).catch(reject)
+        })
+      })
+    }
+
+    const refreshToken = this.getRefreshToken?.()
+    if (!refreshToken) {
+      this.onUnauthorized()
+      throw new ApiClientError('Unauthorized', 'UNAUTHORIZED', 401)
+    }
+
+    this.isRefreshing = true
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+
+      if (!response.ok) {
+        this.refreshSubscribers = []
+        this.onUnauthorized()
+        throw new ApiClientError('Session expired', 'UNAUTHORIZED', 401)
+      }
+
+      const data = await response.json()
+      this.onTokensRefreshed?.(data)
+      this.refreshSubscribers.forEach((cb) => cb(data.access_token))
+      this.refreshSubscribers = []
+
+      return retryRequest()
+    } catch (e) {
+      if (!(e instanceof ApiClientError)) {
+        this.refreshSubscribers = []
+        this.onUnauthorized()
+      }
+      throw e
+    } finally {
+      this.isRefreshing = false
+    }
   }
 
   private async request<T>(
@@ -49,6 +103,16 @@ export class ApiClient {
       }
     }
 
+    const makeRequest = () =>
+      fetch(url.toString(), {
+        method,
+        headers: {
+          ...headers,
+          ...(auth && this.getToken() ? { Authorization: `Bearer ${this.getToken()}` } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      })
+
     const response = await fetch(url.toString(), {
       method,
       headers,
@@ -56,8 +120,21 @@ export class ApiClient {
     })
 
     if (response.status === 401) {
-      this.onUnauthorized()
-      throw new ApiClientError('Unauthorized', 'UNAUTHORIZED', 401)
+      const retried = await this.handleUnauthorized(makeRequest)
+      if (retried.status === 204) {
+        return undefined as T
+      }
+      const retriedData = await retried.json()
+      if (!retried.ok) {
+        if (isApiError(retriedData)) {
+          throw new ApiClientError(retriedData.detail, retriedData.code, retried.status)
+        }
+        if (isValidationError(retriedData)) {
+          throw new ValidationClientError(retriedData.detail, retried.status)
+        }
+        throw new ApiClientError('Unknown error', 'UNKNOWN', retried.status)
+      }
+      return retriedData as T
     }
 
     if (response.status === 204) {
