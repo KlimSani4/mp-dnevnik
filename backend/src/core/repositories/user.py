@@ -59,6 +59,15 @@ class IdentityRepository(BaseRepository[Identity]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_user_telegram_identity(self, user_id: uuid.UUID) -> Identity | None:
+        """Get Telegram identity for a user."""
+        stmt = select(Identity).where(
+            Identity.user_id == user_id,
+            Identity.provider == "telegram",
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
 
 class AuditLogRepository(BaseRepository[AuditLog]):
     """Audit log repository."""

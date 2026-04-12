@@ -13,14 +13,18 @@ from src.api.middleware import RateLimitMiddleware, RequestLoggingMiddleware
 from src.api.routes import (
     assignments,
     auth,
+    dashboard,
     groups,
     health,
+    notifications,
     schedule,
+    semesters,
     tasks,
     users,
 )
 from src.config import settings
 from src.gateways.telegram.bot import create_bot, create_dispatcher
+from src.gateways.telegram.scheduler import start_scheduler, stop_scheduler
 from src.shared.database import close_db, init_db
 from src.shared.exceptions import AppException
 from src.shared.redis import close_redis, init_redis
@@ -55,10 +59,15 @@ async def lifespan(_app: FastAPI) -> Any:
         _bot_task = asyncio.create_task(dp.start_polling(bot))
         logger.info("Telegram bot started")
 
+    # Start scheduler
+    start_scheduler()
+
     yield
 
     # Shutdown
     logger.info("Shutting down application...")
+
+    stop_scheduler()
 
     if _bot_task:
         _bot_task.cancel()
@@ -130,5 +139,8 @@ def create_app() -> FastAPI:
     app.include_router(schedule.router, prefix="/api/v1/schedule", tags=["schedule"])
     app.include_router(assignments.router, prefix="/api/v1/assignments", tags=["assignments"])
     app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
+    app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
+    app.include_router(semesters.router, prefix="/api/v1/subjects", tags=["semesters"])
+    app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 
     return app

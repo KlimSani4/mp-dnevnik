@@ -27,6 +27,11 @@ class GroupRepository(BaseRepository[Group]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_all_groups(self) -> list[Group]:
+        """Get all groups."""
+        result = await self.session.execute(select(Group))
+        return list(result.scalars().all())
+
     async def search_by_code(self, code_prefix: str, limit: int = 10) -> list[Group]:
         """Search groups by code prefix."""
         stmt = select(Group).where(Group.code.ilike(f"{code_prefix}%")).limit(limit)
