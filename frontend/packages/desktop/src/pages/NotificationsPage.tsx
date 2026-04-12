@@ -1,84 +1,18 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Card, Badge, Button } from '../components/ui'
+import { Card, Button } from '../components/ui'
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@nexora/shared'
+import type { Notification } from '@nexora/shared'
 
-type NotifType = 'schedule' | 'assignment' | 'deadline' | 'vote' | 'group'
+type FilterType = 'all' | Notification['type']
 
-interface Notification {
-  id: string
-  type: NotifType
-  title: string
-  message: string
-  time: string
-  read: boolean
-}
-
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    type: 'schedule',
-    title: 'Изменение расписания',
-    message: 'Пара по физике в 14:30 отменена. Преподаватель заболел.',
-    time: '10 мин назад',
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'assignment',
-    title: 'Новое задание',
-    message: 'Феликс добавил задание: "ПЗ №4 по мат. логике" — дедлайн 15.12',
-    time: '1 час назад',
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'vote',
-    title: 'Подтверди задание',
-    message: 'Задание "Лаба по программированию" ожидает подтверждения группы',
-    time: '2 часа назад',
-    read: false,
-  },
-  {
-    id: '4',
-    type: 'deadline',
-    title: 'Горящий дедлайн',
-    message: 'Лаба по физике — осталось 2 дня. Не забудь!',
-    time: '5 часов назад',
-    read: true,
-  },
-  {
-    id: '5',
-    type: 'group',
-    title: 'Группа 241-237',
-    message: 'Алексей Сидоров запросил вступление в группу',
-    time: 'Вчера',
-    read: true,
-  },
-  {
-    id: '6',
-    type: 'schedule',
-    title: 'Расписание на завтра',
-    message: 'Завтра 3 пары: Матан (9:00), Линал (10:40), Прога (14:30)',
-    time: 'Вчера, 21:00',
-    read: true,
-  },
-  {
-    id: '7',
-    type: 'assignment',
-    title: 'Задание верифицировано',
-    message: '"ПЗ №3 по линалу" подтверждено 5 студентами ✓',
-    time: '2 дня назад',
-    read: true,
-  },
-]
-
-const TYPE_CONFIG: Record<NotifType, { icon: React.ReactNode; color: string; label: string }> = {
-  schedule: {
+const TYPE_CONFIG: Record<Notification['type'], { icon: React.ReactNode; color: string; label: string }> = {
+  schedule_change: {
     icon: <CalendarIcon />,
     color: 'bg-info-100 text-info-600 dark:bg-info-500/20 dark:text-info-400',
     label: 'Расписание',
   },
-  assignment: {
+  new_assignment: {
     icon: <ClipboardIcon />,
     color: 'bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400',
     label: 'Задание',
@@ -93,42 +27,61 @@ const TYPE_CONFIG: Record<NotifType, { icon: React.ReactNode; color: string; lab
     color: 'bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-400',
     label: 'Голосование',
   },
-  group: {
+  digest: {
     icon: <UsersIcon />,
     color: 'bg-success-100 text-success-600 dark:bg-success-500/20 dark:text-success-400',
-    label: 'Группа',
+    label: 'Дайджест',
   },
 }
 
-type FilterType = 'all' | NotifType
-
 export function NotificationsPage() {
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS)
   const [filter, setFilter] = useState<FilterType>('all')
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const notificationsQuery = useNotifications()
+  const markReadMutation = useMarkNotificationRead()
+  const markAllReadMutation = useMarkAllNotificationsRead()
+
+  const notifications = notificationsQuery.data?.items ?? []
+  const unreadCount = notificationsQuery.data?.unread_count ?? notifications.filter((n) => !n.is_read).length
 
   const filtered = filter === 'all'
     ? notifications
     : notifications.filter((n) => n.type === filter)
 
   const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    markAllReadMutation.mutate()
   }
 
   const markRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    )
+    markReadMutation.mutate(id)
   }
 
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: 'Все' },
-    { key: 'schedule', label: 'Расписание' },
-    { key: 'assignment', label: 'Задания' },
+    { key: 'schedule_change', label: 'Расписание' },
+    { key: 'new_assignment', label: 'Задания' },
     { key: 'deadline', label: 'Дедлайны' },
     { key: 'vote', label: 'Голосования' },
   ]
+
+  if (notificationsQuery.isLoading) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
+              Уведомления
+            </h1>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-20 bg-surface-200 dark:bg-surface-700 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -144,7 +97,12 @@ export function NotificationsPage() {
           )}
         </div>
         {unreadCount > 0 && (
-          <Button variant="ghost" size="sm" onClick={markAllRead}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={markAllRead}
+            disabled={markAllReadMutation.isPending}
+          >
             Прочитать все
           </Button>
         )}
@@ -175,10 +133,10 @@ export function NotificationsPage() {
           return (
             <Card
               key={notif.id}
-              variant={notif.read ? 'default' : 'hover'}
+              variant={notif.is_read ? 'default' : 'hover'}
               padding="sm"
-              className={clsx(!notif.read && 'border-l-4 border-l-primary-500')}
-              onClick={() => markRead(notif.id)}
+              className={clsx(!notif.is_read && 'border-l-4 border-l-primary-500')}
+              onClick={() => !notif.is_read && markRead(notif.id)}
             >
               <div className="flex items-start gap-3">
                 <div className={clsx('w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0', config.color)}>
@@ -189,15 +147,20 @@ export function NotificationsPage() {
                     <span className="text-sm font-medium text-surface-900 dark:text-surface-50">
                       {notif.title}
                     </span>
-                    {!notif.read && (
+                    {!notif.is_read && (
                       <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
                     )}
                   </div>
                   <p className="text-sm text-surface-600 dark:text-surface-400 line-clamp-2">
-                    {notif.message}
+                    {notif.body}
                   </p>
                   <span className="text-xs text-surface-400 dark:text-surface-500 mt-1 block">
-                    {notif.time}
+                    {new Date(notif.created_at).toLocaleString('ru-RU', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </span>
                 </div>
               </div>
@@ -212,7 +175,7 @@ export function NotificationsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
             </div>
-            <p className="text-surface-500 dark:text-surface-400">Нет уведомлений</p>
+            <p className="text-surface-500 dark:text-surface-400">Уведомлений нет</p>
           </div>
         )}
       </div>

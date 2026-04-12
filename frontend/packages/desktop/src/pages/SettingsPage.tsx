@@ -1,23 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { clsx } from 'clsx'
 import { Button, Card, Input, Avatar, Modal } from '../components/ui'
-
-// Mock user data
-const MOCK_USER = {
-  display_name: 'Анастасия Кузнецова',
-  group: '241-237',
-  subgroup: 1,
-  role: 'student' as const,
-  telegram: '@anastasia_k',
-}
-
-const MOCK_GROUP_MEMBERS = [
-  { name: 'Анастасия Кузнецова', role: 'student', verified: true },
-  { name: 'Феликс Арутюнян', role: 'starosta', verified: true },
-  { name: 'Дмитрий Петров', role: 'student', verified: true },
-  { name: 'Мария Иванова', role: 'deputy', verified: true },
-  { name: 'Алексей Сидоров', role: 'student', verified: false },
-]
+import { useCurrentUser, useLogout, useMyGroups, useApi } from '@nexora/shared'
 
 type NotificationType = 'schedule_changes' | 'new_assignments' | 'deadlines' | 'votes' | 'evening_digest'
 
@@ -29,7 +13,24 @@ interface NotificationSetting {
 }
 
 export function SettingsPage() {
-  const [displayName, setDisplayName] = useState(MOCK_USER.display_name)
+  const currentUserQuery = useCurrentUser()
+  const logoutMutation = useLogout()
+  const myGroupsQuery = useMyGroups()
+  const api = useApi()
+
+  const user = currentUserQuery.data
+  const memberships = myGroupsQuery.data ?? []
+
+  const [displayName, setDisplayName] = useState('')
+  const [savePending, setSavePending] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (user?.display_name) {
+      setDisplayName(user.display_name)
+    }
+  }, [user?.display_name])
+
   const [notifications, setNotifications] = useState<NotificationSetting[]>([
     { key: 'schedule_changes', label: 'Изменения расписания', description: 'Отмена пар, смена аудиторий', enabled: true },
     { key: 'new_assignments', label: 'Новые задания', description: 'Когда кто-то создаёт задание', enabled: true },
@@ -46,12 +47,30 @@ export function SettingsPage() {
     )
   }
 
+  const handleSaveProfile = async () => {
+    setSavePending(true)
+    setSaveError(null)
+    try {
+      await api.users.updateMe({ display_name: displayName })
+    } catch (err) {
+      setSaveError('Не удалось сохранить')
+    } finally {
+      setSavePending(false)
+    }
+  }
+
+  const handleLogout = () => {
+    logoutMutation.mutate()
+  }
+
   const sections = [
     { id: 'profile' as const, label: 'Профиль', icon: UserIcon },
     { id: 'notifications' as const, label: 'Уведомления', icon: BellIcon },
     { id: 'group' as const, label: 'Группа', icon: UsersIcon },
     { id: 'about' as const, label: 'О приложении', icon: InfoIcon },
   ]
+
+  const primaryGroup = memberships[0]
 
   return (
     <div>
@@ -90,54 +109,59 @@ export function SettingsPage() {
                 Профиль
               </h2>
 
-              <div className="flex items-center gap-4 mb-6">
-                <Avatar name={displayName} size="lg" />
-                <div>
-                  <div className="font-medium text-surface-900 dark:text-surface-50">
-                    {displayName}
-                  </div>
-                  <div className="text-sm text-surface-500 dark:text-surface-400">
-                    {MOCK_USER.group} · Подгруппа {MOCK_USER.subgroup}
-                  </div>
-                  <div className="text-sm text-surface-400 dark:text-surface-500">
-                    {MOCK_USER.telegram}
-                  </div>
+              {currentUserQuery.isLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-10 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-4 mb-6">
+                    <Avatar name={displayName || 'Студент'} size="lg" />
+                    <div>
+                      <div className="font-medium text-surface-900 dark:text-surface-50">
+                        {displayName || 'Студент'}
+                      </div>
+                      {primaryGroup && (
+                        <div className="text-sm text-surface-500 dark:text-surface-400">
+                          {primaryGroup.group.code}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-              <div className="space-y-4">
-                <Input
-                  label="Отображаемое имя"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                />
+                  <div className="space-y-4">
+                    <Input
+                      label="Отображаемое имя"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                    />
 
-                <div>
-                  <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
-                    Подгруппа
-                  </label>
-                  <div className="flex gap-2">
-                    {[1, 2].map((num) => (
-                      <button
-                        key={num}
-                        className={clsx(
-                          'px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
-                          MOCK_USER.subgroup === num
-                            ? 'border-primary-500 bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
-                            : 'border-surface-200 dark:border-surface-700 text-surface-600 dark:text-surface-400 hover:border-surface-300'
-                        )}
+                    {saveError && (
+                      <p className="text-sm text-danger-500">{saveError}</p>
+                    )}
+
+                    <div className="pt-4 flex gap-3">
+                      <Button
+                        variant="primary"
+                        onClick={handleSaveProfile}
+                        disabled={savePending}
                       >
-                        Подгруппа {num}
-                      </button>
-                    ))}
+                        {savePending ? 'Сохранение...' : 'Сохранить'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={handleLogout}
+                        disabled={logoutMutation.isPending}
+                        className="text-danger-500 hover:text-danger-600"
+                      >
+                        Выйти
+                      </Button>
+                    </div>
                   </div>
-                </div>
-
-                <div className="pt-4 flex gap-3">
-                  <Button variant="primary">Сохранить</Button>
-                  <Button variant="ghost">Отмена</Button>
-                </div>
-              </div>
+                </>
+              )}
             </Card>
           )}
 
@@ -191,10 +215,12 @@ export function SettingsPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50">
-                    Группа {MOCK_USER.group}
+                    {primaryGroup ? `Группа ${primaryGroup.group.code}` : 'Группа'}
                   </h2>
                   <p className="text-sm text-surface-500 dark:text-surface-400">
-                    {MOCK_GROUP_MEMBERS.length} участников
+                    {memberships.length > 0
+                      ? `${memberships.length} ${memberships.length === 1 ? 'группа' : 'групп'}`
+                      : 'Вы не состоите ни в одной группе'}
                   </p>
                 </div>
                 <Button variant="secondary" size="sm" onClick={() => setShowGroupModal(true)}>
@@ -202,42 +228,64 @@ export function SettingsPage() {
                 </Button>
               </div>
 
-              <div className="space-y-1">
-                {MOCK_GROUP_MEMBERS.map((member) => (
-                  <div
-                    key={member.name}
-                    className="flex items-center gap-3 py-2.5 border-b border-surface-100 dark:border-surface-700 last:border-0"
-                  >
-                    <Avatar name={member.name} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">
-                        {member.name}
+              {myGroupsQuery.isLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-12 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : memberships.length === 0 ? (
+                <p className="text-sm text-surface-500 dark:text-surface-400 py-4 text-center">
+                  Группы не найдены
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {memberships.map((membership) => (
+                    <div
+                      key={membership.id}
+                      className="flex items-center gap-3 py-2.5 border-b border-surface-100 dark:border-surface-700 last:border-0"
+                    >
+                      <Avatar name={membership.group.code} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">
+                          {membership.group.code}
+                        </div>
+                        {membership.group.name && (
+                          <div className="text-xs text-surface-500 dark:text-surface-400 truncate">
+                            {membership.group.name}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {membership.role === 'starosta' && (
+                          <span className="text-xs px-2 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded-full font-medium">
+                            Староста
+                          </span>
+                        )}
+                        {membership.role === 'deputy' && (
+                          <span className="text-xs px-2 py-0.5 bg-info-100 text-info-600 dark:bg-info-500/20 dark:text-info-400 rounded-full font-medium">
+                            Зам
+                          </span>
+                        )}
+                        {!membership.verified && (
+                          <span className="text-xs px-2 py-0.5 bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-400 rounded-full font-medium">
+                            Ожидает
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {member.role === 'starosta' && (
-                        <span className="text-xs px-2 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded-full font-medium">
-                          Староста
-                        </span>
-                      )}
-                      {member.role === 'deputy' && (
-                        <span className="text-xs px-2 py-0.5 bg-info-100 text-info-600 dark:bg-info-500/20 dark:text-info-400 rounded-full font-medium">
-                          Зам
-                        </span>
-                      )}
-                      {!member.verified && (
-                        <span className="text-xs px-2 py-0.5 bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-400 rounded-full font-medium">
-                          Ожидает
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-6 pt-4 border-t border-surface-200 dark:border-surface-700">
-                <Button variant="ghost" className="text-danger-500 hover:text-danger-600">
-                  Покинуть группу
+                <Button
+                  variant="ghost"
+                  className="text-danger-500 hover:text-danger-600"
+                  onClick={handleLogout}
+                  disabled={logoutMutation.isPending}
+                >
+                  Выйти из аккаунта
                 </Button>
               </div>
             </Card>
@@ -279,7 +327,7 @@ export function SettingsPage() {
       <Modal
         open={showGroupModal}
         onClose={() => setShowGroupModal(false)}
-        title={`Управление группой ${MOCK_USER.group}`}
+        title={primaryGroup ? `Управление группой ${primaryGroup.group.code}` : 'Управление группой'}
       >
         <p className="text-sm text-surface-500 dark:text-surface-400 mb-4">
           Функции управления доступны старосте группы. Свяжитесь со старостой для изменения ролей.
