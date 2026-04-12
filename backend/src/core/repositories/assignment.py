@@ -35,6 +35,8 @@ class AssignmentRepository(BaseRepository[Assignment]):
         *,
         subject_id: uuid.UUID | None = None,
         upcoming_only: bool = False,
+        search: str | None = None,
+        priorities: list[str] | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> list[Assignment]:
@@ -52,6 +54,15 @@ class AssignmentRepository(BaseRepository[Assignment]):
             stmt = stmt.where(
                 (Assignment.deadline.is_(None)) | (Assignment.deadline >= datetime.utcnow())
             )
+
+        if search:
+            pattern = f"%{search}%"
+            stmt = stmt.where(
+                Assignment.title.ilike(pattern) | Assignment.description.ilike(pattern)
+            )
+
+        if priorities:
+            stmt = stmt.where(Assignment.priority.in_(priorities))
 
         stmt = stmt.order_by(Assignment.deadline.asc().nulls_last()).offset(offset).limit(limit)
 

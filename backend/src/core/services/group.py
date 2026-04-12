@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.models.group import StudentRole
 from src.core.repositories.group import GroupChatRepository, GroupRepository, StudentRepository
+from src.core.repositories.schedule import SubjectRepository
 from src.core.repositories.user import AuditLogRepository, UserRepository
 from src.core.schemas.group import (
     GroupCreate,
@@ -15,6 +16,7 @@ from src.core.schemas.group import (
     StudentResponse,
     StudentWithGroup,
 )
+from src.core.schemas.schedule import SubjectResponse
 from src.shared.exceptions import AuthorizationError, ConflictError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,7 @@ class GroupService:
         self.group_repo = GroupRepository(session)
         self.chat_repo = GroupChatRepository(session)
         self.student_repo = StudentRepository(session)
+        self.subject_repo = SubjectRepository(session)
         self.user_repo = UserRepository(session)
         self.audit_repo = AuditLogRepository(session)
 
@@ -184,6 +187,14 @@ class GroupService:
         """Get all groups user is member of."""
         students = await self.student_repo.get_user_students(user_id)
         return [StudentWithGroup.model_validate(s) for s in students]
+
+    async def get_group_subjects(self, group_code: str) -> list[SubjectResponse]:
+        """Get all subjects for a group."""
+        group = await self.group_repo.get_by_code(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+        subjects = await self.subject_repo.get_group_subjects(group.id)
+        return [SubjectResponse.model_validate(s) for s in subjects]
 
     async def join_group_by_telegram(
         self,

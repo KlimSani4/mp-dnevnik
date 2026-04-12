@@ -3,6 +3,7 @@
 from src.core.models.assignment import Assignment, AssignmentVote, TaskState, TaskStatus
 from src.core.models.base import Base, TimestampMixin, UUIDMixin
 from src.core.models.group import Group, GroupChat, Student, StudentRole
+from src.core.models.notification import Notification, NotificationPreference, NotificationType
 from src.core.models.schedule import (
     OverrideScope,
     OverrideType,
@@ -10,6 +11,7 @@ from src.core.models.schedule import (
     ScheduleOverride,
     Subject,
 )
+from src.core.models.semester import ControlType, Semester, SubjectSemester
 from src.core.models.user import AuditLog, ConsentRecord, Identity, User
 
 __all__ = [
@@ -38,4 +40,12 @@ __all__ = [
     "AssignmentVote",
     "TaskStatus",
     "TaskState",
+    # Semester
+    "Semester",
+    "SubjectSemester",
+    "ControlType",
+    # Notification
+    "Notification",
+    "NotificationPreference",
+    "NotificationType",
 ]

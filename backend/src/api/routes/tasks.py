@@ -6,7 +6,12 @@ from fastapi import APIRouter, Query
 
 from src.api.deps import CurrentUser, DBSession
 from src.core.models.assignment import TaskState
-from src.core.schemas.assignment import TaskStatusResponse, TaskStatusUpdate, TaskWithAssignment
+from src.core.schemas.assignment import (
+    BulkTaskUpdate,
+    TaskStatusResponse,
+    TaskStatusUpdate,
+    TaskWithAssignment,
+)
 from src.core.services.assignment import AssignmentService
 
 router = APIRouter()
@@ -22,6 +27,17 @@ async def get_tasks(
     """Get user's task statuses for a group."""
     assignment_service = AssignmentService(db)
     return await assignment_service.get_user_tasks(user.id, group_id, state=state)
+
+
+@router.patch("/bulk", response_model=list[TaskStatusResponse])
+async def bulk_update_tasks(
+    data: BulkTaskUpdate,
+    user: CurrentUser,
+    db: DBSession,
+) -> list[TaskStatusResponse]:
+    """Bulk update task statuses (for drag-and-drop)."""
+    assignment_service = AssignmentService(db)
+    return await assignment_service.bulk_update_tasks(user.id, data)
 
 
 @router.patch("/{assignment_id}", response_model=TaskStatusResponse)

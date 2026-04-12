@@ -17,9 +17,11 @@ from src.core.schemas.assignment import (
     AssignmentCreate,
     AssignmentUpdate,
     AssignmentWithSubject,
+    BulkTaskUpdate,
     TaskStatusResponse,
     TaskWithAssignment,
 )
+from src.core.schemas.dashboard import TaskProgress
 from src.shared.exceptions import AuthorizationError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -92,6 +94,8 @@ class AssignmentService:
         *,
         subject_id: uuid.UUID | None = None,
         upcoming_only: bool = False,
+        search: str | None = None,
+        priorities: list[str] | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> list[AssignmentWithSubject]:
@@ -100,6 +104,8 @@ class AssignmentService:
             group_id,
             subject_id=subject_id,
             upcoming_only=upcoming_only,
+            search=search,
+            priorities=priorities,
             offset=offset,
             limit=limit,
         )
@@ -222,3 +228,54 @@ class AssignmentService:
         await self.session.commit()
 
         return TaskStatusResponse.model_validate(task)
+
+    async def bulk_update_tasks(
+        self,
+        user_id: uuid.UUID,
+        data: BulkTaskUpdate,
+    ) -> list[TaskStatusResponse]:
+        """Bulk update task statuses."""
+        results: list[TaskStatusResponse] = []
+
+        for item in data.updates:
+            assignment = await self.assignment_repo.get(item.assignment_id)
+            if not assignment:
+                raise NotFoundError(f"Assignment {item.assignment_id} not found")
+
+            student = await self.student_repo.get_by_user_and_group(
+                user_id, assignment.group_id
+            )
+            if not student:
+                raise AuthorizationError("Not a member of this group")
+
+            task = await self.task_repo.get_or_create(student.id, item.assignment_id)
+            task = await self.task_repo.update_state(task, item.state)
+            results.append(TaskStatusResponse.model_validate(task))
+
+        await self.session.commit()
+        return results
+
+    async def get_task_progress(
+        self,
+        user_id: uuid.UUID,
+        group_id: uuid.UUID,
+    ) -> TaskProgress:
+        """Get task progress counters for user in a group."""
+        student = await self.student_repo.get_by_user_and_group(user_id, group_id)
+        if not student:
+            return TaskProgress(total=0, done=0, doing=0, review=0, todo=0)
+
+        tasks = await self.task_repo.get_student_tasks(student.id)
+
+        counts = {"todo": 0, "doing": 0, "review": 0, "done": 0}
+        for task in tasks:
+            counts[task.state.value] = counts.get(task.state.value, 0) + 1
+
+        total = sum(counts.values())
+        return TaskProgress(
+            total=total,
+            done=counts["done"],
+            doing=counts["doing"],
+            review=counts["review"],
+            todo=counts["todo"],
+        )
