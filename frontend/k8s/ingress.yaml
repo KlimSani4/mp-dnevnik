@@ -11,10 +11,10 @@ spec:
   ingressClassName: traefik
   tls:
     - hosts:
-        - nexora.prdxso.dev
+        - nexora.digitaldrugs.tech
       secretName: nexora-frontend-tls
   rules:
-    - host: nexora.prdxso.dev
+    - host: nexora.digitaldrugs.tech
       http:
         paths:
           - path: /
