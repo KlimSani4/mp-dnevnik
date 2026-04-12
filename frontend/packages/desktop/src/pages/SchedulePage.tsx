@@ -62,218 +62,6 @@ const PAIR_TIMES: Record<number, { start: string; end: string }> = {
 
 const WEEKDAY_NAMES_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-function createMockWeek(weekStart: Date): DaySchedule[] {
-  const weekdayNames = [
-    'Понедельник',
-    'Вторник',
-    'Среда',
-    'Четверг',
-    'Пятница',
-    'Суббота',
-  ]
-
-  const subjects = [
-    { id: 's1', name: 'Математическая логика', short_name: 'Мат. логика' },
-    { id: 's2', name: 'Базы данных', short_name: 'БД' },
-    { id: 's3', name: 'Объектно-ориентированное программирование', short_name: 'ООП' },
-    { id: 's4', name: 'Физическая культура', short_name: 'Физра' },
-    { id: 's5', name: 'Компьютерные сети', short_name: 'Комп. сети' },
-    { id: 's6', name: 'Операционные системы', short_name: 'ОС' },
-    { id: 's7', name: 'Иностранный язык', short_name: 'Англ. язык' },
-    { id: 's8', name: 'Дискретная математика', short_name: 'Дискрет. мат.' },
-    { id: 's9', name: 'Веб-программирование', short_name: 'Веб-прог.' },
-  ]
-
-  const teachers = [
-    'Иванов А.П.',
-    'Петрова М.В.',
-    'Сидоров К.Л.',
-    'Козлова Е.С.',
-    'Михайлов Д.А.',
-    'Романова Т.Н.',
-    'Жмышенко А.В.',
-    'Дудка Д.В.',
-  ]
-
-  const weekEntries: Record<number, Partial<ScheduleEntry>[]> = {
-    0: [
-      {
-        pair_number: 1,
-        subject: subjects[0],
-        teacher: teachers[0],
-        lesson_type: 'лекция',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-406',
-      },
-      {
-        pair_number: 2,
-        subject: subjects[1],
-        teacher: teachers[1],
-        lesson_type: 'практика',
-        location: 'https://meet.mospolytech.ru/bdb-301',
-        room: 'Онлайн',
-      },
-      {
-        pair_number: 3,
-        subject: subjects[2],
-        teacher: teachers[2],
-        lesson_type: 'лаб',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-310',
-      },
-    ],
-    1: [
-      {
-        pair_number: 1,
-        subject: subjects[3],
-        teacher: teachers[7],
-        lesson_type: 'практика',
-        location: 'Спорт зал на Юрино',
-        room: 'Зал 2',
-      },
-      {
-        pair_number: 3,
-        subject: subjects[4],
-        teacher: teachers[3],
-        lesson_type: 'лекция',
-        location: 'Ауд. Б. Семеновская, д.38',
-        room: 'В-305',
-      },
-      {
-        pair_number: 4,
-        subject: subjects[5],
-        teacher: teachers[4],
-        lesson_type: 'лаб',
-        location: 'Ауд. Б. Семеновская, д.38',
-        room: 'В-107',
-      },
-    ],
-    2: [
-      {
-        pair_number: 2,
-        subject: subjects[6],
-        teacher: teachers[5],
-        lesson_type: 'практика',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-201',
-      },
-      {
-        pair_number: 3,
-        subject: subjects[7],
-        teacher: teachers[0],
-        lesson_type: 'лекция',
-        location: 'https://webinar.mospolytech.ru/dm-lecture',
-        room: 'Вебинар',
-      },
-      {
-        pair_number: 4,
-        subject: subjects[8],
-        teacher: teachers[6],
-        lesson_type: 'лаб',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-310',
-      },
-    ],
-    3: [
-      {
-        pair_number: 1,
-        subject: subjects[2],
-        teacher: teachers[2],
-        lesson_type: 'лекция',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-406',
-      },
-      {
-        pair_number: 2,
-        subject: subjects[0],
-        teacher: teachers[0],
-        lesson_type: 'практика',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-310',
-      },
-      {
-        pair_number: 4,
-        subject: subjects[4],
-        teacher: teachers[3],
-        lesson_type: 'лаб',
-        location: 'https://meet.mospolytech.ru/cn-lab',
-        room: 'Онлайн',
-      },
-      {
-        pair_number: 5,
-        subject: subjects[1],
-        teacher: teachers[1],
-        lesson_type: 'лаб',
-        location: 'Ауд. Б. Семеновская, д.38',
-        room: 'В-107',
-      },
-    ],
-    4: [
-      {
-        pair_number: 1,
-        subject: subjects[5],
-        teacher: teachers[4],
-        lesson_type: 'лекция',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-406',
-      },
-      {
-        pair_number: 2,
-        subject: subjects[8],
-        teacher: teachers[6],
-        lesson_type: 'практика',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-310',
-      },
-      {
-        pair_number: 3,
-        subject: subjects[7],
-        teacher: teachers[0],
-        lesson_type: 'практика',
-        location: 'Ауд. Пр Вернадского, д.78',
-        room: 'Н-201',
-      },
-    ],
-    5: [
-      {
-        pair_number: 2,
-        subject: subjects[6],
-        teacher: teachers[5],
-        lesson_type: 'практика',
-        location: 'Ауд. Б. Семеновская, д.38',
-        room: 'В-201',
-      },
-    ],
-  }
-
-  return Array.from({ length: 6 }, (_, dayIdx) => {
-    const date = addDays(weekStart, dayIdx)
-    const rawEntries = weekEntries[dayIdx] ?? []
-
-    return {
-      date: format(date, 'yyyy-MM-dd'),
-      weekday: dayIdx,
-      weekday_name: weekdayNames[dayIdx],
-      entries: rawEntries.map((e, i) => ({
-        id: `${format(date, 'yyyy-MM-dd')}-${e.pair_number}-${i}`,
-        pair_number: e.pair_number!,
-        start_time: PAIR_TIMES[e.pair_number!].start,
-        end_time: PAIR_TIMES[e.pair_number!].end,
-        location: e.location ?? '',
-        room: e.room ?? '',
-        teacher: e.teacher ?? '',
-        lesson_type: e.lesson_type ?? 'лекция',
-        week_parity: null,
-        subject: e.subject ?? { id: 'unknown', name: 'Неизвестно', short_name: '???' },
-        overrides: [],
-      })),
-    }
-  })
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -738,8 +526,6 @@ function WeeklyView({
 // ---------------------------------------------------------------------------
 
 export function SchedulePage() {
-  const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
-
   const isMobile = useIsMobile()
 
   const [viewMode, setViewMode] = useState<'daily' | 'weekly'>(
@@ -753,32 +539,14 @@ export function SchedulePage() {
     setViewMode(isMobile ? 'daily' : 'weekly')
   }, [isMobile])
 
-  // API hooks (inactive when SKIP_AUTH — groupCode will be null so queries won't fire)
   const { groupCode } = useGroupContext()
-  const weekScheduleQuery = useWeekSchedule(
-    SKIP_AUTH ? undefined : (groupCode ?? undefined),
-    weekOffset,
-  )
+  const weekScheduleQuery = useWeekSchedule(groupCode ?? undefined, weekOffset)
 
-  // Build week data from either mocks or API
   const weekData = useMemo(() => {
-    if (SKIP_AUTH) {
-      // Mock mode — existing logic
-      if (viewMode === 'weekly') {
-        const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
-        const targetWeekStart = addDays(currentWeekStart, weekOffset * 7)
-        return createMockWeek(targetWeekStart)
-      } else {
-        const targetDate = addDays(new Date(), dayOffset)
-        const targetWeekStart = startOfWeek(targetDate, { weekStartsOn: 1 })
-        return createMockWeek(targetWeekStart)
-      }
-    }
-    // API mode — use data from query
     return (weekScheduleQuery.data as DaySchedule[] | undefined) ?? []
-  }, [SKIP_AUTH, viewMode, weekOffset, dayOffset, weekScheduleQuery.data])
+  }, [weekScheduleQuery.data])
 
-  const isLoading = !SKIP_AUTH && weekScheduleQuery.isLoading
+  const isLoading = weekScheduleQuery.isLoading
 
   return (
     <div>
@@ -804,7 +572,16 @@ export function SchedulePage() {
         </div>
       )}
 
-      {isLoading ? (
+      {!groupCode ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <p className="text-surface-500 dark:text-surface-400 font-medium">
+            Расписание не загружено
+          </p>
+          <p className="text-sm text-surface-400 dark:text-surface-500 mt-1">
+            Выберите группу в настройках, чтобы увидеть расписание
+          </p>
+        </div>
+      ) : isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
           <p className="mt-4 text-sm text-surface-500 dark:text-surface-400">

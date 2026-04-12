@@ -1,12 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { format, formatDistanceToNow, differenceInMinutes, isBefore, addDays } from 'date-fns'
+import { format, formatDistanceToNow, differenceInMinutes, isBefore } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import clsx from 'clsx'
 import { Card, Badge, ProgressBar, Button, Icon, Avatar } from '../components/ui'
 import { useCurrentUser, useTodaySchedule, useTasks, useGroupContext, useDashboard } from '@nexora/shared'
-
-const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -44,175 +42,6 @@ interface Task {
   assignment: Assignment
   updated_at: string
 }
-
-// ────────────────────────────────────────────────────────
-// Mock Data
-// ────────────────────────────────────────────────────────
-
-const MOCK_USER = { first_name: 'Анастасия', group: '241-237' }
-
-const today = new Date()
-
-const MOCK_SCHEDULE: ScheduleEntry[] = [
-  {
-    id: 's1',
-    pair_number: 1,
-    start_time: '09:00',
-    end_time: '10:30',
-    location: 'Пр. Вернадского, 86',
-    room: 'Н-406',
-    teacher: 'Иванов А.В.',
-    lesson_type: 'очно',
-    subject: { id: 'sub1', name: 'Математический анализ', short_name: 'Матан' },
-  },
-  {
-    id: 's2',
-    pair_number: 2,
-    start_time: '10:40',
-    end_time: '12:10',
-    location: 'Онлайн',
-    room: '',
-    teacher: 'Петрова Е.С.',
-    lesson_type: 'онлайн',
-    subject: { id: 'sub2', name: 'Английский язык', short_name: 'Англ' },
-    link: 'https://meet.google.com/abc-defg-hij',
-  },
-  {
-    id: 's3',
-    pair_number: 4,
-    start_time: '14:30',
-    end_time: '16:00',
-    location: 'Пр. Вернадского, 86',
-    room: 'Н-211',
-    teacher: 'Сидоров К.М.',
-    lesson_type: 'очно',
-    subject: { id: 'sub3', name: 'Физика', short_name: 'Физика' },
-  },
-  {
-    id: 's4',
-    pair_number: 5,
-    start_time: '16:10',
-    end_time: '17:40',
-    location: 'Вебинар',
-    room: '',
-    teacher: 'Козлова М.Н.',
-    lesson_type: 'вебинар',
-    subject: { id: 'sub4', name: 'Программирование', short_name: 'Прог' },
-    link: 'https://webinar.mospolytech.ru/prog-101',
-  },
-]
-
-const MOCK_ASSIGNMENTS: Assignment[] = [
-  {
-    id: 'a1',
-    title: 'Лабораторная работа №3 — Пределы и непрерывность',
-    description: 'Решить задачи из сборника Демидовича',
-    deadline: format(addDays(today, 1), "yyyy-MM-dd'T'23:59:00"),
-    priority: 'urgent',
-    votes_up: 12,
-    votes_down: 1,
-    is_verified: true,
-    subject: { id: 'sub1', name: 'Математический анализ' },
-    created_at: format(addDays(today, -5), "yyyy-MM-dd'T'10:00:00"),
-  },
-  {
-    id: 'a2',
-    title: 'Эссе "My Future Profession"',
-    description: '300 слов, формат A4',
-    deadline: format(addDays(today, 2), "yyyy-MM-dd'T'23:59:00"),
-    priority: 'high',
-    votes_up: 8,
-    votes_down: 0,
-    is_verified: false,
-    subject: { id: 'sub2', name: 'Английский язык' },
-    created_at: format(addDays(today, -3), "yyyy-MM-dd'T'14:00:00"),
-  },
-  {
-    id: 'a3',
-    title: 'Отчёт по лабораторной — Механика',
-    description: 'Оформить по ГОСТ, приложить графики',
-    deadline: format(addDays(today, 3), "yyyy-MM-dd'T'23:59:00"),
-    priority: 'high',
-    votes_up: 5,
-    votes_down: 2,
-    is_verified: true,
-    subject: { id: 'sub3', name: 'Физика' },
-    created_at: format(addDays(today, -7), "yyyy-MM-dd'T'09:00:00"),
-  },
-  {
-    id: 'a4',
-    title: 'Реализовать алгоритм сортировки на Python',
-    description: 'Quick sort + merge sort, покрыть тестами',
-    deadline: format(addDays(today, 5), "yyyy-MM-dd'T'23:59:00"),
-    priority: 'normal',
-    votes_up: 15,
-    votes_down: 0,
-    is_verified: true,
-    subject: { id: 'sub4', name: 'Программирование' },
-    created_at: format(addDays(today, -2), "yyyy-MM-dd'T'11:00:00"),
-  },
-]
-
-const MOCK_TASKS: Task[] = [
-  {
-    id: 't1',
-    state: 'doing',
-    assignment: MOCK_ASSIGNMENTS[0],
-    updated_at: format(addDays(today, -1), "yyyy-MM-dd'T'18:00:00"),
-  },
-  {
-    id: 't2',
-    state: 'todo',
-    assignment: MOCK_ASSIGNMENTS[1],
-    updated_at: format(addDays(today, -1), "yyyy-MM-dd'T'12:00:00"),
-  },
-  {
-    id: 't3',
-    state: 'todo',
-    assignment: MOCK_ASSIGNMENTS[2],
-    updated_at: format(addDays(today, -2), "yyyy-MM-dd'T'09:00:00"),
-  },
-  {
-    id: 't4',
-    state: 'review',
-    assignment: MOCK_ASSIGNMENTS[3],
-    updated_at: format(today, "yyyy-MM-dd'T'08:00:00"),
-  },
-  {
-    id: 't5',
-    state: 'done',
-    assignment: {
-      id: 'a5',
-      title: 'Конспект лекции по теории вероятностей',
-      description: '',
-      deadline: format(addDays(today, -1), "yyyy-MM-dd'T'23:59:00"),
-      priority: 'low',
-      votes_up: 3,
-      votes_down: 0,
-      is_verified: false,
-      subject: { id: 'sub1', name: 'Математический анализ' },
-      created_at: format(addDays(today, -4), "yyyy-MM-dd'T'10:00:00"),
-    },
-    updated_at: format(today, "yyyy-MM-dd'T'07:00:00"),
-  },
-  {
-    id: 't6',
-    state: 'todo',
-    assignment: {
-      id: 'a6',
-      title: 'Подготовить презентацию к семинару',
-      description: '10-15 слайдов',
-      deadline: format(addDays(today, 4), "yyyy-MM-dd'T'23:59:00"),
-      priority: 'normal',
-      votes_up: 2,
-      votes_down: 1,
-      is_verified: false,
-      subject: { id: 'sub3', name: 'Физика' },
-      created_at: format(addDays(today, -1), "yyyy-MM-dd'T'15:00:00"),
-    },
-    updated_at: format(addDays(today, -1), "yyyy-MM-dd'T'15:00:00"),
-  },
-]
 
 // ────────────────────────────────────────────────────────
 // Helpers
@@ -522,22 +351,20 @@ function TaskItem({ task, onToggle }: { task: Task; onToggle: (id: string) => vo
 // ────────────────────────────────────────────────────────
 
 export function HomePage() {
-  // ── API hooks (always called unconditionally) ──
+  // ── API hooks ──
   const { groupId, groupCode } = useGroupContext()
   const currentUserQuery = useCurrentUser()
-  const todayScheduleQuery = useTodaySchedule(SKIP_AUTH ? undefined : (groupCode ?? undefined))
-  const tasksQuery = useTasks({ group_id: SKIP_AUTH ? '' : (groupId ?? '') })
+  const todayScheduleQuery = useTodaySchedule(groupCode ?? undefined)
+  const tasksQuery = useTasks({ group_id: groupId ?? '' })
   const dashboardQuery = useDashboard(
-    !SKIP_AUTH && groupId && groupCode ? { group_id: groupId, group_code: groupCode } : undefined
+    groupId && groupCode ? { group_id: groupId, group_code: groupCode } : undefined
   )
 
-  const isApiLoading = !SKIP_AUTH && (todayScheduleQuery.isLoading || tasksQuery.isLoading)
+  const isApiLoading = todayScheduleQuery.isLoading || tasksQuery.isLoading
 
   // ── Data sources ──
   const greeting = getGreeting()
-  const userName = SKIP_AUTH
-    ? MOCK_USER.first_name
-    : (currentUserQuery.data?.display_name?.split(' ')[0] ?? 'Студент')
+  const userName = currentUserQuery.data?.display_name?.split(' ')[0] ?? 'Студент'
 
   // Map API schedule entries to local ScheduleEntry format
   const apiScheduleToLocal = (entry: any): ScheduleEntry => ({
@@ -553,22 +380,16 @@ export function HomePage() {
     link: undefined,
   })
 
-  const scheduleEntries: ScheduleEntry[] = SKIP_AUTH
-    ? MOCK_SCHEDULE
-    : (todayScheduleQuery.data?.entries ?? []).map(apiScheduleToLocal)
+  const scheduleEntries: ScheduleEntry[] = (todayScheduleQuery.data?.entries ?? []).map(apiScheduleToLocal)
 
   const pairCount = scheduleEntries.length
 
-  // Tasks
-  const [mockTasks, setMockTasks] = useState<Task[]>(MOCK_TASKS)
-  const activeTasks: Task[] = SKIP_AUTH ? mockTasks : (tasksQuery.data ?? [])
+  const activeTasks: Task[] = tasksQuery.data ?? []
 
-  // Assignments for deadlines — derive from tasks in API mode
-  const assignments: Assignment[] = SKIP_AUTH
-    ? MOCK_ASSIGNMENTS
-    : activeTasks
-        .filter((t) => t.state !== 'done')
-        .map((t) => t.assignment)
+  // Assignments for deadlines — derive from active tasks
+  const assignments: Assignment[] = activeTasks
+    .filter((t) => t.state !== 'done')
+    .map((t) => t.assignment)
 
   // Live clock for countdown updates
   const [, setTick] = useState(0)
@@ -577,15 +398,9 @@ export function HomePage() {
     return () => clearInterval(interval)
   }, [])
 
-  const handleToggleTask = (id: string) => {
-    if (!SKIP_AUTH) return
-    setMockTasks((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? { ...t, state: t.state === 'done' ? 'todo' : 'done' }
-          : t,
-      ),
-    )
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleToggleTask = (_id: string) => {
+    // Task toggle is handled via AssignmentsPage / Kanban
   }
 
   // Build schedule list with windows
@@ -622,7 +437,7 @@ export function HomePage() {
   const totalCount = dashProgress ? dashProgress.total : activeTasks.length
   const completionPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
-  const todayFormatted = format(today, "d MMMM, EEEE", { locale: ru })
+  const todayFormatted = format(new Date(), "d MMMM, EEEE", { locale: ru })
 
   if (isApiLoading) {
     return (
@@ -678,12 +493,18 @@ export function HomePage() {
             </Link>
           </div>
 
-          {scheduleWithGaps.map((item, idx) =>
-            item.type === 'entry' ? (
-              <ScheduleCard key={item.entry.id} entry={item.entry} />
-            ) : (
-              <WindowGap key={`gap-${idx}`} minutes={item.minutes} />
-            ),
+          {scheduleWithGaps.length === 0 ? (
+            <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
+              Сегодня пар нет
+            </p>
+          ) : (
+            scheduleWithGaps.map((item, idx) =>
+              item.type === 'entry' ? (
+                <ScheduleCard key={item.entry.id} entry={item.entry} />
+              ) : (
+                <WindowGap key={`gap-${idx}`} minutes={item.minutes} />
+              ),
+            )
           )}
         </div>
 
@@ -729,9 +550,15 @@ export function HomePage() {
               </Link>
             </div>
             <div className="space-y-3">
-              {burningDeadlines.map((a) => (
-                <DeadlineCard key={a.id} assignment={a} />
-              ))}
+              {burningDeadlines.length === 0 ? (
+                <p className="text-sm text-surface-400 dark:text-surface-500 py-2 text-center">
+                  Нет горящих дедлайнов
+                </p>
+              ) : (
+                burningDeadlines.map((a) => (
+                  <DeadlineCard key={a.id} assignment={a} />
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -747,9 +574,15 @@ export function HomePage() {
             </span>
           </div>
           <Card>
-            {activeTasks.map((task) => (
-              <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
-            ))}
+            {activeTasks.length === 0 ? (
+              <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
+                Нет активных задач
+              </p>
+            ) : (
+              activeTasks.map((task) => (
+                <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
+              ))
+            )}
           </Card>
         </div>
       </div>
@@ -771,12 +604,18 @@ export function HomePage() {
             </Link>
           </div>
           <div className="space-y-3">
-            {scheduleWithGaps.map((item, idx) =>
-              item.type === 'entry' ? (
-                <ScheduleCard key={item.entry.id} entry={item.entry} />
-              ) : (
-                <WindowGap key={`gap-m-${idx}`} minutes={item.minutes} />
-              ),
+            {scheduleWithGaps.length === 0 ? (
+              <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
+                Сегодня пар нет
+              </p>
+            ) : (
+              scheduleWithGaps.map((item, idx) =>
+                item.type === 'entry' ? (
+                  <ScheduleCard key={item.entry.id} entry={item.entry} />
+                ) : (
+                  <WindowGap key={`gap-m-${idx}`} minutes={item.minutes} />
+                ),
+              )
             )}
           </div>
         </section>
@@ -796,9 +635,15 @@ export function HomePage() {
             </Link>
           </div>
           <div className="space-y-3">
-            {burningDeadlines.map((a) => (
-              <DeadlineCard key={a.id} assignment={a} />
-            ))}
+            {burningDeadlines.length === 0 ? (
+              <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
+                Нет горящих дедлайнов
+              </p>
+            ) : (
+              burningDeadlines.map((a) => (
+                <DeadlineCard key={a.id} assignment={a} />
+              ))
+            )}
           </div>
         </section>
 
@@ -834,9 +679,15 @@ export function HomePage() {
             </span>
           </div>
           <Card>
-            {activeTasks.map((task) => (
-              <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
-            ))}
+            {activeTasks.length === 0 ? (
+              <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
+                Нет активных задач
+              </p>
+            ) : (
+              activeTasks.map((task) => (
+                <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
+              ))
+            )}
           </Card>
         </section>
       </div>
