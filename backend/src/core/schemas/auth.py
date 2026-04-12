@@ -22,6 +22,12 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class DevLoginRequest(BaseModel):
+    """Dev login request (development only)."""
+
+    telegram_id: str = "12345"
+
+
 class RefreshTokenRequest(BaseModel):
     """Refresh token request."""
 

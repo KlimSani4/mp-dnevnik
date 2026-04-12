@@ -23,15 +23,20 @@ async def list_assignments(
     group_id: uuid.UUID = Query(..., description="Group ID"),
     subject_id: uuid.UUID | None = Query(None, description="Filter by subject"),
     upcoming_only: bool = Query(False, description="Only show upcoming deadlines"),
+    search: str | None = Query(None, description="Search by title/description"),
+    priority: str | None = Query(None, description="Filter by priority (comma-separated: urgent,high)"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ) -> list[AssignmentWithSubject]:
     """Get assignments for a group."""
+    priorities = [p.strip() for p in priority.split(",")] if priority else None
     assignment_service = AssignmentService(db)
     return await assignment_service.get_group_assignments(
         group_id,
         subject_id=subject_id,
         upcoming_only=upcoming_only,
+        search=search,
+        priorities=priorities,
         offset=offset,
         limit=limit,
     )

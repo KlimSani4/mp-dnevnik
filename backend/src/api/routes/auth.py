@@ -1,12 +1,33 @@
 """Authentication routes."""
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, HTTPException, Response
 
 from src.api.deps import ClientIP, CurrentUser, DBSession, UserAgent
-from src.core.schemas.auth import RefreshTokenRequest, TelegramAuthRequest, TokenResponse
+from src.config import settings
+from src.core.schemas.auth import DevLoginRequest, RefreshTokenRequest, TelegramAuthRequest, TokenResponse
 from src.core.services.auth import AuthService
 
 router = APIRouter()
+
+
+@router.post("/dev", response_model=TokenResponse)
+async def dev_login(
+    data: DevLoginRequest,
+    db: DBSession,
+    ip_address: ClientIP,
+    user_agent: UserAgent,
+) -> TokenResponse:
+    """Dev-only login — skips Telegram validation. Only available when APP_ENV=development."""
+    if not settings.is_development:
+        raise HTTPException(status_code=403, detail="Dev login is only available in development mode")
+
+    auth_service = AuthService(db)
+    user, tokens = await auth_service.dev_login(
+        telegram_id=data.telegram_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    return tokens
 
 
 @router.post("/telegram", response_model=TokenResponse)

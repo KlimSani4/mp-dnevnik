@@ -12,6 +12,7 @@ from src.core.schemas.group import (
     StudentResponse,
     StudentWithGroup,
 )
+from src.core.schemas.schedule import SubjectResponse
 from src.core.services.group import GroupService
 
 router = APIRouter()
@@ -85,6 +86,16 @@ async def join_group(
     """Join a group as unverified student."""
     group_service = GroupService(db)
     return await group_service.join_group(code, user.id)
+
+
+@router.get("/{code}/subjects", response_model=list[SubjectResponse])
+async def get_group_subjects(
+    code: str,
+    db: DBSession,
+) -> list[SubjectResponse]:
+    """Get all subjects for a group."""
+    group_service = GroupService(db)
+    return await group_service.get_group_subjects(code)
 
 
 @router.post("/{code}/verify/{user_id}", response_model=StudentResponse)

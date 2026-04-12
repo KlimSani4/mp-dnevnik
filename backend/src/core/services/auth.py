@@ -100,6 +100,32 @@ class AuthService:
 
         return user, tokens, is_new
 
+    async def dev_login(
+        self,
+        *,
+        telegram_id: str,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> tuple[User, TokenResponse]:
+        """Dev-only login: find or create user by telegram_id, return tokens."""
+        user = await self.register_from_bot(
+            telegram_id=telegram_id,
+            first_name="Dev",
+            last_name="User",
+        )
+        tokens = self._create_tokens(user)
+
+        await self.audit_repo.log(
+            action="dev_login",
+            user_id=user.id,
+            resource="auth",
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        await self.session.commit()
+
+        return user, tokens
+
     async def register_from_bot(
         self,
         *,

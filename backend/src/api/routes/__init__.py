@@ -1,6 +1,17 @@
 """API routes."""
 
-from src.api.routes import assignments, auth, groups, health, schedule, tasks, users
+from src.api.routes import (
+    assignments,
+    auth,
+    dashboard,
+    groups,
+    health,
+    notifications,
+    schedule,
+    semesters,
+    tasks,
+    users,
+)
 
 __all__ = [
     "health",
@@ -10,4 +21,7 @@ __all__ = [
     "schedule",
     "assignments",
     "tasks",
+    "dashboard",
+    "semesters",
+    "notifications",
 ]

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     TELEGRAM_WEBHOOK_SECRET: str = ""
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173", "https://nexora.digitaldrugs.tech"]
 
     # Logging
     LOG_LEVEL: str = "INFO"

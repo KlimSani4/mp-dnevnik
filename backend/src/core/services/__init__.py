@@ -3,7 +3,9 @@
 from src.core.services.assignment import AssignmentService
 from src.core.services.auth import AuthService
 from src.core.services.group import GroupService
+from src.core.services.notification import NotificationService
 from src.core.services.schedule import ScheduleService
+from src.core.services.semester import SemesterService
 from src.core.services.user import UserService
 
 __all__ = [
@@ -12,4 +14,6 @@ __all__ = [
     "GroupService",
     "ScheduleService",
     "AssignmentService",
+    "SemesterService",
+    "NotificationService",
 ]

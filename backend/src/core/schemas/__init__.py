@@ -5,12 +5,15 @@ from src.core.schemas.assignment import (
     AssignmentResponse,
     AssignmentUpdate,
     AssignmentWithSubject,
+    BulkTaskUpdate,
+    BulkTaskUpdateItem,
     TaskStatusResponse,
     TaskStatusUpdate,
     TaskWithAssignment,
     VoteCreate,
     VoteResponse,
 )
+from src.core.schemas.dashboard import DashboardResponse, TaskProgress
 from src.core.schemas.auth import (
     AuthenticatedUser,
     ExternalIdentity,
@@ -29,6 +32,14 @@ from src.core.schemas.group import (
     StudentUpdate,
     StudentWithGroup,
 )
+from src.core.schemas.notification import (
+    NotificationListResponse,
+    NotificationPreferenceResponse,
+    NotificationPreferencesResponse,
+    NotificationPreferenceUpdate,
+    NotificationResponse,
+    NotificationSettingsUpdate,
+)
 from src.core.schemas.schedule import (
     DayScheduleResponse,
     OverrideCreate,
@@ -39,6 +50,12 @@ from src.core.schemas.schedule import (
     ScheduleEntryWithSubject,
     SubjectCreate,
     SubjectResponse,
+)
+from src.core.schemas.semester import (
+    SemesterResponse,
+    SubjectProgressResponse,
+    SubjectSemesterResponse,
+    SubjectSemesterUpdate,
 )
 from src.core.schemas.user import (
     AuditLogResponse,
@@ -99,4 +116,21 @@ __all__ = [
     "TaskStatusUpdate",
     "TaskStatusResponse",
     "TaskWithAssignment",
+    "BulkTaskUpdate",
+    "BulkTaskUpdateItem",
+    # Dashboard
+    "DashboardResponse",
+    "TaskProgress",
+    # Semester
+    "SemesterResponse",
+    "SubjectSemesterResponse",
+    "SubjectSemesterUpdate",
+    "SubjectProgressResponse",
+    # Notification
+    "NotificationResponse",
+    "NotificationListResponse",
+    "NotificationPreferenceResponse",
+    "NotificationPreferencesResponse",
+    "NotificationPreferenceUpdate",
+    "NotificationSettingsUpdate",
 ]

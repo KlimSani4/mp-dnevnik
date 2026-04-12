@@ -103,3 +103,16 @@ class TaskWithAssignment(TaskStatusResponse):
     """Task with assignment info."""
 
     assignment: AssignmentWithSubject
+
+
+class BulkTaskUpdateItem(BaseModel):
+    """Single item in bulk task update."""
+
+    assignment_id: uuid.UUID
+    state: TaskState
+
+
+class BulkTaskUpdate(BaseModel):
+    """Bulk task update request."""
+
+    updates: list[BulkTaskUpdateItem] = Field(..., min_length=1, max_length=50)
