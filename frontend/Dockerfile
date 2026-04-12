@@ -19,6 +19,12 @@ RUN pnpm install --frozen-lockfile
 COPY packages/shared/ ./packages/shared/
 COPY packages/desktop/ ./packages/desktop/
 
+# Build-time env для Vite (могут быть переданы через --build-arg)
+ARG VITE_API_URL=https://nexora.digitaldrugs.tech/api/v1
+ARG VITE_TELEGRAM_BOT_USERNAME=nexora_mospolytech_bot
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
+
 # Собираем desktop-пакет
 RUN pnpm --filter @nexora/desktop build
 
