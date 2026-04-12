@@ -12,6 +12,19 @@ from src.gateways.telegram.handlers import settings as settings_handler
 
 logger = logging.getLogger(__name__)
 
+_bot_instance: Bot | None = None
+
+
+async def get_bot() -> Bot:
+    """Get or create the bot singleton instance."""
+    global _bot_instance
+    if _bot_instance is None:
+        _bot_instance = Bot(
+            token=settings.TELEGRAM_BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+    return _bot_instance
+
 
 def create_bot() -> Bot | None:
     """Create Telegram bot instance."""
