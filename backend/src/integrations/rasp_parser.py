@@ -16,15 +16,11 @@ RASP_URL = "https://rasp.dmami.ru/site/group"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 TIMEOUT = 30.0
 
-# Subjects to filter out (PE, personal development, etc.)
+# Subjects to filter out (only pure PE electives, not ПД)
 FILTER_PATTERNS = [
-    r"-\*ПД\*-",
-    r"-\*Физ\*-",
-    r"Физическая культура",
     r"Элективные дисциплины по физической культуре",
+    r"Общая физическая подготовка",
     r"Проектная деятельность",
-    r"Физическая подготовка",
-    r"Общая физическая",
 ]
 
 
