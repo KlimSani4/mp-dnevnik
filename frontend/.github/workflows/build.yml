@@ -61,4 +61,5 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VITE_API_URL=https://api.nexora.prdxso.dev/api/v1
+            VITE_API_URL=https://nexora.digitaldrugs.tech/api/v1
+            VITE_TELEGRAM_BOT_USERNAME=nexora_mpu_bot
