@@ -35,8 +35,9 @@ async def send_upcoming_class_notifications() -> None:
 
         for group in groups:
             try:
+                today_moscow = datetime.now(tz=timezone(timedelta(hours=3))).date()
                 day_schedule = await schedule_service.get_day_schedule(
-                    group.code, date.today()
+                    group.code, today_moscow
                 )
                 for entry in day_schedule.entries:
                     if abs_diff_minutes(entry.start_time, target_hhmm) <= 1:
