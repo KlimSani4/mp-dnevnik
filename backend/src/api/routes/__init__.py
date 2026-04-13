@@ -6,6 +6,7 @@ from src.api.routes import (
     dashboard,
     groups,
     health,
+    internal,
     notifications,
     schedule,
     semesters,
@@ -24,4 +25,5 @@ __all__ = [
     "dashboard",
     "semesters",
     "notifications",
+    "internal",
 ]
