@@ -93,9 +93,12 @@ export function OnboardingPage() {
     if (effectiveGroup) {
       try {
         await joinGroupMutation.mutateAsync(effectiveGroup)
-        // useGroupContext will auto-select the group once groups query refreshes
-      } catch {
-        // group might already be joined, proceed anyway
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status !== 409) {
+          // 409 = already a member, that's fine. Other errors — still proceed.
+          console.warn('joinGroup error:', err)
+        }
       }
     }
     navigate('/')
