@@ -25,6 +25,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --chown=nexora:nexora src/ ./src/
 COPY --chown=nexora:nexora alembic/ ./alembic/
 COPY --chown=nexora:nexora alembic.ini pyproject.toml ./
+COPY --chown=nexora:nexora entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
 USER nexora
 
@@ -33,4 +35,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./entrypoint.sh"]

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
 from src.core.models.schedule import OverrideScope, OverrideType, ScheduleOverride
+from src.integrations.rasp_parser import fetch_group_schedule
 from src.core.repositories.group import GroupRepository, StudentRepository
 from src.core.repositories.schedule import (
     ScheduleEntryRepository,
@@ -53,6 +54,19 @@ class ScheduleService:
 
         # Get base entries
         entries = await self.entry_repo.get_day_schedule(group.id, target_date)
+
+        # Auto-import from rasp.dmami.ru if no entries in DB
+        if not entries:
+            try:
+                schedule_data = await fetch_group_schedule(group_code)
+                if schedule_data:
+                    await self.import_schedule(group_code, schedule_data)
+                    entries = await self.entry_repo.get_day_schedule(group.id, target_date)
+            except Exception:
+                logger.exception(
+                    "Failed to auto-import schedule",
+                    extra={"group_code": group_code},
+                )
 
         # Get student for personal overrides
         student_id: uuid.UUID | None = None
