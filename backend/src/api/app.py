@@ -16,6 +16,7 @@ from src.api.routes import (
     dashboard,
     groups,
     health,
+    internal,
     notifications,
     schedule,
     semesters,
@@ -142,5 +143,6 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
     app.include_router(semesters.router, prefix="/api/v1/subjects", tags=["semesters"])
     app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
+    app.include_router(internal.router, prefix="/api/v1/internal", tags=["internal"])
 
     return app

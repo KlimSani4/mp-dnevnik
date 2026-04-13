@@ -1,13 +1,20 @@
 """Authentication routes."""
 
+import json
+import secrets
+import time
+
 from fastapi import APIRouter, HTTPException, Response
 
-from src.api.deps import ClientIP, CurrentUser, DBSession, UserAgent
+from src.api.deps import ClientIP, CurrentUser, DBSession, RedisClient, UserAgent
 from src.config import settings
 from src.core.schemas.auth import DevLoginRequest, RefreshTokenRequest, TelegramAuthRequest, TokenResponse
 from src.core.services.auth import AuthService
 
 router = APIRouter()
+
+BOT_USERNAME = "nexora_mpu_bot"
+AUTH_TOKEN_TTL = 600  # 10 minutes
 
 
 @router.post("/dev", response_model=TokenResponse)
@@ -67,6 +74,38 @@ async def refresh_tokens(
     )
 
     return tokens
+
+
+@router.post("/telegram/init")
+async def telegram_bot_init(redis: RedisClient) -> dict:
+    """Create a pending auth token for bot-based login flow."""
+    token = secrets.token_urlsafe(16)
+    key = f"auth_token:{token}"
+    payload = json.dumps({"status": "pending", "created_at": int(time.time())})
+    await redis.set(key, payload, ex=AUTH_TOKEN_TTL)
+    return {"token": token, "bot_username": BOT_USERNAME}
+
+
+@router.get("/telegram/poll/{token}")
+async def telegram_bot_poll(token: str, redis: RedisClient) -> dict:
+    """Poll for bot-auth completion."""
+    key = f"auth_token:{token}"
+    raw = await redis.get(key)
+    if raw is None:
+        raise HTTPException(status_code=404, detail="Token not found or expired")
+
+    data = json.loads(raw)
+    if data["status"] == "pending":
+        return {"status": "pending"}
+
+    # Complete — delete token and return tokens
+    await redis.delete(key)
+    return {
+        "status": "complete",
+        "access_token": data["access_token"],
+        "refresh_token": data["refresh_token"],
+        "token_type": data["token_type"],
+    }
 
 
 @router.post("/logout", status_code=204)
