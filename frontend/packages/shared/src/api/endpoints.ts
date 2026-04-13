@@ -2,6 +2,8 @@ import type { ApiClient } from './client'
 import type {
   AuthTokens,
   TelegramAuthRequest,
+  TelegramBotInitResponse,
+  TelegramBotPollResponse,
   RefreshTokenRequest,
   User,
   UserUpdateRequest,
@@ -44,6 +46,12 @@ export function createAuthApi(client: ApiClient) {
     },
     logout() {
       return client.post<void>('/auth/logout')
+    },
+    telegramBotInit() {
+      return client.post<TelegramBotInitResponse>('/auth/telegram/init')
+    },
+    telegramBotPoll(token: string) {
+      return client.get<TelegramBotPollResponse>(`/auth/telegram/poll/${token}`)
     },
   }
 }

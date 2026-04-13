@@ -23,3 +23,12 @@ export interface TelegramAuthRequest {
 export interface RefreshTokenRequest {
   refresh_token: string
 }
+
+export interface TelegramBotInitResponse {
+  token: string
+  bot_username: string
+}
+
+export type TelegramBotPollResponse =
+  | { status: 'pending' }
+  | { status: 'complete'; access_token: string; refresh_token: string; token_type: 'bearer' }

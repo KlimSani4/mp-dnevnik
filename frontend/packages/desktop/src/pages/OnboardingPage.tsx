@@ -2,10 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Button, Card, Input } from '../components/ui'
-import { useLoginWithTelegram, useSearchGroups, useJoinGroup, useAuthStore } from '@nexora/shared'
-import type { TelegramWidgetData } from '@nexora/shared'
-
-const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? 'nexora_mospolytech_bot'
+import { useSearchGroups, useJoinGroup, useAuthStore, useTelegramBotAuth, useTelegramBotPoll } from '@nexora/shared'
 
 type Step = 'welcome' | 'group' | 'subgroup' | 'schedule' | 'done'
 
@@ -26,7 +23,11 @@ export function OnboardingPage() {
   const [scheduleConfirmed, setScheduleConfirmed] = useState(false)
   const [loginError, setLoginError] = useState<string | null>(null)
 
-  const loginMutation = useLoginWithTelegram()
+  // Bot-based auth state
+  const [pollToken, setPollToken] = useState<string | null>(null)
+  const [awaitingBot, setAwaitingBot] = useState(false)
+
+  const botAuthMutation = useTelegramBotAuth()
   const searchGroupsQuery = useSearchGroups(
     groupCode.length >= 2 ? { search: groupCode } : undefined
   )
@@ -35,42 +36,28 @@ export function OnboardingPage() {
 
   const displayedGroups = searchGroupsQuery.data?.map((g) => g.code) ?? []
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const telegramContainerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (step !== 'welcome') return
-
-    const container = telegramContainerRef.current
-    if (!container) return
-
-    // Clean up any existing widget
-    container.innerHTML = ''
-
-    const script = document.createElement('script')
-    script.src = 'https://telegram.org/js/telegram-widget.js?22'
-    script.setAttribute('data-telegram-login', BOT_USERNAME)
-    script.setAttribute('data-size', 'large')
-    script.setAttribute('data-request-access', 'write')
-    script.setAttribute('data-onauth', 'onTelegramAuth(user)')
-    script.async = true
-    container.appendChild(script)
-
-    ;(window as any).onTelegramAuth = async (user: TelegramWidgetData) => {
-      setLoginError(null)
-      try {
-        await loginMutation.mutateAsync({ widget_data: user })
-        goNext()
-      } catch {
-        setLoginError('Не удалось войти через Telegram. Попробуйте ещё раз.')
-      }
+  const handleBotAuth = async () => {
+    setLoginError(null)
+    try {
+      const { token, botUrl } = await botAuthMutation.mutateAsync()
+      setPollToken(token)
+      setAwaitingBot(true)
+      window.open(botUrl, '_blank', 'noopener,noreferrer')
+    } catch {
+      setLoginError('Не удалось начать авторизацию. Попробуйте ещё раз.')
     }
+  }
 
-    return () => {
-      delete (window as any).onTelegramAuth
-      if (container) container.innerHTML = ''
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step])
+  const handlePollSuccess = () => {
+    setPollToken(null)
+    setAwaitingBot(false)
+    goNext()
+  }
+
+  useTelegramBotPoll(pollToken, handlePollSuccess)
 
   const effectiveGroup = selectedGroup || groupCode.trim()
   const isValidGroup = /^\d{2,3}-\d{2,3}$/.test(effectiveGroup)
@@ -148,15 +135,53 @@ export function OnboardingPage() {
               Для начала войди через Telegram
             </p>
 
-            {/* Telegram Login Widget */}
-            <div className="flex justify-center mb-4">
-              <div ref={telegramContainerRef} id="telegram-login-container" />
-            </div>
+            {!awaitingBot ? (
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full max-w-xs mx-auto mb-4"
+                onClick={handleBotAuth}
+                disabled={botAuthMutation.isPending}
+              >
+                {botAuthMutation.isPending ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    Открываем бот...
+                  </span>
+                ) : (
+                  'Войти через Telegram'
+                )}
+              </Button>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-center gap-2 text-surface-500 dark:text-surface-400">
+                  <svg className="w-5 h-5 animate-spin text-primary-500" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  <span className="text-sm font-medium">Ожидаем авторизацию в боте...</span>
+                </div>
 
-            {loginMutation.isPending && (
-              <p className="text-sm text-surface-500 dark:text-surface-400 mt-2">
-                Вход...
-              </p>
+                <div className="bg-surface-100 dark:bg-surface-800 rounded-xl p-4 text-left space-y-2 text-sm text-surface-600 dark:text-surface-300">
+                  <p className="font-medium text-surface-900 dark:text-surface-50 mb-1">Что делать:</p>
+                  <p>1. Нажмите кнопку выше чтобы открыть бота</p>
+                  <p>2. Нажмите <span className="font-medium">Старт</span> в боте</p>
+                  <p>3. Вернитесь на эту страницу</p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setPollToken(null)
+                    setAwaitingBot(false)
+                  }}
+                  className="text-sm text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 underline"
+                >
+                  Отмена
+                </button>
+              </div>
             )}
 
             {loginError && (
