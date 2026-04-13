@@ -127,7 +127,7 @@ class GroupService:
         group = await self.group_repo.get_by_code(group_code)
         if not group:
             # Auto-create group on first join
-            group = await self.group_repo.create(code=group_code, name=group_code)
+            group = await self.group_repo.create(code=group_code, name=group_code, owner_id=user_id)
 
         # Check if already member
         existing = await self.student_repo.get_by_user_and_group(user_id, group.id)
