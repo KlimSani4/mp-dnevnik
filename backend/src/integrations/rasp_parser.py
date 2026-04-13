@@ -22,6 +22,9 @@ FILTER_PATTERNS = [
     r"-\*Физ\*-",
     r"Физическая культура",
     r"Элективные дисциплины по физической культуре",
+    r"Проектная деятельность",
+    r"Физическая подготовка",
+    r"Общая физическая",
 ]
 
 
@@ -47,7 +50,7 @@ class CircuitBreaker:
     def record_failure(self) -> None:
         """Record failed call."""
         self.failures += 1
-        self.last_failure_time = asyncio.get_event_loop().time()
+        self.last_failure_time = asyncio.get_running_loop().time()
         if self.failures >= self.failure_threshold:
             self.state = "open"
             logger.warning("Circuit breaker opened")
@@ -60,7 +63,7 @@ class CircuitBreaker:
         if self.state == "open":
             if self.last_failure_time is None:
                 return True
-            elapsed = asyncio.get_event_loop().time() - self.last_failure_time
+            elapsed = asyncio.get_running_loop().time() - self.last_failure_time
             if elapsed >= self.reset_timeout:
                 self.state = "half-open"
                 logger.info("Circuit breaker half-open")
@@ -218,7 +221,7 @@ class RaspParser:
 
         # Parse location
         location = lesson.get("location", "")
-        room = lesson.get("aud", "")
+        room = lesson.get("shortRooms", [""])[0] if lesson.get("shortRooms") else ""
         if room and location:
             location = f"{location}, {room}"
         elif room:
@@ -237,7 +240,7 @@ class RaspParser:
             "week_parity": self._parse_week_parity(lesson.get("week", "")),
             "date_from": lesson.get("df"),
             "date_to": lesson.get("dt"),
-            "external_link": lesson.get("link"),
+            "external_link": lesson.get("e_link"),
             "raw_data": lesson,
         }
 
