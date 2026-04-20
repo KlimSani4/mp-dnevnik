@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { clsx } from 'clsx'
-import { Button, Card, Input, Avatar, Modal } from '../components/ui'
-import { useCurrentUser, useLogout, useMyGroups, useApi } from '@nexora/shared'
+import { Button, Card, Input, Avatar } from '../components/ui'
+import { useCurrentUser, useLogout, useMyGroups, useApi, useSearchGroups, useJoinGroup } from '@nexora/shared'
 
 type NotificationType = 'schedule_changes' | 'new_assignments' | 'deadlines' | 'votes' | 'evening_digest'
 
@@ -16,6 +16,7 @@ export function SettingsPage() {
   const currentUserQuery = useCurrentUser()
   const logoutMutation = useLogout()
   const myGroupsQuery = useMyGroups()
+  const joinGroupMutation = useJoinGroup()
   const api = useApi()
 
   const user = currentUserQuery.data
@@ -31,6 +32,43 @@ export function SettingsPage() {
     }
   }, [user?.display_name])
 
+  // Group search state
+  const [groupSearch, setGroupSearch] = useState('')
+  const [debouncedGroupSearch, setDebouncedGroupSearch] = useState('')
+  const [joinError, setJoinError] = useState<string | null>(null)
+  const [joinSuccess, setJoinSuccess] = useState<string | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleGroupSearchChange = (value: string) => {
+    setGroupSearch(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setDebouncedGroupSearch(value)
+    }, 400)
+  }
+
+  const searchGroupsQuery = useSearchGroups(
+    debouncedGroupSearch.length >= 2 ? { search: debouncedGroupSearch } : undefined
+  )
+
+  const handleJoinGroup = async (code: string) => {
+    setJoinError(null)
+    setJoinSuccess(null)
+    try {
+      await joinGroupMutation.mutateAsync(code)
+      setJoinSuccess(`Вы вступили в группу ${code}. Ожидайте подтверждения от старосты.`)
+      setGroupSearch('')
+      setDebouncedGroupSearch('')
+    } catch (err: unknown) {
+      const error = err as { status?: number; message?: string }
+      if (error?.status === 409) {
+        setJoinError('Вы уже состоите в этой группе.')
+      } else {
+        setJoinError('Не удалось вступить в группу. Попробуйте позже.')
+      }
+    }
+  }
+
   const [notifications, setNotifications] = useState<NotificationSetting[]>([
     { key: 'schedule_changes', label: 'Изменения расписания', description: 'Отмена пар, смена аудиторий', enabled: true },
     { key: 'new_assignments', label: 'Новые задания', description: 'Когда кто-то создаёт задание', enabled: true },
@@ -38,7 +76,6 @@ export function SettingsPage() {
     { key: 'votes', label: 'Голосования', description: 'Новые задания требуют подтверждения', enabled: false },
     { key: 'evening_digest', label: 'Вечерний дайджест', description: 'Сводка на завтра в 21:00', enabled: true },
   ])
-  const [showGroupModal, setShowGroupModal] = useState(false)
   const [activeSection, setActiveSection] = useState<'profile' | 'notifications' | 'group' | 'about'>('profile')
 
   const toggleNotification = (key: NotificationType) => {
@@ -212,81 +249,127 @@ export function SettingsPage() {
           {/* Group */}
           {activeSection === 'group' && (
             <Card padding="lg">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50">
-                    {primaryGroup ? `Группа ${primaryGroup.group.code}` : 'Группа'}
-                  </h2>
-                  <p className="text-sm text-surface-500 dark:text-surface-400">
-                    {memberships.length > 0
-                      ? `${memberships.length} ${memberships.length === 1 ? 'группа' : 'групп'}`
-                      : 'Вы не состоите ни в одной группе'}
+              <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50 mb-6">
+                Группа
+              </h2>
+
+              {/* Current memberships */}
+              <div className="mb-6">
+                <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-3">
+                  Ваши группы
+                </p>
+                {myGroupsQuery.isLoading ? (
+                  <div className="space-y-2">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="h-12 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+                    ))}
+                  </div>
+                ) : memberships.length === 0 ? (
+                  <p className="text-sm text-surface-500 dark:text-surface-400 py-3">
+                    Вы не состоите ни в одной группе
                   </p>
-                </div>
-                <Button variant="secondary" size="sm" onClick={() => setShowGroupModal(true)}>
-                  Управление
-                </Button>
+                ) : (
+                  <div className="space-y-1">
+                    {memberships.map((membership) => (
+                      <div
+                        key={membership.id}
+                        className="flex items-center gap-3 py-2.5 border-b border-surface-100 dark:border-surface-700 last:border-0"
+                      >
+                        <Avatar name={membership.group.code} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">
+                            {membership.group.code}
+                          </div>
+                          {membership.group.name && (
+                            <div className="text-xs text-surface-500 dark:text-surface-400 truncate">
+                              {membership.group.name}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {membership.role === 'starosta' && (
+                            <span className="text-xs px-2 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded-full font-medium">
+                              Староста
+                            </span>
+                          )}
+                          {membership.role === 'deputy' && (
+                            <span className="text-xs px-2 py-0.5 bg-info-100 text-info-600 dark:bg-info-500/20 dark:text-info-400 rounded-full font-medium">
+                              Зам
+                            </span>
+                          )}
+                          {!membership.verified && (
+                            <span className="text-xs px-2 py-0.5 bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-400 rounded-full font-medium">
+                              Ожидает
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {myGroupsQuery.isLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-12 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
-                  ))}
-                </div>
-              ) : memberships.length === 0 ? (
-                <p className="text-sm text-surface-500 dark:text-surface-400 py-4 text-center">
-                  Группы не найдены
+              {/* Join group */}
+              <div className="pt-4 border-t border-surface-200 dark:border-surface-700">
+                <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-3">
+                  {memberships.length > 0 ? 'Вступить в другую группу' : 'Найти и вступить в группу'}
                 </p>
-              ) : (
-                <div className="space-y-1">
-                  {memberships.map((membership) => (
-                    <div
-                      key={membership.id}
-                      className="flex items-center gap-3 py-2.5 border-b border-surface-100 dark:border-surface-700 last:border-0"
-                    >
-                      <Avatar name={membership.group.code} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">
-                          {membership.group.code}
-                        </div>
-                        {membership.group.name && (
-                          <div className="text-xs text-surface-500 dark:text-surface-400 truncate">
-                            {membership.group.name}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {membership.role === 'starosta' && (
-                          <span className="text-xs px-2 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded-full font-medium">
-                            Староста
-                          </span>
-                        )}
-                        {membership.role === 'deputy' && (
-                          <span className="text-xs px-2 py-0.5 bg-info-100 text-info-600 dark:bg-info-500/20 dark:text-info-400 rounded-full font-medium">
-                            Зам
-                          </span>
-                        )}
-                        {!membership.verified && (
-                          <span className="text-xs px-2 py-0.5 bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-400 rounded-full font-medium">
-                            Ожидает
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
-              <div className="mt-6 pt-4 border-t border-surface-200 dark:border-surface-700">
-                <Button
-                  variant="ghost"
-                  className="text-danger-500 hover:text-danger-600"
-                  onClick={handleLogout}
-                  disabled={logoutMutation.isPending}
-                >
-                  Выйти из аккаунта
-                </Button>
+                <Input
+                  placeholder="Введите код группы, напр. 221-361"
+                  value={groupSearch}
+                  onChange={(e) => handleGroupSearchChange(e.target.value)}
+                />
+
+                {joinError && (
+                  <p className="mt-2 text-sm text-danger-500">{joinError}</p>
+                )}
+                {joinSuccess && (
+                  <p className="mt-2 text-sm text-success-600 dark:text-success-400">{joinSuccess}</p>
+                )}
+
+                {debouncedGroupSearch.length >= 2 && (
+                  <div className="mt-2 border border-surface-200 dark:border-surface-700 rounded-lg overflow-hidden">
+                    {searchGroupsQuery.isLoading ? (
+                      <div className="px-4 py-3 text-sm text-surface-500 dark:text-surface-400">
+                        Поиск...
+                      </div>
+                    ) : !searchGroupsQuery.data || searchGroupsQuery.data.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-surface-500 dark:text-surface-400">
+                        Группы не найдены
+                      </div>
+                    ) : (
+                      searchGroupsQuery.data.map((group) => {
+                        const alreadyMember = memberships.some((m) => m.group.code === group.code)
+                        return (
+                          <div
+                            key={group.id}
+                            className="flex items-center justify-between px-4 py-3 border-b border-surface-100 dark:border-surface-700 last:border-0 hover:bg-surface-50 dark:hover:bg-surface-700/50 transition-colors"
+                          >
+                            <div>
+                              <div className="text-sm font-medium text-surface-900 dark:text-surface-50">
+                                {group.code}
+                              </div>
+                              {group.name && (
+                                <div className="text-xs text-surface-500 dark:text-surface-400">
+                                  {group.name}
+                                </div>
+                              )}
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={alreadyMember || joinGroupMutation.isPending}
+                              onClick={() => handleJoinGroup(group.code)}
+                            >
+                              {alreadyMember ? 'Вы в группе' : 'Вступить'}
+                            </Button>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -323,19 +406,6 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Group management modal */}
-      <Modal
-        open={showGroupModal}
-        onClose={() => setShowGroupModal(false)}
-        title={primaryGroup ? `Управление группой ${primaryGroup.group.code}` : 'Управление группой'}
-      >
-        <p className="text-sm text-surface-500 dark:text-surface-400 mb-4">
-          Функции управления доступны старосте группы. Свяжитесь со старостой для изменения ролей.
-        </p>
-        <Button variant="secondary" onClick={() => setShowGroupModal(false)}>
-          Закрыть
-        </Button>
-      </Modal>
     </div>
   )
 }
