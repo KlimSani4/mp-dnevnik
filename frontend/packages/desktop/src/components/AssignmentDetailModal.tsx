@@ -1,4 +1,3 @@
-import { useState, useCallback, type DragEvent } from 'react'
 import clsx from 'clsx'
 import { format, formatDistanceToNow, isPast, startOfDay } from 'date-fns'
 import { ru } from 'date-fns/locale'
@@ -31,34 +30,6 @@ const STATE_LABELS: Record<TaskState, string> = {
   done: 'Зачтено',
 }
 
-/* ─── Mock Data ─── */
-
-interface ChecklistItem {
-  id: string
-  label: string
-  checked: boolean
-}
-
-interface AttachmentFile {
-  id: string
-  name: string
-  size: string
-  type: 'pdf' | 'doc' | 'image' | 'archive' | 'other'
-}
-
-const MOCK_CHECKLIST: ChecklistItem[] = [
-  { id: 'cl1', label: 'Прочитать теоретический материал', checked: true },
-  { id: 'cl2', label: 'Решить задачи из методички', checked: true },
-  { id: 'cl3', label: 'Оформить решение в LaTeX', checked: false },
-  { id: 'cl4', label: 'Проверить вычисления', checked: false },
-]
-
-const MOCK_ATTACHMENTS: AttachmentFile[] = [
-  { id: 'f1', name: 'Методичка_ПЗ4.pdf', size: '2.3 МБ', type: 'pdf' },
-  { id: 'f2', name: 'Пример_оформления.docx', size: '540 КБ', type: 'doc' },
-  { id: 'f3', name: 'Формулы.png', size: '180 КБ', type: 'image' },
-]
-
 /* ─── Helpers ─── */
 
 function formatDeadline(deadline: string): string {
@@ -85,10 +56,6 @@ function isOverdue(deadline: string): boolean {
   return isPast(startOfDay(new Date(deadline)))
 }
 
-function getFileIcon(_type: AttachmentFile['type']): string {
-  return 'file'
-}
-
 function pluralize(n: number, forms: [string, string, string]): string {
   const abs = Math.abs(n)
   if (abs % 10 === 1 && abs % 100 !== 11) return forms[0]
@@ -105,42 +72,10 @@ function AssignmentDetailModal({
   onVote,
   userVote = null,
 }: AssignmentDetailModalProps) {
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(MOCK_CHECKLIST)
-  const [isDragOver, setIsDragOver] = useState(false)
-
-  const toggleChecklistItem = useCallback((itemId: string) => {
-    setChecklist((prev) =>
-      prev.map((item) =>
-        item.id === itemId ? { ...item, checked: !item.checked } : item,
-      ),
-    )
-  }, [])
-
-  const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragOver(true)
-  }, [])
-
-  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragOver(false)
-  }, [])
-
-  const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragOver(false)
-    // Upload logic will be implemented later
-  }, [])
-
   if (!task) return null
 
   const { assignment } = task
   const overdue = isOverdue(assignment.deadline)
-  const completedCount = checklist.filter((item) => item.checked).length
-  const totalCount = checklist.length
   const authorName = AUTHORS[assignment.author_id] ?? 'Неизвестный'
 
   return (
@@ -314,152 +249,6 @@ function AssignmentDetailModal({
             />
           </a>
         )}
-
-        {/* Checklist */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-50">
-              Чеклист
-            </h3>
-            <span className="text-xs font-medium text-surface-400 dark:text-surface-500">
-              {completedCount}/{totalCount}
-            </span>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full h-1.5 bg-surface-200 dark:bg-surface-700 rounded-full mb-3 overflow-hidden">
-            <div
-              className="h-full bg-primary-500 rounded-full transition-all duration-300"
-              style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            {checklist.map((item) => (
-              <label
-                key={item.id}
-                className={clsx(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer',
-                  'hover:bg-surface-50 dark:hover:bg-surface-800/50',
-                  'transition-colors',
-                )}
-              >
-                <input
-                  type="checkbox"
-                  checked={item.checked}
-                  onChange={() => toggleChecklistItem(item.id)}
-                  className={clsx(
-                    'w-4 h-4 rounded border-2 cursor-pointer',
-                    'border-surface-300 dark:border-surface-600',
-                    'text-primary-500 focus:ring-primary-500/20 focus:ring-offset-0',
-                    'dark:bg-surface-700',
-                  )}
-                />
-                <span
-                  className={clsx(
-                    'text-sm transition-all',
-                    item.checked
-                      ? 'text-surface-400 dark:text-surface-500 line-through'
-                      : 'text-surface-700 dark:text-surface-300',
-                  )}
-                >
-                  {item.label}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Attachments */}
-        <div>
-          <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-50 mb-3">
-            Вложения
-          </h3>
-          <div className="space-y-2">
-            {MOCK_ATTACHMENTS.map((file) => (
-              <div
-                key={file.id}
-                className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg',
-                  'bg-surface-50 dark:bg-surface-800/50',
-                  'border border-surface-200 dark:border-surface-700',
-                  'hover:border-primary-300 dark:hover:border-primary-500/30',
-                  'transition-colors cursor-pointer group',
-                )}
-              >
-                <div className="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-500/10 flex items-center justify-center shrink-0">
-                  <Icon
-                    name={getFileIcon(file.type)}
-                    size={16}
-                    className="text-primary-500 dark:text-primary-400"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-surface-700 dark:text-surface-300 truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                    {file.name}
-                  </p>
-                  <p className="text-xs text-surface-400 dark:text-surface-500">
-                    {file.size}
-                  </p>
-                </div>
-                <Icon
-                  name="chevron-right"
-                  size={16}
-                  className="text-surface-300 dark:text-surface-600 group-hover:text-primary-400 transition-colors shrink-0"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* File Upload Drop Zone */}
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={clsx(
-            'relative flex flex-col items-center justify-center gap-3 px-6 py-8',
-            'rounded-xl border-2 border-dashed transition-all cursor-pointer',
-            isDragOver
-              ? 'border-primary-400 bg-primary-50 dark:border-primary-500 dark:bg-primary-500/10'
-              : 'border-surface-300 dark:border-surface-600 hover:border-primary-300 dark:hover:border-primary-500/40 hover:bg-surface-50 dark:hover:bg-surface-800/30',
-          )}
-        >
-          <div
-            className={clsx(
-              'w-12 h-12 rounded-xl flex items-center justify-center transition-colors',
-              isDragOver
-                ? 'bg-primary-100 dark:bg-primary-500/20'
-                : 'bg-surface-100 dark:bg-surface-800',
-            )}
-          >
-            <Icon
-              name="upload"
-              size={24}
-              className={clsx(
-                'transition-colors',
-                isDragOver
-                  ? 'text-primary-500'
-                  : 'text-surface-400 dark:text-surface-500',
-              )}
-            />
-          </div>
-          <div className="text-center">
-            <p
-              className={clsx(
-                'text-sm font-medium transition-colors',
-                isDragOver
-                  ? 'text-primary-600 dark:text-primary-400'
-                  : 'text-surface-600 dark:text-surface-400',
-              )}
-            >
-              Перетащи выполненную работу
-            </p>
-            <p className="text-xs text-surface-400 dark:text-surface-500 mt-1">
-              PDF, DOCX, PNG, ZIP до 50 МБ
-            </p>
-          </div>
-        </div>
 
         {/* Author + creation date */}
         <div className="flex items-center gap-3 pt-2 border-t border-surface-200 dark:border-surface-700">

@@ -605,9 +605,11 @@ export function AssignmentsPage() {
         ),
       )
     } else {
-      updateTaskMutation.mutate({ assignmentId: taskId, data: { state: newState } })
+      const task = tasks.find((t) => t.id === taskId)
+      if (!task) return
+      updateTaskMutation.mutate({ assignmentId: task.assignment.id, data: { state: newState } })
     }
-  }, [SKIP_AUTH, updateTaskMutation])
+  }, [SKIP_AUTH, tasks, updateTaskMutation])
 
   const toggleVote = useCallback(
     (assignmentId: string, direction: 'up' | 'down') => {
@@ -700,7 +702,7 @@ export function AssignmentsPage() {
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
-      const { active, over } = event
+      const { over } = event
       if (!over) {
         setOverColumnId(null)
         return
@@ -715,19 +717,14 @@ export function AssignmentsPage() {
         return
       }
 
-      // Otherwise it's over a card — find which column that card belongs to
+      // Otherwise it's over a card — find which column that card belongs to.
+      // Note: we deliberately do NOT call moveTask here; movement only happens on drop.
       const overColumn = findColumnForTask(overId)
       if (overColumn) {
         setOverColumnId(overColumn)
-
-        // If dragging to different column, move immediately for visual feedback
-        const activeColumn = findColumnForTask(active.id as string)
-        if (activeColumn && activeColumn !== overColumn) {
-          moveTask(active.id as string, overColumn)
-        }
       }
     },
-    [findColumnForTask, moveTask],
+    [findColumnForTask],
   )
 
   const handleDragEnd = useCallback(
