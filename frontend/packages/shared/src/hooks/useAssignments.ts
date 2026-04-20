@@ -38,6 +38,7 @@ export function useCreateAssignment() {
     mutationFn: (data: AssignmentCreateRequest) => api.assignments.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assignments'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }

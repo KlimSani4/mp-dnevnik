@@ -381,6 +381,7 @@ function MobileCard({ task, columnState, onMove, userVote, onVote, onClick }: Mo
 interface CreateAssignmentModalProps {
   open: boolean
   onClose: () => void
+  subjects: { id: string; name: string }[]
   onSubmit: (data: {
     subjectId: string
     title: string
@@ -390,7 +391,7 @@ interface CreateAssignmentModalProps {
   }) => void
 }
 
-function CreateAssignmentModal({ open, onClose, onSubmit }: CreateAssignmentModalProps) {
+function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssignmentModalProps) {
   const [subjectId, setSubjectId] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -438,7 +439,7 @@ function CreateAssignmentModal({ open, onClose, onSubmit }: CreateAssignmentModa
     [subjectId, title, description, deadline, priority, validate, onSubmit, resetForm],
   )
 
-  const subjectOptions = SUBJECTS.map((s) => ({ value: s.id, label: s.name }))
+  const subjectOptions = subjects.map((s) => ({ value: s.id, label: s.name }))
   const priorityOptions = [
     { value: 'low', label: 'Низкий' },
     { value: 'normal', label: 'Обычный' },
@@ -978,6 +979,7 @@ export function AssignmentsPage() {
       <CreateAssignmentModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
+        subjects={SKIP_AUTH ? SUBJECTS : apiSubjects}
         onSubmit={handleCreateTask}
       />
     </div>
