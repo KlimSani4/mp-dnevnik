@@ -24,13 +24,13 @@ interface ScheduleEntry {
   pair_number: number
   start_time: string
   end_time: string
-  location: string
-  room: string
-  teacher: string
-  lesson_type: string
+  location: string | null
+  room: string | null
+  teacher: string | null
+  lesson_type: string | null
   week_parity: 'odd' | 'even' | null
-  subject: { id: string; name: string; short_name: string }
-  overrides: ScheduleOverride[]
+  subject: { id: string; name: string; short_name: string | null }
+  overrides?: ScheduleOverride[]
 }
 
 interface ScheduleOverride {
@@ -40,9 +40,9 @@ interface ScheduleOverride {
 }
 
 interface DaySchedule {
-  date: string
+  schedule_date: string
   weekday: number
-  weekday_name: string
+  weekday_name?: string
   entries: ScheduleEntry[]
 }
 
@@ -68,12 +68,16 @@ const WEEKDAY_NAMES_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 // ---------------------------------------------------------------------------
 
 function getClassType(entry: ScheduleEntry): ClassType {
-  const loc = entry.location.toLowerCase()
-  if (loc.includes('webinar') || entry.room.toLowerCase() === 'вебинар') return 'webinar'
+  const loc = (entry.location ?? '').toLowerCase()
+  const room = (entry.room ?? '').toLowerCase()
+  if (loc.includes('webinar') || loc.includes('вебинар') || room === 'вебинар') return 'webinar'
   if (
     loc.startsWith('http') ||
     loc.includes('meet') ||
-    entry.room.toLowerCase() === 'онлайн'
+    loc.includes('сдо') ||
+    loc.includes('lms') ||
+    loc.includes('онлайн') ||
+    room === 'онлайн'
   )
     return 'online'
   return 'offline'
@@ -109,9 +113,21 @@ const lessonTypeLabels: Record<string, string> = {
   лаб: 'Лаб. работа',
 }
 
+function parseTimeFlexible(t: string): Date {
+  // Handles "HH:mm" or "HH:mm:ss" from API
+  const fmt = t.length > 5 ? 'HH:mm:ss' : 'HH:mm'
+  return parse(t, fmt, new Date())
+}
+
+function formatTimeDisplay(t: string | null | undefined): string {
+  if (!t) return ''
+  // Strip seconds if present
+  return t.length > 5 ? t.slice(0, 5) : t
+}
+
 function formatGap(entry1: ScheduleEntry, entry2: ScheduleEntry): string | null {
-  const end = parse(entry1.end_time, 'HH:mm', new Date())
-  const start = parse(entry2.start_time, 'HH:mm', new Date())
+  const end = parseTimeFlexible(entry1.end_time)
+  const start = parseTimeFlexible(entry2.start_time)
   const mins = differenceInMinutes(start, end)
 
   if (mins <= 10) return null
@@ -185,16 +201,16 @@ function DailyClassCard({ entry }: { entry: ScheduleEntry }) {
           <div className="flex items-center gap-2 text-sm text-surface-500 dark:text-surface-400">
             <Icon name="clock" size={14} />
             <span>
-              {entry.start_time} – {entry.end_time}
+              {formatTimeDisplay(entry.start_time)} – {formatTimeDisplay(entry.end_time)}
             </span>
             <Badge size="sm" variant="default">
-              {lessonTypeLabels[entry.lesson_type] ?? entry.lesson_type}
+              {entry.lesson_type ? (lessonTypeLabels[entry.lesson_type] ?? entry.lesson_type) : 'Занятие'}
             </Badge>
           </div>
 
           <div className="flex items-center gap-2 mt-2 text-sm">
             <Icon name="map-pin" size={14} className={config.text} />
-            {isOnline ? (
+            {isOnline && entry.location ? (
               <a
                 href={entry.location}
                 target="_blank"
@@ -221,7 +237,7 @@ function DailyClassCard({ entry }: { entry: ScheduleEntry }) {
               size="sm"
               className="mt-3"
               icon={<Icon name="play" size={14} />}
-              onClick={() => window.open(entry.location, '_blank')}
+              onClick={() => entry.location && window.open(entry.location, '_blank')}
             >
               ПОДКЛЮЧИТЬСЯ
             </Button>
@@ -271,7 +287,7 @@ function WeeklyClassCell({ entry }: { entry: ScheduleEntry }) {
       </div>
 
       <div className="text-surface-500 dark:text-surface-400 truncate">
-        {lessonTypeLabels[entry.lesson_type] ?? entry.lesson_type}
+        {entry.lesson_type ? (lessonTypeLabels[entry.lesson_type] ?? entry.lesson_type) : 'Занятие'}
       </div>
 
       <div className="mt-auto pt-1">
@@ -310,7 +326,7 @@ function DailyView({
   const targetDate = addDays(new Date(), dayOffset)
 
   const daySchedule = useMemo(() => {
-    return weekData.find((d) => isSameDay(parse(d.date, 'yyyy-MM-dd', new Date()), targetDate))
+    return weekData.find((d) => isSameDay(parse(d.schedule_date, 'yyyy-MM-dd', new Date()), targetDate))
   }, [weekData, targetDate])
 
   const dateLabel = format(targetDate, 'd MMMM, EEEE', { locale: ru })
@@ -447,11 +463,11 @@ function WeeklyView({
                 Время
               </th>
               {weekData.map((day, idx) => {
-                const date = parse(day.date, 'yyyy-MM-dd', new Date())
+                const date = parse(day.schedule_date, 'yyyy-MM-dd', new Date())
                 const current = isToday(date)
                 return (
                   <th
-                    key={day.date}
+                    key={day.schedule_date}
                     className={`p-2 text-center ${
                       current
                         ? 'bg-primary-50 dark:bg-primary-900/20 rounded-t-lg'
@@ -493,13 +509,13 @@ function WeeklyView({
                   </div>
                 </td>
                 {weekData.map((day) => {
-                  const date = parse(day.date, 'yyyy-MM-dd', new Date())
+                  const date = parse(day.schedule_date, 'yyyy-MM-dd', new Date())
                   const current = isToday(date)
                   const entry = day.entries.find((e) => e.pair_number === pn)
 
                   return (
                     <td
-                      key={`${day.date}-${pn}`}
+                      key={`${day.schedule_date}-${pn}`}
                       className={`p-1 align-top h-[90px] ${
                         current
                           ? 'bg-primary-50/50 dark:bg-primary-900/10'
