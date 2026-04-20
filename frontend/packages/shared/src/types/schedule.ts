@@ -21,19 +21,19 @@ export interface ScheduleEntry {
   pair_number: number
   start_time: string
   end_time: string
-  location: string
-  room: string
-  teacher: string
-  lesson_type: string
+  location: string | null
+  room: string | null
+  teacher: string | null
+  lesson_type: string | null
   week_parity: WeekParity
   subject: Subject
-  overrides: ScheduleOverride[]
+  overrides?: ScheduleOverride[]
 }
 
 export interface DaySchedule {
-  date: string
+  schedule_date: string
   weekday: number
-  weekday_name: string
+  weekday_name?: string
   entries: ScheduleEntry[]
 }
 
