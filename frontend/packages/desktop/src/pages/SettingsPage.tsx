@@ -1,16 +1,31 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { clsx } from 'clsx'
 import { Button, Card, Input, Avatar } from '../components/ui'
-import { useCurrentUser, useLogout, useMyGroups, useApi, useSearchGroups, useJoinGroup } from '@nexora/shared'
+import {
+  useCurrentUser,
+  useLogout,
+  useMyGroups,
+  useApi,
+  useSearchGroups,
+  useJoinGroup,
+  useNotificationPreferences,
+  useUpdateNotificationPreferences,
+} from '@nexora/shared'
+import type { NotificationPreferenceType } from '@nexora/shared'
 
-type NotificationType = 'schedule_changes' | 'new_assignments' | 'deadlines' | 'votes' | 'evening_digest'
-
-interface NotificationSetting {
-  key: NotificationType
+interface NotificationSettingMeta {
+  type: NotificationPreferenceType
   label: string
   description: string
-  enabled: boolean
 }
+
+const NOTIFICATION_META: NotificationSettingMeta[] = [
+  { type: 'schedule_change', label: 'Изменения расписания', description: 'Отмена пар, смена аудиторий' },
+  { type: 'new_assignment', label: 'Новые задания', description: 'Когда кто-то создаёт задание' },
+  { type: 'deadline', label: 'Дедлайны', description: 'Напоминание за день до срока' },
+  { type: 'vote', label: 'Голосования', description: 'Новые задания требуют подтверждения' },
+  { type: 'digest', label: 'Вечерний дайджест', description: 'Сводка на завтра в 21:00' },
+]
 
 export function SettingsPage() {
   const currentUserQuery = useCurrentUser()
@@ -69,19 +84,26 @@ export function SettingsPage() {
     }
   }
 
-  const [notifications, setNotifications] = useState<NotificationSetting[]>([
-    { key: 'schedule_changes', label: 'Изменения расписания', description: 'Отмена пар, смена аудиторий', enabled: true },
-    { key: 'new_assignments', label: 'Новые задания', description: 'Когда кто-то создаёт задание', enabled: true },
-    { key: 'deadlines', label: 'Дедлайны', description: 'Напоминание за день до срока', enabled: true },
-    { key: 'votes', label: 'Голосования', description: 'Новые задания требуют подтверждения', enabled: false },
-    { key: 'evening_digest', label: 'Вечерний дайджест', description: 'Сводка на завтра в 21:00', enabled: true },
-  ])
   const [activeSection, setActiveSection] = useState<'profile' | 'notifications' | 'group' | 'about'>('profile')
 
-  const toggleNotification = (key: NotificationType) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.key === key ? { ...n, enabled: !n.enabled } : n))
+  const prefsQuery = useNotificationPreferences()
+  const updatePrefsMutation = useUpdateNotificationPreferences()
+
+  // Merge saved preferences with meta. Missing type => default enabled except digest starts from backend.
+  const notifications = useMemo(() => {
+    const saved = prefsQuery.data?.preferences ?? []
+    const savedByType = new Map(saved.map((p) => [p.type, p.enabled]))
+    return NOTIFICATION_META.map((m) => ({
+      ...m,
+      enabled: savedByType.has(m.type) ? savedByType.get(m.type)! : m.type !== 'vote',
+    }))
+  }, [prefsQuery.data])
+
+  const toggleNotification = (type: NotificationPreferenceType) => {
+    const next = notifications.map((n) =>
+      n.type === type ? { type: n.type, enabled: !n.enabled } : { type: n.type, enabled: n.enabled }
     )
+    updatePrefsMutation.mutate({ preferences: next })
   }
 
   const handleSaveProfile = async () => {
@@ -215,7 +237,7 @@ export function SettingsPage() {
               <div className="space-y-1">
                 {notifications.map((n) => (
                   <div
-                    key={n.key}
+                    key={n.type}
                     className="flex items-center justify-between py-3 border-b border-surface-100 dark:border-surface-700 last:border-0"
                   >
                     <div>
@@ -227,7 +249,8 @@ export function SettingsPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => toggleNotification(n.key)}
+                      disabled={updatePrefsMutation.isPending}
+                      onClick={() => toggleNotification(n.type)}
                       className={clsx(
                         'relative w-11 h-6 rounded-full transition-colors',
                         n.enabled ? 'bg-primary-500' : 'bg-surface-300 dark:bg-surface-600'

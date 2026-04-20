@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
 import { useAuthStore } from '../stores/auth'
-import type { NotificationListParams } from '../types'
+import type { NotificationListParams, NotificationPreferencesUpdate } from '../types'
 
 export function useNotifications(params?: NotificationListParams) {
   const api = useApi()
@@ -35,6 +35,30 @@ export function useMarkAllNotificationsRead() {
     mutationFn: () => api.notifications.markAllRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
+export function useNotificationPreferences() {
+  const api = useApi()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+
+  return useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: () => api.notifications.getPreferences(),
+    enabled: isAuthenticated,
+    staleTime: 1000 * 60 * 10,
+  })
+}
+
+export function useUpdateNotificationPreferences() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: NotificationPreferencesUpdate) => api.notifications.updatePreferences(data),
+    onSuccess: (result) => {
+      queryClient.setQueryData(['notification-preferences'], result)
     },
   })
 }
