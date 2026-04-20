@@ -417,7 +417,6 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
     const newErrors: Record<string, string> = {}
     if (!subjectId) newErrors.subjectId = 'Выберите предмет'
     if (!title.trim()) newErrors.title = 'Введите название'
-    if (!description.trim()) newErrors.description = 'Введите описание'
     if (!deadline) newErrors.deadline = 'Укажите дедлайн'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
