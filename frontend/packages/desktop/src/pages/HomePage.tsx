@@ -15,11 +15,11 @@ interface ScheduleEntry {
   pair_number: number
   start_time: string
   end_time: string
-  location: string
-  room: string
-  teacher: string
+  location: string | null
+  room: string | null
+  teacher: string | null
   lesson_type: 'очно' | 'онлайн' | 'вебинар'
-  subject: { id: string; name: string; short_name: string }
+  subject: { id: string; name: string; short_name?: string | null }
   link?: string
 }
 
@@ -66,10 +66,17 @@ function getPairCountText(n: number): string {
 }
 
 function parseTime(timeStr: string): Date {
-  const [h, m] = timeStr.split(':').map(Number)
+  const parts = timeStr.split(':').map(Number)
+  const h = parts[0] ?? 0
+  const m = parts[1] ?? 0
   const d = new Date()
   d.setHours(h, m, 0, 0)
   return d
+}
+
+function formatTime(timeStr: string): string {
+  // Trim HH:mm:ss → HH:mm
+  return timeStr.slice(0, 5)
 }
 
 function formatWindowDuration(minutes: number): string {
@@ -164,7 +171,7 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
             )}
           </div>
           <div className="text-sm text-surface-500 dark:text-surface-400 mt-0.5">
-            {entry.start_time} - {entry.end_time}
+            {formatTime(entry.start_time)} – {formatTime(entry.end_time)}
           </div>
           <div className="text-sm text-primary-500 mt-1 truncate">
             {isOnline ? (
@@ -181,13 +188,15 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
                 config.label
               )
             ) : (
-              `${entry.room}, ${entry.location}`
+              [entry.room, entry.location].filter(Boolean).join(', ') || 'Аудитория не указана'
             )}
           </div>
-          <div className="flex items-center gap-2 mt-2 text-sm text-surface-500 dark:text-surface-400">
-            <Avatar name={entry.teacher} size="xs" />
-            <span className="truncate">{entry.teacher}</span>
-          </div>
+          {entry.teacher && (
+            <div className="flex items-center gap-2 mt-2 text-sm text-surface-500 dark:text-surface-400">
+              <Avatar name={entry.teacher} size="xs" />
+              <span className="truncate">{entry.teacher}</span>
+            </div>
+          )}
 
           {isOnline && (isUpcoming || isActive) && (
             <div className="mt-3">
@@ -367,18 +376,33 @@ export function HomePage() {
   const userName = currentUserQuery.data?.display_name?.split(' ')[0] ?? 'Студент'
 
   // Map API schedule entries to local ScheduleEntry format
-  const apiScheduleToLocal = (entry: any): ScheduleEntry => ({
-    id: entry.id,
-    pair_number: entry.pair_number,
-    start_time: entry.start_time,
-    end_time: entry.end_time,
-    location: entry.location,
-    room: entry.room,
-    teacher: entry.teacher,
-    lesson_type: entry.room === 'Онлайн' ? 'онлайн' : entry.room === 'Вебинар' ? 'вебинар' : 'очно',
-    subject: entry.subject,
-    link: undefined,
-  })
+  const apiScheduleToLocal = (entry: any): ScheduleEntry => {
+    const roomStr = entry.room ?? ''
+    const locStr = entry.location ?? ''
+    const isWebinar = /вебинар/i.test(roomStr) || /вебинар/i.test(locStr)
+    const isOnline = isWebinar || /онлайн|сдо|lms/i.test(roomStr) || /онлайн|сдо|lms/i.test(locStr)
+    // Extract online link from raw_data.auditories[].title (HTML with href)
+    let link: string | undefined
+    const auds = entry.raw_data?.auditories
+    if (Array.isArray(auds)) {
+      for (const a of auds) {
+        const m = /href="([^"]+)"/.exec(a.title ?? '')
+        if (m) { link = m[1]; break }
+      }
+    }
+    return {
+      id: entry.id,
+      pair_number: entry.pair_number,
+      start_time: entry.start_time,
+      end_time: entry.end_time,
+      location: entry.location,
+      room: entry.room,
+      teacher: entry.teacher,
+      lesson_type: isWebinar ? 'вебинар' : isOnline ? 'онлайн' : 'очно',
+      subject: entry.subject,
+      link,
+    }
+  }
 
   const scheduleEntries: ScheduleEntry[] = (todayScheduleQuery.data?.entries ?? []).map(apiScheduleToLocal)
 
