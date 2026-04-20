@@ -31,6 +31,8 @@ import type {
   DashboardParams,
   NotificationListResponse,
   NotificationListParams,
+  NotificationPreferencesResponse,
+  NotificationPreferencesUpdate,
 } from '../types'
 
 export function createAuthApi(client: ApiClient) {
@@ -177,6 +179,12 @@ export function createNotificationsApi(client: ApiClient) {
     },
     markAllRead() {
       return client.patch<void>('/notifications/read-all', {})
+    },
+    getPreferences() {
+      return client.get<NotificationPreferencesResponse>('/notifications/settings')
+    },
+    updatePreferences(data: NotificationPreferencesUpdate) {
+      return client.patch<NotificationPreferencesResponse>('/notifications/settings', data)
     },
   }
 }

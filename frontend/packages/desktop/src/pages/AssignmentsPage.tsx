@@ -162,7 +162,7 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded-full bg-surface-200 dark:bg-surface-600 flex items-center justify-center flex-shrink-0">
               <span className="text-[9px] font-medium text-surface-600 dark:text-surface-300">
-                {(AUTHORS[assignment.author_id] ?? 'U')[0]}
+                {(AUTHORS[assignment.author_id] ?? assignment.author_id ?? '?')[0]?.toUpperCase()}
               </span>
             </div>
             {!isDone && (

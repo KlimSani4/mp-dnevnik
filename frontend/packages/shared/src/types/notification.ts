@@ -19,3 +19,23 @@ export interface NotificationListParams {
   limit?: number
   unread_only?: boolean
 }
+
+export type NotificationPreferenceType =
+  | 'schedule_change'
+  | 'new_assignment'
+  | 'deadline'
+  | 'vote'
+  | 'digest'
+
+export interface NotificationPreference {
+  type: NotificationPreferenceType
+  enabled: boolean
+}
+
+export interface NotificationPreferencesResponse {
+  preferences: NotificationPreference[]
+}
+
+export interface NotificationPreferencesUpdate {
+  preferences: NotificationPreference[]
+}
