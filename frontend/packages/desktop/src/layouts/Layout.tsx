@@ -28,7 +28,7 @@ export function Layout() {
   const currentUserQuery = useCurrentUser()
   const { groupCode } = useGroupContext()
   const user = currentUserQuery.data
-  const displayName = user?.display_name || user?.username || 'Пользователь'
+  const displayName = user?.display_name || 'Пользователь'
   const initial = displayName.trim()[0]?.toUpperCase() || '?'
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
