@@ -196,17 +196,60 @@ class AssignmentService:
         *,
         state: TaskState | None = None,
     ) -> list[TaskWithAssignment]:
-        """Get user's task statuses."""
+        """Get user's task statuses — merged with all group assignments.
+
+        For every group assignment we return a task: an explicit TaskStatus row
+        if the student has interacted with the assignment, or a synthesized
+        TODO row otherwise. This way newly-created assignments immediately
+        show up in the board without requiring eager TaskStatus creation.
+        """
+        import uuid as _uuid
+        from datetime import datetime as _dt, timezone as _tz
+
+        from src.core.models.assignment import TaskState as _TaskState
+
         student = await self.student_repo.get_by_user_and_group(user_id, group_id)
         if not student:
             raise NotFoundError("Not a member of this group")
 
-        tasks = await self.task_repo.get_student_tasks(
+        existing_tasks = await self.task_repo.get_student_tasks(
             student.id,
-            state=state,
+            state=None,  # fetch all, filter locally to correctly merge
             with_assignment=True,
         )
-        return [TaskWithAssignment.model_validate(t) for t in tasks]
+        by_assignment_id = {t.assignment_id: t for t in existing_tasks}
+
+        assignments = await self.assignment_repo.get_group_assignments(
+            group_id,
+            limit=500,
+        )
+
+        now = _dt.now(tz=_tz.utc)
+        result: list[TaskWithAssignment] = []
+        for a in assignments:
+            if a.id in by_assignment_id:
+                t = by_assignment_id[a.id]
+                if state is not None and t.state != state:
+                    continue
+                result.append(TaskWithAssignment.model_validate(t))
+            else:
+                if state is not None and state != _TaskState.TODO:
+                    continue
+                # Synthesize a TODO task pointing at this assignment.
+                synthetic = {
+                    "id": _uuid.uuid4(),
+                    "student_id": student.id,
+                    "assignment_id": a.id,
+                    "state": _TaskState.TODO,
+                    "created_at": a.created_at or now,
+                    "updated_at": a.created_at or now,
+                    "assignment": a,
+                }
+                result.append(TaskWithAssignment.model_validate(synthetic))
+
+        # Sort by updated_at desc, matching prior behavior
+        result.sort(key=lambda t: t.updated_at, reverse=True)
+        return result
 
     async def update_task_status(
         self,
