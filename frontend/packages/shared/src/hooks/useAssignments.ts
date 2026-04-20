@@ -5,6 +5,7 @@ import type {
   AssignmentSearchParams,
   AssignmentUpdateRequest,
   AssignmentVoteRequest,
+  Task,
   TaskUpdateRequest,
   TaskSearchParams,
   BulkTaskUpdateRequest,
@@ -77,6 +78,7 @@ export function useVoteAssignment() {
       api.assignments.vote(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assignments'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }
@@ -98,7 +100,29 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: ({ assignmentId, data }: { assignmentId: string; data: TaskUpdateRequest }) =>
       api.tasks.update(assignmentId, data),
-    onSuccess: () => {
+    onMutate: async ({ assignmentId, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] })
+      const snapshots = queryClient.getQueriesData<Task[]>({ queryKey: ['tasks'] })
+      for (const [key, prev] of snapshots) {
+        if (!prev) continue
+        queryClient.setQueryData<Task[]>(
+          key,
+          prev.map((t) =>
+            t.assignment.id === assignmentId
+              ? { ...t, state: data.state, updated_at: new Date().toISOString() }
+              : t,
+          ),
+        )
+      }
+      return { snapshots }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx?.snapshots) return
+      for (const [key, data] of ctx.snapshots) {
+        queryClient.setQueryData(key, data)
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       queryClient.invalidateQueries({ queryKey: ['assignments'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
