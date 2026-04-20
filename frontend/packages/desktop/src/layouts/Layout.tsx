@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { clsx } from 'clsx'
+import { useCurrentUser, useGroupContext } from '@nexora/shared'
 
 const mainNav = [
   { to: '/', label: 'Главная', icon: HomeIcon },
@@ -24,6 +25,11 @@ const tabBarItems = [
 
 export function Layout() {
   const [collapsed, setCollapsed] = useState(false)
+  const currentUserQuery = useCurrentUser()
+  const { groupCode } = useGroupContext()
+  const user = currentUserQuery.data
+  const displayName = user?.display_name || user?.username || 'Пользователь'
+  const initial = displayName.trim()[0]?.toUpperCase() || '?'
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark')
@@ -160,12 +166,12 @@ export function Layout() {
               'rounded-full bg-surface-200 dark:bg-surface-600 flex items-center justify-center flex-shrink-0',
               collapsed ? 'w-8 h-8' : 'w-9 h-9',
             )}>
-              <span className="text-sm font-medium text-surface-600 dark:text-surface-300">А</span>
+              <span className="text-sm font-medium text-surface-600 dark:text-surface-300">{initial}</span>
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">Анастасия</div>
-                <div className="text-xs text-surface-500 dark:text-surface-400 truncate">241-237</div>
+                <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">{displayName}</div>
+                <div className="text-xs text-surface-500 dark:text-surface-400 truncate">{groupCode ?? 'Без группы'}</div>
               </div>
             )}
           </div>
