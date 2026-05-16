@@ -7,7 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from src.config import settings
-from src.gateways.telegram.handlers import callbacks, schedule, start
+from src.gateways.telegram.handlers import callbacks, forward, schedule, start
 from src.gateways.telegram.handlers import settings as settings_handler
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(schedule.router)
     dp.include_router(settings_handler.router)
     dp.include_router(callbacks.router)
+    dp.include_router(forward.router)
 
     return dp
 
