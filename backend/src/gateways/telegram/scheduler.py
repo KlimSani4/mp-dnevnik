@@ -286,6 +286,31 @@ async def send_deadline_reminders() -> None:
                 )
 
 
+async def sync_all_schedules() -> None:
+    """Sync schedules for all groups from rasp.dmami.ru every 15 minutes."""
+    from src.core.repositories.group import GroupRepository
+    from src.core.services.schedule import ScheduleService
+    from src.integrations.rasp_parser import fetch_group_schedule
+    from src.gateways.telegram.deps import get_session
+
+    async with get_session() as session:
+        group_repo = GroupRepository(session)
+        schedule_service = ScheduleService(session)
+
+        groups = await group_repo.get_all_groups()
+
+        for group in groups:
+            try:
+                schedule_data = await fetch_group_schedule(group.code)
+                if schedule_data:
+                    await schedule_service.import_schedule(group.code, schedule_data)
+            except Exception as e:
+                logger.warning(
+                    "Failed to sync schedule for group",
+                    extra={"group": group.code, "error": str(e)},
+                )
+
+
 def abs_diff_minutes(time_str: object, target_hhmm: str) -> int:
     """Calculate absolute difference in minutes between two HH:MM strings."""
     try:
@@ -325,6 +350,13 @@ def start_scheduler() -> None:
         id="deadline_reminders",
         replace_existing=True,
         misfire_grace_time=300,
+    )
+    scheduler.add_job(
+        sync_all_schedules,
+        CronTrigger(minute="*/15"),
+        id="sync_all_schedules",
+        replace_existing=True,
+        misfire_grace_time=60,
     )
     scheduler.start()
     logger.info("Scheduler started")
