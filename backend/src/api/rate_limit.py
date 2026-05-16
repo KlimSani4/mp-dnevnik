@@ -14,7 +14,7 @@ _ENDPOINT_LIMITS: dict[str, tuple[int, int]] = {
 }
 
 
-async def _check_rate_limit(redis: Redis[str], ip: str, path: str) -> None:
+async def _check_rate_limit(redis: Redis, ip: str, path: str) -> None:
     """Increment counter for ip+path; raise RateLimitError if over limit."""
     limit, window = _ENDPOINT_LIMITS.get(path, (60, 60))
     key = f"ratelimit:{ip}:{path}"

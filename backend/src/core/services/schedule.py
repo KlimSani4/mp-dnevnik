@@ -31,7 +31,7 @@ SCHEDULE_CACHE_TTL = 3600  # 1 hour
 class ScheduleService:
     """Schedule management service."""
 
-    def __init__(self, session: AsyncSession, redis: _Redis[str] | None = None) -> None:
+    def __init__(self, session: AsyncSession, redis: _Redis | None = None) -> None:
         self.session = session
         self.redis = redis
         self.group_repo = GroupRepository(session)
