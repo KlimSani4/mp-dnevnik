@@ -395,6 +395,20 @@ function DailyView({
 // Weekly view
 // ---------------------------------------------------------------------------
 
+function getISOWeek(date: Date): number {
+  const tmp = new Date(date.valueOf())
+  tmp.setDate(tmp.getDate() + 4 - (tmp.getDay() || 7))
+  const yearStart = new Date(tmp.getFullYear(), 0, 1)
+  return Math.ceil(((tmp.valueOf() - yearStart.valueOf()) / 86400000 + 1) / 7)
+}
+
+function getWeekParity(weekOffset: number): 'Числитель' | 'Знаменатель' {
+  const today = new Date()
+  const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 })
+  const targetWeekStart = addDays(currentWeekStart, weekOffset * 7)
+  return getISOWeek(targetWeekStart) % 2 === 0 ? 'Знаменатель' : 'Числитель'
+}
+
 function WeeklyView({
   weekOffset,
   onPrevWeek,
@@ -418,6 +432,8 @@ function WeeklyView({
     'd MMMM',
     { locale: ru },
   )}`
+
+  const weekParity = getWeekParity(weekOffset)
 
   const pairNumbers = [1, 2, 3, 4, 5]
 
@@ -451,6 +467,13 @@ function WeeklyView({
             icon={<Icon name="chevron-right" size={18} />}
             onClick={onNextWeek}
           />
+          <Badge
+            size="sm"
+            variant={weekParity === 'Числитель' ? 'primary' : 'default'}
+            className="ml-1 shrink-0"
+          >
+            {weekParity}
+          </Badge>
         </div>
       </div>
 
