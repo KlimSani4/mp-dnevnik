@@ -3,7 +3,6 @@ import type { Task, TaskState } from '@nexora/shared'
 
 const STATE_LABELS: Record<TaskState, string> = {
   todo: 'Нужно сделать',
-  doing: 'В процессе',
   review: 'На проверке',
   done: 'Зачтено',
 }
@@ -116,7 +115,6 @@ function Spinner() {
 
 const GROUPS: Array<{ state: TaskState; label: string }> = [
   { state: 'todo', label: 'Нужно сделать' },
-  { state: 'doing', label: 'В процессе' },
   { state: 'review', label: 'На проверке' },
   { state: 'done', label: 'Зачтено' },
 ]
