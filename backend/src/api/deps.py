@@ -26,7 +26,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_redis_client() -> "_Redis[str]":
+async def get_redis_client() -> _Redis[str]:
     """Get Redis client."""
     return await get_redis()
 
