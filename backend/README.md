@@ -1,80 +1,40 @@
-# Nexora
+# Nexora Backend
 
-Студенческая платформа для Московского Политеха. Собирает расписание, задания и дедлайны в одном месте.
+FastAPI backend for Nexora — student planning platform for Moscow Polytechnic.
 
-## Зачем
+## Stack
+- Python 3.12, FastAPI, SQLAlchemy 2.0 async
+- PostgreSQL 16, Redis 7
+- aiogram 3.x (Telegram bot)
+- APScheduler (notifications)
 
-Студенческая жизнь — это хаос из расписаний, ссылок и чатов. Nexora собирает всё в одном месте: пары, Zoom, задания и дедлайны — без потерь и путаницы.
-
-## Возможности
-
-- Расписание с персонализацией (парсинг rasp.dmami.ru)
-- Задания от одногруппников с голосованием
-- Личный канбан
-- Уведомления в Telegram, VK
-- Управление своей успеваймостью
-- Отслеживание пересдач 
-
-## Требования
-
-- Python 3.12+
-- PostgreSQL 16
-- Redis 7
-- Docker
-
-## Запуск
+## Local Setup
 
 ```bash
-# Клонировать
-git clone https://github.com/KlimSani4/Nexora.git
-cd Nexora
+# Prerequisites: Docker, Python 3.12
 
-# Настроить
-cp .env.example .env
-# Отредактировать .env
+# 1. Start infrastructure
+docker compose up -d postgres redis
 
-# БД
-docker compose up -d db redis
+# 2. Install dependencies  
+pip install -e ".[dev,test]"
 
-# Зависимости
-uv sync
+# 3. Run migrations
+alembic upgrade head
 
-# Миграции
-uv run alembic upgrade head
+# 4. Start server
+uvicorn src.main:app --reload --port 8000
 
-# Запуск
-uv run uvicorn src.main:app --reload
+# 5. Run tests
+pytest --cov=src --cov-report=term-missing
 ```
 
-## Структура
+## Environment Variables
+See `.env.example` or `docker-compose.yml` for required variables.
 
-```
-src/
-├── api/          # HTTP endpoints
-├── core/         # Бизнес-логика
-├── gateways/     # Telegram, VK, MAX
-├── integrations/ # Внешние сервисы
-└── shared/       # Общие утилиты
-```
+## CI/CD
+- **Test**: pytest with PostgreSQL + Redis services
+- **Lint**: ruff check + ruff format + mypy --strict  
+- **Deploy**: GitHub Actions → ghcr.io → Keel auto-deploy on K8s
 
-## Документация
-
-- [Архитектура](docs/architecture.md)
-- [API](docs/api.md)
-- [База данных](docs/database.md)
-
-## Разработка
-
-```bash
-# Тесты
-uv run pytest
-
-# Линтеры
-uv run black src tests
-uv run ruff check src tests
-uv run mypy src
-```
-
-## Лицензия
-
-MIT
+[![codecov](https://codecov.io/gh/KlimSani4/Nexora/branch/main/graph/badge.svg)](https://codecov.io/gh/KlimSani4/Nexora)
