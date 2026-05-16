@@ -76,9 +76,16 @@ function AppInner() {
   const { webApp, isReady } = useTelegramWebApp()
 
   useEffect(() => {
-    if (webApp && isReady) {
-      webApp.ready()
-      webApp.expand()
+    if (!webApp || !isReady) return
+    webApp.ready()
+    webApp.expand()
+
+    // Wire up back button — theme sync happens inside useTelegramWebApp
+    const handleBack = () => window.history.back()
+    webApp.BackButton.onClick(handleBack)
+
+    return () => {
+      webApp.BackButton.offClick(handleBack)
     }
   }, [webApp, isReady])
 
