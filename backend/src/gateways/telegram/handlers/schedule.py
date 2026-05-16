@@ -170,6 +170,55 @@ async def cmd_schedule(message: Message) -> None:
     await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard)
 
 
+@router.message(Command("today"))
+async def cmd_today(message: Message) -> None:
+    """Handle /today — alias for /schedule."""
+    from src.gateways.telegram.deps import get_session
+
+    tg_user = message.from_user
+    if not tg_user:
+        return
+
+    async with get_session() as session:
+        identity, group = await _get_user_group(session, str(tg_user.id))
+
+        if not identity:
+            await message.answer("📅 <b>Расписание</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML")
+            return
+        if not group:
+            await message.answer("📅 <b>Расписание</b>\n\nУкажи группу в /settings.", parse_mode="HTML")
+            return
+
+        text, keyboard = await _render_schedule(session, identity, group, today_moscow())
+
+    await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard)
+
+
+@router.message(Command("tomorrow"))
+async def cmd_tomorrow(message: Message) -> None:
+    """Handle /tomorrow — tomorrow's schedule."""
+    from src.gateways.telegram.deps import get_session
+
+    tg_user = message.from_user
+    if not tg_user:
+        return
+
+    async with get_session() as session:
+        identity, group = await _get_user_group(session, str(tg_user.id))
+
+        if not identity:
+            await message.answer("📅 <b>Расписание</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML")
+            return
+        if not group:
+            await message.answer("📅 <b>Расписание</b>\n\nУкажи группу в /settings.", parse_mode="HTML")
+            return
+
+        tomorrow = today_moscow() + timedelta(days=1)
+        text, keyboard = await _render_schedule(session, identity, group, tomorrow)
+
+    await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard)
+
+
 @router.callback_query(F.data.startswith("sched:"))
 async def cb_schedule(callback: CallbackQuery) -> None:
     """Handle schedule day navigation."""

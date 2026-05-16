@@ -117,10 +117,11 @@ class AssignmentRepository(BaseRepository[Assignment]):
         votes_down = down_result.scalar() or 0
 
         # Update assignment
+        is_verified = votes_up >= 3
         update_stmt = (
             update(Assignment)
             .where(Assignment.id == assignment_id)
-            .values(votes_up=votes_up, votes_down=votes_down)
+            .values(votes_up=votes_up, votes_down=votes_down, is_verified=is_verified)
         )
         await self.session.execute(update_stmt)
 
