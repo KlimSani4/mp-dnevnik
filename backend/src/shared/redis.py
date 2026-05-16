@@ -11,10 +11,10 @@ from src.config import settings
 if TYPE_CHECKING:
     from redis.asyncio import Redis
 
-_redis_client: "Redis[str] | None" = None
+_redis_client: Redis[str] | None = None
 
 
-async def get_redis() -> "Redis[str]":
+async def get_redis() -> Redis[str]:
     """Get Redis client instance."""
     global _redis_client
     if _redis_client is None:
@@ -26,7 +26,7 @@ async def get_redis() -> "Redis[str]":
     return _redis_client
 
 
-async def init_redis() -> "Redis[str]":
+async def init_redis() -> Redis[str]:
     """Initialize Redis connection."""
     client = await get_redis()
     await client.ping()
