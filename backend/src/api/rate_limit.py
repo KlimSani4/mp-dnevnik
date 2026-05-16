@@ -38,7 +38,7 @@ def make_rate_limit_dependency(path: str):  # type: ignore[no-untyped-def]
 
     from src.api.deps import get_redis_client
 
-    async def _dep(request: Request, redis: Redis = Depends(get_redis_client)) -> None:  # type: ignore[assignment]
+    async def _dep(request: Request, redis: Redis = Depends(get_redis_client)) -> None:
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             ip = forwarded.split(",")[0].strip()

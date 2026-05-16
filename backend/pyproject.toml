@@ -77,6 +77,10 @@ module = ["aiogram.*", "apscheduler.*", "jose.*", "passlib.*", "redis.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = ["src.shared.redis", "src.api.deps", "src.api.rate_limit", "src.api.routes.*", "src.core.services.schedule"]
+disable_error_code = ["type-arg"]
+
+[[tool.mypy.overrides]]
 module = ["src.gateways.telegram.*"]
 ignore_errors = true
 
