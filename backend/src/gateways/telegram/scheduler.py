@@ -12,6 +12,21 @@ scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
+_DEDUP_TTL = 30 * 60  # 30 minutes in seconds
+
+
+async def _is_duplicate(user_id: str, notif_type: str, identifier: str) -> bool:
+    """Return True if this notification was already sent recently (Redis dedup)."""
+    from src.shared.redis import get_redis
+
+    redis = await get_redis()
+    key = f"notification:{user_id}:{notif_type}:{identifier}"
+    exists = await redis.exists(key)
+    if exists:
+        return True
+    await redis.setex(key, _DEDUP_TTL, "1")
+    return False
+
 
 async def send_upcoming_class_notifications() -> None:
     """Send notifications to students about classes starting in 15 minutes."""
@@ -43,12 +58,19 @@ async def send_upcoming_class_notifications() -> None:
                 )
                 for entry in day_schedule.entries:
                     if abs_diff_minutes(entry.start_time, target_hhmm) <= 1:
+                        lesson_id = str(getattr(entry, "id", entry.start_time))
+                        today_str = today_moscow.isoformat()
+                        dedup_id = f"{lesson_id}:{today_str}"
                         students = await student_repo.get_group_students(group.id)
                         for student in students:
                             identity = await identity_repo.get_user_telegram_identity(
                                 student.user_id
                             )
                             if identity and identity.external_id:
+                                if await _is_duplicate(
+                                    str(student.user_id), "class_reminder", dedup_id
+                                ):
+                                    continue
                                 subject_name = (
                                     entry.subject.name if entry.subject else "Пара"
                                 )
@@ -134,9 +156,12 @@ async def send_evening_digest() -> None:
                 else:
                     text = f"🌙 Дайджест на завтра\n\n{schedule_part}"
 
+                dedup_id = tomorrow.isoformat()
                 for student in students:
                     identity = await identity_repo.get_user_telegram_identity(student.user_id)
                     if identity and identity.external_id:
+                        if await _is_duplicate(str(student.user_id), "evening_digest", dedup_id):
+                            continue
                         try:
                             await bot.send_message(
                                 chat_id=int(identity.external_id),
@@ -196,9 +221,14 @@ async def send_morning_schedule() -> None:
                 else:
                     text = "☀️ Доброе утро!\n\nСегодня пар нет"
 
+                dedup_id = today.isoformat()
                 for student in students:
                     identity = await identity_repo.get_user_telegram_identity(student.user_id)
                     if identity and identity.external_id:
+                        if await _is_duplicate(
+                            str(student.user_id), "morning_schedule", dedup_id
+                        ):
+                            continue
                         try:
                             await bot.send_message(
                                 chat_id=int(identity.external_id),
@@ -245,7 +275,7 @@ async def send_deadline_reminders() -> None:
                 # Fetch assignments due within the next 25 hours to cover both windows
                 deadlines = await assignment_service.get_upcoming_deadlines(group.id, days=2, limit=50)
 
-                reminders: list[tuple[object, str]] = []
+                reminders: list[tuple[object, str, str]] = []
                 for a in deadlines:
                     if not a.deadline:
                         continue
@@ -257,10 +287,10 @@ async def send_deadline_reminders() -> None:
 
                     if abs(hours_left - 24) <= 0.5:
                         msg = f"⏰ Завтра дедлайн: {a.title} ({subject_name})"
-                        reminders.append((a, msg))
+                        reminders.append((a, msg, "deadline_24h"))
                     elif abs(hours_left - 3) <= 0.5:
                         msg = f"🔥 Через 3 часа дедлайн: {a.title} ({subject_name})"
-                        reminders.append((a, msg))
+                        reminders.append((a, msg, "deadline_3h"))
 
                 if not reminders:
                     continue
@@ -268,7 +298,12 @@ async def send_deadline_reminders() -> None:
                 for student in students:
                     identity = await identity_repo.get_user_telegram_identity(student.user_id)
                     if identity and identity.external_id:
-                        for _assignment, text in reminders:
+                        for assignment, text, notif_type in reminders:
+                            dedup_id = str(assignment.id)
+                            if await _is_duplicate(
+                                str(student.user_id), notif_type, dedup_id
+                            ):
+                                continue
                             try:
                                 await bot.send_message(
                                     chat_id=int(identity.external_id),

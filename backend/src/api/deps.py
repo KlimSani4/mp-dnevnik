@@ -107,7 +107,7 @@ class RequireGroupRole:
         self,
         user: Annotated[User, Depends(get_current_user)],
         db: Annotated[AsyncSession, Depends(get_db_session)],
-        group_code: str,
+        code: str,
     ) -> Student:
         """Check user has required role in group."""
         from src.core.repositories.group import GroupRepository
@@ -115,7 +115,7 @@ class RequireGroupRole:
         group_repo = GroupRepository(db)
         student_repo = StudentRepository(db)
 
-        group = await group_repo.get_by_code(group_code)
+        group = await group_repo.get_by_code(code)
         if not group:
             raise AuthorizationError("Group not found")
 
@@ -130,6 +130,7 @@ class RequireGroupRole:
 
 
 require_starosta = RequireGroupRole(StudentRole.STAROSTA, StudentRole.DEPUTY)
+require_group_moderator = RequireGroupRole(StudentRole.STAROSTA, StudentRole.DEPUTY, StudentRole.MODERATOR)
 require_member = RequireGroupRole()
 
 

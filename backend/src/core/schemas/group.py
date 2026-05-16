@@ -99,3 +99,24 @@ class StudentWithGroup(StudentResponse):
     """Student with group info."""
 
     group: GroupResponse
+
+
+class UserBrief(BaseModel):
+    """Brief user info for student list."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    display_name: str | None
+
+
+class StudentWithUser(StudentResponse):
+    """Student with embedded user info for group management."""
+
+    user: UserBrief
+
+
+class RoleUpdateRequest(BaseModel):
+    """Request to change a student's role."""
+
+    role: StudentRole

@@ -15,6 +15,7 @@ from src.core.schemas.group import (
     GroupUpdate,
     StudentResponse,
     StudentWithGroup,
+    StudentWithUser,
 )
 from src.core.schemas.schedule import SubjectResponse
 from src.shared.exceptions import AuthorizationError, ConflictError, NotFoundError
@@ -183,6 +184,14 @@ class GroupService:
         await self.session.commit()
 
         return StudentResponse.model_validate(student)
+
+    async def get_group_students_with_users(self, group_code: str) -> list[StudentWithUser]:
+        """Get all students in a group with their user info."""
+        group = await self.group_repo.get_by_code(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+        students = await self.student_repo.get_group_students_with_users(group.id)
+        return [StudentWithUser.model_validate(s) for s in students]
 
     async def get_user_groups(self, user_id: uuid.UUID) -> list[StudentWithGroup]:
         """Get all groups user is member of."""
