@@ -1,5 +1,5 @@
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
-export type TaskState = 'todo' | 'doing' | 'review' | 'done'
+export type TaskState = 'todo' | 'review' | 'done'
 
 export interface Assignment {
   id: string
