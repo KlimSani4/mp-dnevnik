@@ -13,6 +13,8 @@ import type {
   GroupCreateRequest,
   GroupUpdateRequest,
   GroupSearchParams,
+  GroupStudent,
+  RoleUpdateRequest,
   Subject,
   DaySchedule,
   ScheduleEntry,
@@ -100,6 +102,12 @@ export function createGroupsApi(client: ApiClient) {
     },
     getSubjects(code: string) {
       return client.get<Subject[]>(`/groups/${code}/subjects`)
+    },
+    getStudents(code: string) {
+      return client.get<GroupStudent[]>(`/groups/${code}/students`)
+    },
+    changeRole(code: string, userId: string, data: RoleUpdateRequest) {
+      return client.patch<void>(`/groups/${code}/students/${userId}/role`, data)
     },
   }
 }

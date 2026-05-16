@@ -1,4 +1,4 @@
-export type GroupRole = 'starosta' | 'deputy' | 'student'
+export type GroupRole = 'starosta' | 'deputy' | 'student' | 'moderator'
 
 export interface Group {
   id: string
@@ -32,4 +32,24 @@ export interface GroupSearchParams {
   search?: string
   offset?: number
   limit?: number
+}
+
+export interface GroupStudentUser {
+  id: string
+  display_name: string | null
+}
+
+export interface GroupStudent {
+  id: string
+  user_id: string
+  group_id: string
+  role: GroupRole
+  verified: boolean
+  user: GroupStudentUser
+  created_at: string
+  updated_at: string
+}
+
+export interface RoleUpdateRequest {
+  role: GroupRole
 }

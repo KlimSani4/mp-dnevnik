@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
-import type { GroupCreateRequest, GroupSearchParams, GroupUpdateRequest, Subject } from '../types'
+import type { GroupCreateRequest, GroupRole, GroupSearchParams, GroupUpdateRequest, Subject } from '../types'
 
 export function useMyGroups() {
   const api = useApi()
@@ -76,6 +76,43 @@ export function useUpdateGroup() {
       api.groups.update(code, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] })
+    },
+  })
+}
+
+export function useGroupStudents(code?: string) {
+  const api = useApi()
+
+  return useQuery({
+    queryKey: ['groups', code, 'students'],
+    queryFn: () => api.groups.getStudents(code!),
+    enabled: !!code,
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useVerifyStudent() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ code, userId }: { code: string; userId: string }) =>
+      api.groups.verify(code, userId),
+    onSuccess: (_data, { code }) => {
+      queryClient.invalidateQueries({ queryKey: ['groups', code, 'students'] })
+    },
+  })
+}
+
+export function useChangeStudentRole() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ code, userId, role }: { code: string; userId: string; role: GroupRole }) =>
+      api.groups.changeRole(code, userId, { role }),
+    onSuccess: (_data, { code }) => {
+      queryClient.invalidateQueries({ queryKey: ['groups', code, 'students'] })
     },
   })
 }
