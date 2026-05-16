@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from datetime import UTC
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -204,7 +205,7 @@ class AssignmentService:
         show up in the board without requiring eager TaskStatus creation.
         """
         import uuid as _uuid
-        from datetime import datetime as _dt, timezone as _tz
+        from datetime import datetime as _dt
 
         from src.core.models.assignment import TaskState as _TaskState
 
@@ -224,7 +225,7 @@ class AssignmentService:
             limit=500,
         )
 
-        now = _dt.now(tz=_tz.utc)
+        now = _dt.now(tz=UTC)
         result: list[TaskWithAssignment] = []
         for a in assignments:
             if a.id in by_assignment_id:
@@ -285,9 +286,7 @@ class AssignmentService:
             if not assignment:
                 raise NotFoundError(f"Assignment {item.assignment_id} not found")
 
-            student = await self.student_repo.get_by_user_and_group(
-                user_id, assignment.group_id
-            )
+            student = await self.student_repo.get_by_user_and_group(user_id, assignment.group_id)
             if not student:
                 raise AuthorizationError("Not a member of this group")
 

@@ -24,7 +24,9 @@ async def list_assignments(
     subject_id: uuid.UUID | None = Query(None, description="Filter by subject"),
     upcoming_only: bool = Query(False, description="Only show upcoming deadlines"),
     search: str | None = Query(None, description="Search by title/description"),
-    priority: str | None = Query(None, description="Filter by priority (comma-separated: urgent,high)"),
+    priority: str | None = Query(
+        None, description="Filter by priority (comma-separated: urgent,high)"
+    ),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ) -> list[AssignmentWithSubject]:

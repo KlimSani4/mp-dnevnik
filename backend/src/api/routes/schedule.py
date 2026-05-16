@@ -1,7 +1,7 @@
 """Schedule routes."""
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Query, Response
 
@@ -21,7 +21,7 @@ _WEEKDAY_TO_BYDAY = {1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "S
 
 def _build_ical(group_code: str, entries: list[ScheduleEntryWithSubject]) -> str:
     """Build RFC 5545 iCalendar string for a list of schedule entries."""
-    now_stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    now_stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
 
     # Find the next occurrence of each weekday starting from the coming Monday
     today = date.today()
@@ -171,7 +171,7 @@ async def delete_override(
 
 @router.get("/export")
 async def export_ical(
-    user: CurrentUser,
+    _user: CurrentUser,
     db: DBSession,
     redis: RedisClient,
     group_code: str = Query(..., description="Group code (e.g., 231-329)"),

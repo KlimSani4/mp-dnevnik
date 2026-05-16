@@ -13,7 +13,6 @@ from src.core.schemas.assignment import (
     VoteCreate,
     VoteResponse,
 )
-from src.core.schemas.dashboard import DashboardResponse, TaskProgress
 from src.core.schemas.auth import (
     AuthenticatedUser,
     ExternalIdentity,
@@ -21,6 +20,7 @@ from src.core.schemas.auth import (
     TelegramAuthRequest,
     TokenResponse,
 )
+from src.core.schemas.dashboard import DashboardResponse, TaskProgress
 from src.core.schemas.group import (
     GroupChatCreate,
     GroupChatResponse,

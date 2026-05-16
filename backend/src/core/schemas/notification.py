@@ -55,6 +55,4 @@ class NotificationPreferenceUpdate(BaseModel):
 class NotificationSettingsUpdate(BaseModel):
     """Batch-обновление настроек уведомлений."""
 
-    preferences: list[NotificationPreferenceUpdate] = Field(
-        ..., min_length=1, max_length=10
-    )
+    preferences: list[NotificationPreferenceUpdate] = Field(..., min_length=1, max_length=10)

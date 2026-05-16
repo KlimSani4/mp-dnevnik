@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
 from src.core.models.schedule import OverrideScope, OverrideType, ScheduleOverride
-from src.integrations.rasp_parser import fetch_group_schedule
 from src.core.repositories.group import GroupRepository, StudentRepository
 from src.core.repositories.schedule import (
     ScheduleEntryRepository,
@@ -21,6 +20,7 @@ from src.core.repositories.schedule import (
     SubjectRepository,
 )
 from src.core.schemas.schedule import DayScheduleResponse, ScheduleEntryWithSubject
+from src.integrations.rasp_parser import fetch_group_schedule
 from src.shared.exceptions import AuthorizationError, NotFoundError
 
 logger = logging.getLogger(__name__)

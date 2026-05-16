@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Query
 
 from src.api.deps import CurrentUser, DBSession
 from src.core.schemas.notification import (

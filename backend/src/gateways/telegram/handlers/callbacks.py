@@ -22,15 +22,12 @@ class GroupSelection(StatesGroup):
 
 
 @router.callback_query(F.data == "settings:group")
-async def callback_settings_group(
-    callback: CallbackQuery, state: FSMContext
-) -> None:
+async def callback_settings_group(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle group selection callback."""
     await callback.answer()
     await state.set_state(GroupSelection.waiting_for_group)
     await callback.message.answer(  # type: ignore[union-attr]
-        "📚 <b>Выбор группы</b>\n\n"
-        "Введите номер группы (например, 231-329):"
+        "📚 <b>Выбор группы</b>\n\nВведите номер группы (например, 231-329):"
     )
 
 
@@ -47,8 +44,7 @@ async def process_group_input(message: Message, state: FSMContext) -> None:
     # Validate group code format (e.g., 231-329, 241-1234)
     if not re.match(r"^\d{3}-\d{3,4}$", group_code):
         await message.answer(
-            "❌ Неверный формат группы.\n\n"
-            "Введите номер в формате XXX-XXX или XXX-XXXX:"
+            "❌ Неверный формат группы.\n\nВведите номер в формате XXX-XXX или XXX-XXXX:"
         )
         return
 
@@ -71,8 +67,7 @@ async def process_group_input(message: Message, state: FSMContext) -> None:
     await state.clear()
 
     await message.answer(
-        f"✅ Группа <b>{group_code}</b> сохранена!\n\n"
-        "Теперь можно посмотреть расписание: /schedule"
+        f"✅ Группа <b>{group_code}</b> сохранена!\n\nТеперь можно посмотреть расписание: /schedule"
     )
 
 

@@ -24,27 +24,40 @@ MOSCOW_TZ = timezone(timedelta(hours=3))
 # ── date parsing ──────────────────────────────────────────────────────────────
 
 _MONTH_NAMES: dict[str, int] = {
-    "янв": 1, "январ": 1,
-    "фев": 2, "феврал": 2,
-    "мар": 3, "март": 3,
-    "апр": 4, "апрел": 4,
-    "май": 5, "мая": 5,
+    "янв": 1,
+    "январ": 1,
+    "фев": 2,
+    "феврал": 2,
+    "мар": 3,
+    "март": 3,
+    "апр": 4,
+    "апрел": 4,
+    "май": 5,
+    "мая": 5,
     "июн": 6,
     "июл": 7,
-    "авг": 8, "август": 8,
-    "сен": 9, "сентябр": 9,
-    "окт": 10, "октябр": 10,
-    "ноя": 11, "ноябр": 11,
-    "дек": 12, "декабр": 12,
+    "авг": 8,
+    "август": 8,
+    "сен": 9,
+    "сентябр": 9,
+    "окт": 10,
+    "октябр": 10,
+    "ноя": 11,
+    "ноябр": 11,
+    "дек": 12,
+    "декабр": 12,
 }
 
 _WEEKDAY_RU: dict[str, int] = {
     "понедельник": 0,
     "вторник": 1,
-    "среду": 2, "среда": 2,
+    "среду": 2,
+    "среда": 2,
     "четверг": 3,
-    "пятницу": 4, "пятница": 4,
-    "субботу": 5, "суббота": 5,
+    "пятницу": 4,
+    "пятница": 4,
+    "субботу": 5,
+    "суббота": 5,
     "воскресенье": 6,
 }
 
@@ -128,6 +141,7 @@ def extract_deadline(text: str) -> datetime | None:
 
 # ── subject matching ──────────────────────────────────────────────────────────
 
+
 def match_subject(text: str, subjects: list) -> "object | None":
     """Return the best-matching subject or None.
 
@@ -151,6 +165,7 @@ def match_subject(text: str, subjects: list) -> "object | None":
 
 # ── FSM ───────────────────────────────────────────────────────────────────────
 
+
 class ForwardEdit(StatesGroup):
     waiting_for_title = State()
     waiting_for_subject = State()
@@ -158,6 +173,7 @@ class ForwardEdit(StatesGroup):
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _preview_keyboard(payload: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -175,12 +191,14 @@ def _subject_keyboard(subjects: list, payload_base: str) -> InlineKeyboardMarkup
     """Build inline keyboard with subject choices."""
     rows = []
     for subj in subjects[:20]:  # cap at 20 to avoid huge keyboards
-        rows.append([
-            InlineKeyboardButton(
-                text=subj.name[:40],
-                callback_data=f"fw_subj:{subj.id}:{payload_base}",
-            )
-        ])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=subj.name[:40],
+                    callback_data=f"fw_subj:{subj.id}:{payload_base}",
+                )
+            ]
+        )
     rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="fw_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -217,12 +235,13 @@ def _make_title(text: str) -> str:
 
 # ── main handler ──────────────────────────────────────────────────────────────
 
+
 @router.message(F.forward_date | F.forward_origin)
 async def handle_forwarded_message(message: Message) -> None:
     """Catch forwarded messages and try to parse them as assignments."""
+    from src.core.repositories.group import StudentRepository
     from src.core.repositories.schedule import SubjectRepository
     from src.core.repositories.user import IdentityRepository
-    from src.core.repositories.group import StudentRepository
     from src.gateways.telegram.deps import get_session
 
     tg_user = message.from_user
@@ -273,11 +292,12 @@ async def handle_forwarded_message(message: Message) -> None:
 
 # ── callback: create ──────────────────────────────────────────────────────────
 
+
 @router.callback_query(F.data.startswith("fw_create:"))
 async def cb_forward_create(callback: CallbackQuery) -> None:
-    from src.core.repositories.schedule import SubjectRepository
-    from src.core.repositories.group import StudentRepository
     from src.core.models.assignment import Assignment
+    from src.core.repositories.group import StudentRepository
+    from src.core.repositories.schedule import SubjectRepository
     from src.gateways.telegram.deps import get_session
 
     await callback.answer()
@@ -324,10 +344,7 @@ async def cb_forward_create(callback: CallbackQuery) -> None:
 
         deadline_str = deadline.strftime("%d.%m.%Y") if deadline else "без дедлайна"
         await callback.message.edit_text(  # type: ignore[union-attr]
-            f"✅ Задание создано!\n\n"
-            f"📌 <b>{data['t']}</b>\n"
-            f"📚 {data['sn']}\n"
-            f"⏰ {deadline_str}",
+            f"✅ Задание создано!\n\n📌 <b>{data['t']}</b>\n📚 {data['sn']}\n⏰ {deadline_str}",
             parse_mode="HTML",
         )
     except Exception as e:
@@ -336,6 +353,7 @@ async def cb_forward_create(callback: CallbackQuery) -> None:
 
 
 # ── callback: cancel ──────────────────────────────────────────────────────────
+
 
 @router.callback_query(F.data == "fw_cancel")
 async def cb_forward_cancel(callback: CallbackQuery, state: FSMContext) -> None:
@@ -348,6 +366,7 @@ async def cb_forward_cancel(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 # ── callback: edit (entry point) ─────────────────────────────────────────────
+
 
 @router.callback_query(F.data.startswith("fw_edit:"))
 async def cb_forward_edit(callback: CallbackQuery, state: FSMContext) -> None:

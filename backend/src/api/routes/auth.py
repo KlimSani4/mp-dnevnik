@@ -9,7 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from src.api.deps import ClientIP, CurrentUser, DBSession, RedisClient, UserAgent
 from src.api.rate_limit import make_rate_limit_dependency
 from src.config import settings
-from src.core.schemas.auth import DevLoginRequest, RefreshTokenRequest, TelegramAuthRequest, TokenResponse
+from src.core.schemas.auth import (
+    DevLoginRequest,
+    RefreshTokenRequest,
+    TelegramAuthRequest,
+    TokenResponse,
+)
 from src.core.services.auth import AuthService
 
 router = APIRouter()
@@ -30,7 +35,9 @@ async def dev_login(
 ) -> TokenResponse:
     """Dev-only login — skips Telegram validation. Only available when APP_ENV=development."""
     if not settings.is_development:
-        raise HTTPException(status_code=403, detail="Dev login is only available in development mode")
+        raise HTTPException(
+            status_code=403, detail="Dev login is only available in development mode"
+        )
 
     auth_service = AuthService(db)
     user, tokens = await auth_service.dev_login(
@@ -41,7 +48,9 @@ async def dev_login(
     return tokens
 
 
-@router.post("/telegram", response_model=TokenResponse, dependencies=[Depends(_rate_limit_telegram)])
+@router.post(
+    "/telegram", response_model=TokenResponse, dependencies=[Depends(_rate_limit_telegram)]
+)
 async def authenticate_telegram(
     data: TelegramAuthRequest,
     db: DBSession,

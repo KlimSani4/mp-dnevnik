@@ -130,7 +130,9 @@ class RequireGroupRole:
 
 
 require_starosta = RequireGroupRole(StudentRole.STAROSTA, StudentRole.DEPUTY)
-require_group_moderator = RequireGroupRole(StudentRole.STAROSTA, StudentRole.DEPUTY, StudentRole.MODERATOR)
+require_group_moderator = RequireGroupRole(
+    StudentRole.STAROSTA, StudentRole.DEPUTY, StudentRole.MODERATOR
+)
 require_member = RequireGroupRole()
 
 
