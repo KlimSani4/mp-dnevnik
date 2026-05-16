@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
-    from redis.asyncio import Redis
+    from redis.asyncio import Redis as _Redis
 
 from src.core.models.schedule import OverrideScope, OverrideType, ScheduleOverride
 from src.core.repositories.group import GroupRepository, StudentRepository
@@ -31,7 +31,7 @@ SCHEDULE_CACHE_TTL = 3600  # 1 hour
 class ScheduleService:
     """Schedule management service."""
 
-    def __init__(self, session: AsyncSession, redis: Redis | None = None) -> None:
+    def __init__(self, session: AsyncSession, redis: "_Redis[str] | None" = None) -> None:
         self.session = session
         self.redis = redis
         self.group_repo = GroupRepository(session)
