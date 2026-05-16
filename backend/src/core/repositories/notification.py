@@ -31,11 +31,7 @@ class NotificationRepository(BaseRepository[Notification]):
         if unread_only:
             stmt = stmt.where(Notification.is_read.is_(False))
 
-        stmt = (
-            stmt.order_by(Notification.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-        )
+        stmt = stmt.order_by(Notification.created_at.desc()).offset(offset).limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -46,8 +42,12 @@ class NotificationRepository(BaseRepository[Notification]):
         unread_only: bool = False,
     ) -> int:
         """Подсчитать количество уведомлений пользователя."""
-        stmt = select(func.count()).select_from(Notification).where(
-            Notification.user_id == user_id,
+        stmt = (
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.user_id == user_id,
+            )
         )
         if unread_only:
             stmt = stmt.where(Notification.is_read.is_(False))

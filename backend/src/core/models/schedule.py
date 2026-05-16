@@ -81,14 +81,14 @@ class ScheduleEntry(Base, UUIDMixin, TimestampMixin):
     )
 
 
-class OverrideScope(str, enum.Enum):
+class OverrideScope(enum.StrEnum):
     """Scope of schedule override."""
 
     GROUP = "group"
     PERSONAL = "personal"
 
 
-class OverrideType(str, enum.Enum):
+class OverrideType(enum.StrEnum):
     """Type of schedule override."""
 
     CANCEL = "cancel"

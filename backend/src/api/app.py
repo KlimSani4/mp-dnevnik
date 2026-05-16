@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -72,10 +72,8 @@ async def lifespan(_app: FastAPI) -> Any:
 
     if _bot_task:
         _bot_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await _bot_task
-        except asyncio.CancelledError:
-            pass
         logger.info("Telegram bot stopped")
 
     await close_redis()

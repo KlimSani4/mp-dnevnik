@@ -4,8 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query
 
-from src.api.deps import CurrentUser, DBSession, RequireGroupRole, require_group_moderator
-from src.core.models.group import StudentRole
+from src.api.deps import CurrentUser, DBSession, require_group_moderator
 from src.core.schemas.group import (
     GroupCreate,
     GroupResponse,
@@ -105,7 +104,7 @@ async def get_group_subjects(
 @router.get("/{code}/students", response_model=list[StudentWithUser])
 async def get_group_students(
     code: str,
-    user: CurrentUser,
+    _user: CurrentUser,
     db: DBSession,
     _moderator: object = Depends(require_group_moderator),
 ) -> list[StudentWithUser]:

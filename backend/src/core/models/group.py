@@ -76,7 +76,7 @@ class GroupChat(Base, UUIDMixin):
     group: Mapped["Group"] = relationship("Group", back_populates="chats")
 
 
-class StudentRole(str, enum.Enum):
+class StudentRole(enum.StrEnum):
     """Student role in group."""
 
     STUDENT = "student"

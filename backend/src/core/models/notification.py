@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from src.core.models.user import User
 
 
-class NotificationType(str, enum.Enum):
+class NotificationType(enum.StrEnum):
     """Тип уведомления."""
 
     SCHEDULE_CHANGE = "schedule_change"
@@ -56,9 +56,7 @@ class NotificationPreference(Base, UUIDMixin):
     """Настройки уведомлений пользователя (per notification type)."""
 
     __tablename__ = "notification_preferences"
-    __table_args__ = (
-        UniqueConstraint("user_id", "type", name="uq_notification_pref_user_type"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "type", name="uq_notification_pref_user_type"),)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

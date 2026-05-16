@@ -85,7 +85,7 @@ class AssignmentVote(Base, UUIDMixin):
     user: Mapped["User"] = relationship("User")
 
 
-class TaskState(str, enum.Enum):
+class TaskState(enum.StrEnum):
     """Personal task state."""
 
     TODO = "todo"

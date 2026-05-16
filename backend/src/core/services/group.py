@@ -248,9 +248,7 @@ class GroupService:
             )
         else:
             # Check if already member
-            existing = await self.student_repo.get_by_user_and_group(
-                identity.user_id, group.id
-            )
+            existing = await self.student_repo.get_by_user_and_group(identity.user_id, group.id)
             if existing:
                 return StudentResponse.model_validate(existing)
 

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from src.core.models.schedule import Subject
 
 
-class ControlType(str, enum.Enum):
+class ControlType(enum.StrEnum):
     """Тип контроля по предмету."""
 
     EXAM = "exam"
@@ -48,7 +48,9 @@ class SubjectSemester(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "subject_semesters"
     __table_args__ = (
         UniqueConstraint(
-            "subject_id", "semester_id", "student_id",
+            "subject_id",
+            "semester_id",
+            "student_id",
             name="uq_subject_semester_student",
         ),
     )

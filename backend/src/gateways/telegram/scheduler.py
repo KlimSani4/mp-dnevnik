@@ -1,7 +1,7 @@
 """APScheduler tasks for Nexora bot notifications."""
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -53,9 +53,7 @@ async def send_upcoming_class_notifications() -> None:
         for group in groups:
             try:
                 today_moscow = datetime.now(tz=timezone(timedelta(hours=3))).date()
-                day_schedule = await schedule_service.get_day_schedule(
-                    group.code, today_moscow
-                )
+                day_schedule = await schedule_service.get_day_schedule(group.code, today_moscow)
                 for entry in day_schedule.entries:
                     if abs_diff_minutes(entry.start_time, target_hhmm) <= 1:
                         lesson_id = str(getattr(entry, "id", entry.start_time))
@@ -71,9 +69,7 @@ async def send_upcoming_class_notifications() -> None:
                                     str(student.user_id), "class_reminder", dedup_id
                                 ):
                                     continue
-                                subject_name = (
-                                    entry.subject.name if entry.subject else "Пара"
-                                )
+                                subject_name = entry.subject.name if entry.subject else "Пара"
                                 location = entry.location or "—"
                                 text = (
                                     f"🔔 <b>Через 15 минут начинается пара</b>\n\n"
@@ -225,9 +221,7 @@ async def send_morning_schedule() -> None:
                 for student in students:
                     identity = await identity_repo.get_user_telegram_identity(student.user_id)
                     if identity and identity.external_id:
-                        if await _is_duplicate(
-                            str(student.user_id), "morning_schedule", dedup_id
-                        ):
+                        if await _is_duplicate(str(student.user_id), "morning_schedule", dedup_id):
                             continue
                         try:
                             await bot.send_message(
@@ -273,7 +267,9 @@ async def send_deadline_reminders() -> None:
                     continue
 
                 # Fetch assignments due within the next 25 hours to cover both windows
-                deadlines = await assignment_service.get_upcoming_deadlines(group.id, days=2, limit=50)
+                deadlines = await assignment_service.get_upcoming_deadlines(
+                    group.id, days=2, limit=50
+                )
 
                 reminders: list[tuple[object, str, str]] = []
                 for a in deadlines:
@@ -281,7 +277,7 @@ async def send_deadline_reminders() -> None:
                         continue
                     dl = a.deadline
                     if dl.tzinfo is None:
-                        dl = dl.replace(tzinfo=timezone.utc)
+                        dl = dl.replace(tzinfo=UTC)
                     hours_left = (dl - now).total_seconds() / 3600
                     subject_name = a.subject.name if a.subject else "Предмет"
 
@@ -300,9 +296,7 @@ async def send_deadline_reminders() -> None:
                     if identity and identity.external_id:
                         for assignment, text, notif_type in reminders:
                             dedup_id = str(assignment.id)
-                            if await _is_duplicate(
-                                str(student.user_id), notif_type, dedup_id
-                            ):
+                            if await _is_duplicate(str(student.user_id), notif_type, dedup_id):
                                 continue
                             try:
                                 await bot.send_message(
@@ -325,8 +319,8 @@ async def sync_all_schedules() -> None:
     """Sync schedules for all groups from rasp.dmami.ru every 15 minutes."""
     from src.core.repositories.group import GroupRepository
     from src.core.services.schedule import ScheduleService
-    from src.integrations.rasp_parser import fetch_group_schedule
     from src.gateways.telegram.deps import get_session
+    from src.integrations.rasp_parser import fetch_group_schedule
 
     async with get_session() as session:
         group_repo = GroupRepository(session)

@@ -1,7 +1,7 @@
 """Schedule command handlers."""
 
 import re
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from aiogram import F, Router
@@ -13,8 +13,13 @@ router = Router(name="schedule")
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
 WEEKDAY_NAMES = {
-    1: "Понедельник", 2: "Вторник", 3: "Среда",
-    4: "Четверг", 5: "Пятница", 6: "Суббота", 7: "Воскресенье",
+    1: "Понедельник",
+    2: "Вторник",
+    3: "Среда",
+    4: "Четверг",
+    5: "Пятница",
+    6: "Суббота",
+    7: "Воскресенье",
 }
 
 
@@ -81,21 +86,33 @@ def schedule_keyboard(target_date: date) -> InlineKeyboardMarkup:
     prev_date = target_date - timedelta(days=1)
     next_date = target_date + timedelta(days=1)
 
-    prev_label = WEEKDAY_NAMES.get(prev_date.isoweekday(), "")[:2] + f" {prev_date.strftime('%d.%m')}"
-    next_label = WEEKDAY_NAMES.get(next_date.isoweekday(), "")[:2] + f" {next_date.strftime('%d.%m')}"
+    prev_label = (
+        WEEKDAY_NAMES.get(prev_date.isoweekday(), "")[:2] + f" {prev_date.strftime('%d.%m')}"
+    )
+    next_label = (
+        WEEKDAY_NAMES.get(next_date.isoweekday(), "")[:2] + f" {next_date.strftime('%d.%m')}"
+    )
 
     row1 = [
-        InlineKeyboardButton(text=f"◀ {prev_label}", callback_data=f"sched:{prev_date.isoformat()}"),
-        InlineKeyboardButton(text=f"{next_label} ▶", callback_data=f"sched:{next_date.isoformat()}"),
+        InlineKeyboardButton(
+            text=f"◀ {prev_label}", callback_data=f"sched:{prev_date.isoformat()}"
+        ),
+        InlineKeyboardButton(
+            text=f"{next_label} ▶", callback_data=f"sched:{next_date.isoformat()}"
+        ),
     ]
 
     row2 = []
     if target_date != today:
-        row2.append(InlineKeyboardButton(text="📅 Сегодня", callback_data=f"sched:{today.isoformat()}"))
+        row2.append(
+            InlineKeyboardButton(text="📅 Сегодня", callback_data=f"sched:{today.isoformat()}")
+        )
 
     tomorrow = today + timedelta(days=1)
     if target_date != tomorrow:
-        row2.append(InlineKeyboardButton(text="➡️ Завтра", callback_data=f"sched:{tomorrow.isoformat()}"))
+        row2.append(
+            InlineKeyboardButton(text="➡️ Завтра", callback_data=f"sched:{tomorrow.isoformat()}")
+        )
 
     rows = [row1]
     if row2:
@@ -133,7 +150,9 @@ async def _render_schedule(
 
     try:
         schedule_service = ScheduleService(session)
-        day = await schedule_service.get_day_schedule(group.code, target_date, user_id=identity.user_id)
+        day = await schedule_service.get_day_schedule(
+            group.code, target_date, user_id=identity.user_id
+        )
         entries = [e.model_dump() for e in day.entries] if day.entries else []
         text = format_day_full(target_date, entries, group.code)
     except Exception as exc:
@@ -159,15 +178,21 @@ async def cmd_schedule(message: Message) -> None:
         identity, group = await _get_user_group(session, str(tg_user.id))
 
         if not identity:
-            await message.answer("📅 <b>Расписание</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML")
+            await message.answer(
+                "📅 <b>Расписание</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML"
+            )
             return
         if not group:
-            await message.answer("📅 <b>Расписание</b>\n\nУкажи группу в /settings.", parse_mode="HTML")
+            await message.answer(
+                "📅 <b>Расписание</b>\n\nУкажи группу в /settings.", parse_mode="HTML"
+            )
             return
 
         text, keyboard = await _render_schedule(session, identity, group, today_moscow())
 
-    await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard)
+    await message.answer(
+        text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard
+    )
 
 
 @router.message(Command("today"))
@@ -183,15 +208,21 @@ async def cmd_today(message: Message) -> None:
         identity, group = await _get_user_group(session, str(tg_user.id))
 
         if not identity:
-            await message.answer("📅 <b>Расписание</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML")
+            await message.answer(
+                "📅 <b>Расписание</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML"
+            )
             return
         if not group:
-            await message.answer("📅 <b>Расписание</b>\n\nУкажи группу в /settings.", parse_mode="HTML")
+            await message.answer(
+                "📅 <b>Расписание</b>\n\nУкажи группу в /settings.", parse_mode="HTML"
+            )
             return
 
         text, keyboard = await _render_schedule(session, identity, group, today_moscow())
 
-    await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard)
+    await message.answer(
+        text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard
+    )
 
 
 @router.message(Command("tomorrow"))
@@ -207,16 +238,22 @@ async def cmd_tomorrow(message: Message) -> None:
         identity, group = await _get_user_group(session, str(tg_user.id))
 
         if not identity:
-            await message.answer("📅 <b>Расписание</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML")
+            await message.answer(
+                "📅 <b>Расписание</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML"
+            )
             return
         if not group:
-            await message.answer("📅 <b>Расписание</b>\n\nУкажи группу в /settings.", parse_mode="HTML")
+            await message.answer(
+                "📅 <b>Расписание</b>\n\nУкажи группу в /settings.", parse_mode="HTML"
+            )
             return
 
         tomorrow = today_moscow() + timedelta(days=1)
         text, keyboard = await _render_schedule(session, identity, group, tomorrow)
 
-    await message.answer(text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard)
+    await message.answer(
+        text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=keyboard
+    )
 
 
 @router.callback_query(F.data.startswith("sched:"))
@@ -284,10 +321,14 @@ async def cmd_deadlines(message: Message) -> None:
         identity, group = await _get_user_group(session, str(tg_user.id))
 
         if not identity:
-            await message.answer("⏰ <b>Дедлайны</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML")
+            await message.answer(
+                "⏰ <b>Дедлайны</b>\n\nСначала зарегистрируйся: /start", parse_mode="HTML"
+            )
             return
         if not group:
-            await message.answer("⏰ <b>Дедлайны</b>\n\nУкажи группу в /settings.", parse_mode="HTML")
+            await message.answer(
+                "⏰ <b>Дедлайны</b>\n\nУкажи группу в /settings.", parse_mode="HTML"
+            )
             return
 
         assignment_repo = AssignmentRepository(session)

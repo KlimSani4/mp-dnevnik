@@ -54,9 +54,13 @@ async def cmd_start(message: Message) -> None:
                     parse_mode="HTML",
                 )
             elif resp.status_code == 404:
-                await message.answer("Ссылка для входа устарела или уже использована. Запросите новую на сайте.")
+                await message.answer(
+                    "Ссылка для входа устарела или уже использована. Запросите новую на сайте."
+                )
             else:
-                logger.warning("Internal auth/complete returned %s: %s", resp.status_code, resp.text)
+                logger.warning(
+                    "Internal auth/complete returned %s: %s", resp.status_code, resp.text
+                )
                 await message.answer("Не удалось завершить авторизацию. Попробуйте ещё раз.")
         except Exception as e:
             logger.exception("Bot auth complete failed: %s", e)

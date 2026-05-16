@@ -81,16 +81,28 @@ class TestRaspParser:
         """Test filtering out PE classes."""
         parser = RaspParser()
 
-        lesson = {"sbj": "-*Физ*-", "time": "09:00 - 10:30"}
+        lesson = {
+            "sbj": "Элективные дисциплины по физической культуре",
+            "time": "09:00 - 10:30",
+        }
+        result = parser._parse_lesson(1, 1, lesson)
+
+        assert result is None
+
+    def test_parse_lesson_filters_pe_general(self) -> None:
+        """Test filtering out general physical training."""
+        parser = RaspParser()
+
+        lesson = {"sbj": "Общая физическая подготовка", "time": "09:00 - 10:30"}
         result = parser._parse_lesson(1, 1, lesson)
 
         assert result is None
 
     def test_parse_lesson_filters_pd(self) -> None:
-        """Test filtering out personal development."""
+        """Test filtering out project activity (Проектная деятельность)."""
         parser = RaspParser()
 
-        lesson = {"sbj": "-*ПД*-", "time": "09:00 - 10:30"}
+        lesson = {"sbj": "Проектная деятельность", "time": "09:00 - 10:30"}
         result = parser._parse_lesson(1, 1, lesson)
 
         assert result is None
@@ -103,7 +115,7 @@ class TestRaspParser:
             "sbj": "Математика",
             "time": "09:00 - 10:30",
             "teacher": "Иванов И.И.",
-            "aud": "101",
+            "shortRooms": ["101"],
             "type": "Лекция",
         }
         result = parser._parse_lesson(1, 1, lesson)

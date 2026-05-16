@@ -47,9 +47,7 @@ class SemesterService:
         )
 
         # Собрать информацию о преподавателях из расписания
-        entries = await self.entry_repo.get_group_schedule(
-            group_id, with_subject=True
-        )
+        entries = await self.entry_repo.get_group_schedule(group_id, with_subject=True)
         # Маппинг subject_id -> teacher (берём первого встреченного преподавателя)
         teacher_map: dict[uuid.UUID, str | None] = {}
         for entry in entries:

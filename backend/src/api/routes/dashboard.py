@@ -25,9 +25,7 @@ async def get_dashboard(
     assignment_service = AssignmentService(db)
 
     today = date.today()
-    today_schedule = await schedule_service.get_day_schedule(
-        group_code, today, user_id=user.id
-    )
+    today_schedule = await schedule_service.get_day_schedule(group_code, today, user_id=user.id)
     burning_tasks = await assignment_service.get_upcoming_deadlines(group_id, days=7)
     progress = await assignment_service.get_task_progress(user.id, group_id)
 
