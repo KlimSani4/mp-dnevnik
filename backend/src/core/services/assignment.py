@@ -14,6 +14,7 @@ from src.core.repositories.assignment import (
 )
 from src.core.repositories.group import GroupRepository, StudentRepository
 from src.core.repositories.schedule import SubjectRepository
+from src.core.repositories.user import AuditLogRepository
 from src.core.schemas.assignment import (
     AssignmentCreate,
     AssignmentUpdate,
@@ -39,6 +40,7 @@ class AssignmentService:
         self.group_repo = GroupRepository(session)
         self.student_repo = StudentRepository(session)
         self.subject_repo = SubjectRepository(session)
+        self.audit_repo = AuditLogRepository(session)
 
     async def create_assignment(
         self,
@@ -67,6 +69,12 @@ class AssignmentService:
             author_id=author_id,
         )
 
+        await self.audit_repo.log(
+            action="assignment_created",
+            user_id=author_id,
+            resource="assignment",
+            resource_id=str(assignment.id),
+        )
         await self.session.commit()
 
         logger.info(
