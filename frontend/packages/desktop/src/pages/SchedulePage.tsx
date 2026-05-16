@@ -487,7 +487,7 @@ function WeeklyView({
           />
           <Badge
             size="sm"
-            variant={weekParity === 'Числитель' ? 'primary' : 'default'}
+            variant={weekParity === 'Числитель' ? 'success' : 'default'}
             className="ml-1 shrink-0"
           >
             {weekParity}
