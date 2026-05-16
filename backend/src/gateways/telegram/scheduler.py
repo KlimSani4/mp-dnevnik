@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
+MOSCOW_TZ = timezone(timedelta(hours=3))
+
 
 async def send_upcoming_class_notifications() -> None:
     """Send notifications to students about classes starting in 15 minutes."""
@@ -78,6 +80,212 @@ async def send_upcoming_class_notifications() -> None:
                 )
 
 
+async def send_evening_digest() -> None:
+    """Send evening digest at 20:00 Moscow with tomorrow's schedule and upcoming deadlines."""
+    from src.core.repositories.group import GroupRepository, StudentRepository
+    from src.core.repositories.user import IdentityRepository
+    from src.core.services.assignment import AssignmentService
+    from src.core.services.schedule import ScheduleService
+    from src.gateways.telegram.bot import get_bot
+    from src.gateways.telegram.deps import get_session
+
+    tomorrow = (datetime.now(tz=MOSCOW_TZ) + timedelta(days=1)).date()
+
+    async with get_session() as session:
+        group_repo = GroupRepository(session)
+        student_repo = StudentRepository(session)
+        identity_repo = IdentityRepository(session)
+        schedule_service = ScheduleService(session)
+        assignment_service = AssignmentService(session)
+
+        groups = await group_repo.get_all_groups()
+        bot = await get_bot()
+
+        for group in groups:
+            try:
+                students = await student_repo.get_group_students(group.id)
+                if not students:
+                    continue
+
+                day_schedule = await schedule_service.get_day_schedule(group.code, tomorrow)
+                deadlines = await assignment_service.get_upcoming_deadlines(group.id, days=7)
+
+                if day_schedule.entries:
+                    first = day_schedule.entries[0]
+                    first_subject = first.subject.name if first.subject else "Пара"
+                    first_room = first.location or "—"
+                    first_time = str(first.start_time)[:5]
+                    schedule_part = (
+                        f"📅 Завтра {len(day_schedule.entries)} пар"
+                        f" с {first_time}\n"
+                        f"Первая — {first_subject} в {first_room}"
+                    )
+                else:
+                    schedule_part = "Завтра пар нет. Выспись 😴"
+
+                if deadlines:
+                    deadline_lines = []
+                    for a in deadlines:
+                        subject_name = a.subject.name if a.subject else "Предмет"
+                        dl_str = a.deadline.strftime("%d.%m") if a.deadline else "?"
+                        deadline_lines.append(f"• {subject_name} — {a.title} (до {dl_str})")
+                    deadlines_part = "⏰ Горящие дедлайны:\n" + "\n".join(deadline_lines)
+                    text = f"🌙 Дайджест на завтра\n\n{schedule_part}\n\n{deadlines_part}"
+                else:
+                    text = f"🌙 Дайджест на завтра\n\n{schedule_part}"
+
+                for student in students:
+                    identity = await identity_repo.get_user_telegram_identity(student.user_id)
+                    if identity and identity.external_id:
+                        try:
+                            await bot.send_message(
+                                chat_id=int(identity.external_id),
+                                text=text,
+                                parse_mode="HTML",
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to send evening digest",
+                                extra={"user": identity.external_id, "error": str(e)},
+                            )
+            except Exception as e:
+                logger.warning(
+                    "Failed to process evening digest for group",
+                    extra={"group": group.code, "error": str(e)},
+                )
+
+
+async def send_morning_schedule() -> None:
+    """Send morning schedule at 07:30 Moscow with today's classes."""
+    from src.core.repositories.group import GroupRepository, StudentRepository
+    from src.core.repositories.user import IdentityRepository
+    from src.core.services.schedule import ScheduleService
+    from src.gateways.telegram.bot import get_bot
+    from src.gateways.telegram.deps import get_session
+
+    today = datetime.now(tz=MOSCOW_TZ).date()
+
+    async with get_session() as session:
+        group_repo = GroupRepository(session)
+        student_repo = StudentRepository(session)
+        identity_repo = IdentityRepository(session)
+        schedule_service = ScheduleService(session)
+
+        groups = await group_repo.get_all_groups()
+        bot = await get_bot()
+
+        for group in groups:
+            try:
+                students = await student_repo.get_group_students(group.id)
+                if not students:
+                    continue
+
+                day_schedule = await schedule_service.get_day_schedule(group.code, today)
+
+                if day_schedule.entries:
+                    first = day_schedule.entries[0]
+                    first_subject = first.subject.name if first.subject else "Пара"
+                    first_room = first.location or "—"
+                    first_time = str(first.start_time)[:5]
+                    text = (
+                        f"☀️ Доброе утро!\n\n"
+                        f"Сегодня {len(day_schedule.entries)} пар"
+                        f" с {first_time}\n"
+                        f"Первая — {first_subject} в {first_room}"
+                    )
+                else:
+                    text = "☀️ Доброе утро!\n\nСегодня пар нет"
+
+                for student in students:
+                    identity = await identity_repo.get_user_telegram_identity(student.user_id)
+                    if identity and identity.external_id:
+                        try:
+                            await bot.send_message(
+                                chat_id=int(identity.external_id),
+                                text=text,
+                                parse_mode="HTML",
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to send morning schedule",
+                                extra={"user": identity.external_id, "error": str(e)},
+                            )
+            except Exception as e:
+                logger.warning(
+                    "Failed to process morning schedule for group",
+                    extra={"group": group.code, "error": str(e)},
+                )
+
+
+async def send_deadline_reminders() -> None:
+    """Hourly job: remind students about deadlines in ~24h or ~3h."""
+    from src.core.repositories.group import GroupRepository, StudentRepository
+    from src.core.repositories.user import IdentityRepository
+    from src.core.services.assignment import AssignmentService
+    from src.gateways.telegram.bot import get_bot
+    from src.gateways.telegram.deps import get_session
+
+    now = datetime.now(tz=MOSCOW_TZ)
+
+    async with get_session() as session:
+        group_repo = GroupRepository(session)
+        student_repo = StudentRepository(session)
+        identity_repo = IdentityRepository(session)
+        assignment_service = AssignmentService(session)
+
+        groups = await group_repo.get_all_groups()
+        bot = await get_bot()
+
+        for group in groups:
+            try:
+                students = await student_repo.get_group_students(group.id)
+                if not students:
+                    continue
+
+                # Fetch assignments due within the next 25 hours to cover both windows
+                deadlines = await assignment_service.get_upcoming_deadlines(group.id, days=2, limit=50)
+
+                reminders: list[tuple[object, str]] = []
+                for a in deadlines:
+                    if not a.deadline:
+                        continue
+                    dl = a.deadline
+                    if dl.tzinfo is None:
+                        dl = dl.replace(tzinfo=timezone.utc)
+                    hours_left = (dl - now).total_seconds() / 3600
+                    subject_name = a.subject.name if a.subject else "Предмет"
+
+                    if abs(hours_left - 24) <= 0.5:
+                        msg = f"⏰ Завтра дедлайн: {a.title} ({subject_name})"
+                        reminders.append((a, msg))
+                    elif abs(hours_left - 3) <= 0.5:
+                        msg = f"🔥 Через 3 часа дедлайн: {a.title} ({subject_name})"
+                        reminders.append((a, msg))
+
+                if not reminders:
+                    continue
+
+                for student in students:
+                    identity = await identity_repo.get_user_telegram_identity(student.user_id)
+                    if identity and identity.external_id:
+                        for _assignment, text in reminders:
+                            try:
+                                await bot.send_message(
+                                    chat_id=int(identity.external_id),
+                                    text=text,
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    "Failed to send deadline reminder",
+                                    extra={"user": identity.external_id, "error": str(e)},
+                                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to process deadline reminders for group",
+                    extra={"group": group.code, "error": str(e)},
+                )
+
+
 def abs_diff_minutes(time_str: object, target_hhmm: str) -> int:
     """Calculate absolute difference in minutes between two HH:MM strings."""
     try:
@@ -96,6 +304,27 @@ def start_scheduler() -> None:
         id="upcoming_class_notifications",
         replace_existing=True,
         misfire_grace_time=30,
+    )
+    scheduler.add_job(
+        send_evening_digest,
+        CronTrigger(hour=20, minute=0, timezone="Europe/Moscow"),
+        id="evening_digest",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+    scheduler.add_job(
+        send_morning_schedule,
+        CronTrigger(hour=7, minute=30, timezone="Europe/Moscow"),
+        id="morning_schedule",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+    scheduler.add_job(
+        send_deadline_reminders,
+        CronTrigger(minute=0, timezone="Europe/Moscow"),
+        id="deadline_reminders",
+        replace_existing=True,
+        misfire_grace_time=300,
     )
     scheduler.start()
     logger.info("Scheduler started")
