@@ -26,7 +26,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_redis_client() -> _Redis[str]:
+async def get_redis_client() -> _Redis:
     """Get Redis client."""
     return await get_redis()
 
@@ -138,7 +138,7 @@ require_member = RequireGroupRole()
 
 # Type aliases for cleaner route signatures
 DBSession = Annotated[AsyncSession, Depends(get_db_session)]
-RedisClient = Annotated["_Redis[str]", Depends(get_redis_client)]
+RedisClient = Annotated["_Redis", Depends(get_redis_client)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentUserOptional = Annotated[User | None, Depends(get_current_user_optional)]
 VerifiedUser = Annotated[User, Depends(require_verified)]
