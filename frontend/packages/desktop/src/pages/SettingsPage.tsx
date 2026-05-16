@@ -10,8 +10,11 @@ import {
   useJoinGroup,
   useNotificationPreferences,
   useUpdateNotificationPreferences,
+  useGroupStudents,
+  useVerifyStudent,
+  useChangeStudentRole,
 } from '@nexora/shared'
-import type { NotificationPreferenceType } from '@nexora/shared'
+import type { NotificationPreferenceType, GroupRole } from '@nexora/shared'
 
 interface NotificationSettingMeta {
   type: NotificationPreferenceType
@@ -130,6 +133,24 @@ export function SettingsPage() {
   ]
 
   const primaryGroup = memberships[0]
+  const isModerator =
+    !!primaryGroup &&
+    (primaryGroup.role === 'starosta' || primaryGroup.role === 'deputy' || primaryGroup.role === 'moderator')
+  const moderatedGroupCode = isModerator ? primaryGroup.group.code : undefined
+
+  const groupStudentsQuery = useGroupStudents(moderatedGroupCode)
+  const verifyStudentMutation = useVerifyStudent()
+  const changeRoleMutation = useChangeStudentRole()
+
+  const handleVerify = (userId: string) => {
+    if (!moderatedGroupCode) return
+    verifyStudentMutation.mutate({ code: moderatedGroupCode, userId })
+  }
+
+  const handleChangeRole = (userId: string, role: GroupRole) => {
+    if (!moderatedGroupCode) return
+    changeRoleMutation.mutate({ code: moderatedGroupCode, userId, role })
+  }
 
   return (
     <div>
@@ -394,6 +415,98 @@ export function SettingsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Moderator: group member management */}
+              {isModerator && (
+                <div className="pt-6 mt-2 border-t border-surface-200 dark:border-surface-700">
+                  <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">
+                    Управление участниками
+                  </p>
+                  <p className="text-xs text-surface-500 dark:text-surface-400 mb-4">
+                    Подтверждайте новых студентов и изменяйте их роли
+                  </p>
+
+                  {groupStudentsQuery.isLoading ? (
+                    <div className="space-y-2">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="h-12 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
+                      ))}
+                    </div>
+                  ) : !groupStudentsQuery.data || groupStudentsQuery.data.length === 0 ? (
+                    <p className="text-sm text-surface-500 dark:text-surface-400 py-2">
+                      Участников нет
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      {groupStudentsQuery.data.map((student) => {
+                        const isPending = verifyStudentMutation.isPending || changeRoleMutation.isPending
+                        return (
+                          <div
+                            key={student.id}
+                            className="flex items-center gap-3 py-2.5 border-b border-surface-100 dark:border-surface-700 last:border-0"
+                          >
+                            <Avatar name={student.user.display_name || student.user_id} size="sm" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">
+                                {student.user.display_name || 'Студент'}
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {student.verified ? (
+                                  <span className="text-xs text-success-600 dark:text-success-400 flex items-center gap-1">
+                                    <CheckIcon className="w-3 h-3" />
+                                    Подтверждён
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-warning-600 dark:text-warning-400">
+                                    Ожидает подтверждения
+                                  </span>
+                                )}
+                                {student.role !== 'student' && (
+                                  <span className="text-xs px-1.5 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded font-medium capitalize">
+                                    {student.role === 'starosta' ? 'Староста' : student.role === 'deputy' ? 'Зам' : student.role === 'moderator' ? 'Модератор' : student.role}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {!student.verified && (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={isPending}
+                                  onClick={() => handleVerify(student.user_id)}
+                                >
+                                  Подтвердить
+                                </Button>
+                              )}
+                              {student.role === 'student' && student.verified && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isPending}
+                                  onClick={() => handleChangeRole(student.user_id, 'moderator')}
+                                >
+                                  Сделать модератором
+                                </Button>
+                              )}
+                              {student.role === 'moderator' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isPending}
+                                  onClick={() => handleChangeRole(student.user_id, 'student')}
+                                >
+                                  Убрать роль
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </Card>
           )}
 
@@ -463,6 +576,14 @@ function InfoIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
     </svg>
   )
 }

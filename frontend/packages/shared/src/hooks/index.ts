@@ -20,6 +20,9 @@ export {
   useCreateGroup,
   useJoinGroup,
   useUpdateGroup,
+  useGroupStudents,
+  useVerifyStudent,
+  useChangeStudentRole,
 } from './useGroups'
 export { useGroupContext } from './useGroupContext'
 export { useDashboard } from './useDashboard'
