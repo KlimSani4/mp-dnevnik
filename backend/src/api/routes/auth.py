@@ -90,7 +90,7 @@ async def refresh_tokens(
 
 
 @router.post("/telegram/init")
-async def telegram_bot_init(redis: RedisClient) -> dict:
+async def telegram_bot_init(redis: RedisClient) -> dict[str, str]:
     """Create a pending auth token for bot-based login flow."""
     token = secrets.token_urlsafe(16)
     key = f"auth_token:{token}"
@@ -100,7 +100,7 @@ async def telegram_bot_init(redis: RedisClient) -> dict:
 
 
 @router.get("/telegram/poll/{token}")
-async def telegram_bot_poll(token: str, redis: RedisClient) -> dict:
+async def telegram_bot_poll(token: str, redis: RedisClient) -> dict[str, str]:
     """Poll for bot-auth completion."""
     key = f"auth_token:{token}"
     raw = await redis.get(key)

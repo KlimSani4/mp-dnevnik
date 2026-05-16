@@ -24,7 +24,7 @@ async def bot_auth_complete(
     data: BotAuthCompleteRequest,
     db: DBSession,
     redis: RedisClient,
-) -> dict:
+) -> dict[str, str]:
     """Called by the bot when user sends /start <token>. Completes the auth flow."""
     key = f"auth_token:{data.token}"
     raw = await redis.get(key)

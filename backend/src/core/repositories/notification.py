@@ -73,7 +73,7 @@ class NotificationRepository(BaseRepository[Notification]):
             .values(is_read=True)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
 
 class NotificationPreferenceRepository(BaseRepository[NotificationPreference]):

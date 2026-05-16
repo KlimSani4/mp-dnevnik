@@ -245,6 +245,7 @@ async def send_deadline_reminders() -> None:
     """Hourly job: remind students about deadlines in ~24h or ~3h."""
     from src.core.repositories.group import GroupRepository, StudentRepository
     from src.core.repositories.user import IdentityRepository
+    from src.core.schemas.assignment import AssignmentWithSubject
     from src.core.services.assignment import AssignmentService
     from src.gateways.telegram.bot import get_bot
     from src.gateways.telegram.deps import get_session
@@ -271,7 +272,7 @@ async def send_deadline_reminders() -> None:
                     group.id, days=2, limit=50
                 )
 
-                reminders: list[tuple[object, str, str]] = []
+                reminders: list[tuple[AssignmentWithSubject, str, str]] = []
                 for a in deadlines:
                     if not a.deadline:
                         continue

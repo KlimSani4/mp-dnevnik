@@ -5,6 +5,7 @@ import logging
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -125,13 +126,13 @@ def extract_deadline(text: str) -> datetime | None:
         try:
             day = int(m.group(1))
             month_key = m.group(2)[:3]
-            month = _MONTH_NAMES.get(month_key) or _MONTH_NAMES.get(m.group(2)[:6])
+            month_num = _MONTH_NAMES.get(month_key) or _MONTH_NAMES.get(m.group(2)[:6])
             year_raw = m.group(3)
             year = int(year_raw) if year_raw else _today().year
-            if month:
-                if not year_raw and date(year, month, day) < _today():
+            if month_num:
+                if not year_raw and date(year, month_num, day) < _today():
                     year += 1
-                d = date(year, month, day)
+                d = date(year, month_num, day)
                 return datetime(d.year, d.month, d.day, 23, 59, tzinfo=MOSCOW_TZ)
         except (ValueError, TypeError):
             pass
@@ -142,7 +143,7 @@ def extract_deadline(text: str) -> datetime | None:
 # ── subject matching ──────────────────────────────────────────────────────────
 
 
-def match_subject(text: str, subjects: list) -> "object | None":
+def match_subject(text: str, subjects: list[Any]) -> Any:
     """Return the best-matching subject or None.
 
     Strategy: for each subject split its name into words ≥4 chars and count
@@ -187,7 +188,7 @@ def _preview_keyboard(payload: str) -> InlineKeyboardMarkup:
     )
 
 
-def _subject_keyboard(subjects: list, payload_base: str) -> InlineKeyboardMarkup:
+def _subject_keyboard(subjects: list[Any], payload_base: str) -> InlineKeyboardMarkup:
     """Build inline keyboard with subject choices."""
     rows = []
     for subj in subjects[:20]:  # cap at 20 to avoid huge keyboards
@@ -215,13 +216,13 @@ def _format_preview(title: str, subject_name: str | None, deadline: datetime | N
     )
 
 
-def _encode_payload(data: dict) -> str:
+def _encode_payload(data: dict[str, Any]) -> str:
     """Encode assignment data as compact JSON string for callback_data."""
     return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
 
 
-def _decode_payload(raw: str) -> dict:
-    return json.loads(raw)
+def _decode_payload(raw: str) -> dict[str, Any]:
+    return json.loads(raw)  # type: ignore[no-any-return]
 
 
 def _make_title(text: str) -> str:
