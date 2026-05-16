@@ -25,7 +25,6 @@ interface AssignmentDetailModalProps {
 
 const STATE_LABELS: Record<TaskState, string> = {
   todo: 'Нужно сделать',
-  doing: 'В работе',
   review: 'На проверке',
   done: 'Зачтено',
 }
@@ -267,26 +266,6 @@ function AssignmentDetailModal({
       {/* ─── Footer: Action Buttons ─── */}
       <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-surface-200 dark:border-surface-700">
         {task.state === 'todo' && (
-          <>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onClose}
-            >
-              Отмена
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Icon name="chevron-right" size={16} />}
-              onClick={() => onStateChange(task.id, 'review')}
-            >
-              Сдал
-            </Button>
-          </>
-        )}
-
-        {task.state === 'doing' && (
           <>
             <Button
               variant="secondary"

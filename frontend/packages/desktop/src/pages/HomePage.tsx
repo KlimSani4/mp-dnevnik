@@ -38,7 +38,7 @@ interface Assignment {
 
 interface Task {
   id: string
-  state: 'todo' | 'doing' | 'review' | 'done'
+  state: 'todo' | 'review' | 'done'
   assignment: Assignment
   updated_at: string
 }
@@ -119,14 +119,12 @@ const priorityToBadge: Record<Assignment['priority'], { variant: 'urgent' | 'hig
 
 const taskStateLabels: Record<Task['state'], string> = {
   todo: 'Сделать',
-  doing: 'В работе',
   review: 'На проверке',
   done: 'Готово',
 }
 
 const taskStateColors: Record<Task['state'], string> = {
   todo: 'bg-surface-200 dark:bg-surface-600',
-  doing: 'bg-primary-500',
   review: 'bg-warning-500',
   done: 'bg-success-500',
 }
@@ -551,7 +549,6 @@ export function HomePage() {
               <span className="text-3xl font-bold text-surface-900 dark:text-surface-50">
                 {completionPercent}%
               </span>
-              <span className="text-sm font-medium text-success-500">+5%</span>
             </div>
             <ProgressBar value={completionPercent} color="success" />
             <div className="text-xs text-surface-400 dark:text-surface-500 mt-2">
@@ -678,7 +675,6 @@ export function HomePage() {
               <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-50">
                 Выполненных работ
               </h3>
-              <span className="text-sm font-medium text-success-500">+5%</span>
             </div>
             <div className="flex items-baseline gap-3 mb-3">
               <span className="text-2xl font-bold text-surface-900 dark:text-surface-50">

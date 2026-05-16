@@ -327,30 +327,12 @@ function MobileCard({ task, columnState, onMove, userVote, onVote, onClick }: Mo
         <div className="flex mt-[-1px] rounded-b-lg border border-t-0 border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 overflow-hidden">
           {columnState === 'todo' && (
             <button
-              onClick={() => onMove(task.id, 'doing')}
+              onClick={() => onMove(task.id, 'review')}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-500/10 transition-colors"
             >
               <Icon name="chevron-right" size={14} />
-              Начать
+              Сдал
             </button>
-          )}
-          {columnState === 'doing' && (
-            <>
-              <button
-                onClick={() => onMove(task.id, 'todo')}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors border-r border-surface-200 dark:border-surface-700"
-              >
-                <Icon name="chevron-left" size={14} />
-                Назад
-              </button>
-              <button
-                onClick={() => onMove(task.id, 'review')}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-500/10 transition-colors"
-              >
-                <Icon name="chevron-right" size={14} />
-                Сдал
-              </button>
-            </>
           )}
           {columnState === 'review' && (
             <>
@@ -588,7 +570,7 @@ export function AssignmentsPage() {
   }, [tasks, search, subjectFilter, deadlineFilter])
 
   const tasksByColumn = useMemo(() => {
-    const grouped: Record<TaskState, Task[]> = { todo: [], doing: [], review: [], done: [] }
+    const grouped: Record<TaskState, Task[]> = { todo: [], review: [], done: [] }
     for (const task of filteredTasks) {
       grouped[task.state].push(task)
     }
@@ -827,7 +809,7 @@ export function AssignmentsPage() {
 
       {/* API Loading State */}
       {!SKIP_AUTH && tasksQuery.isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {COLUMNS.map((col) => (
             <div key={col.key} className="rounded-lg bg-surface-50 dark:bg-surface-800/50 p-3 space-y-2">
               <div className="h-4 w-24 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
@@ -919,7 +901,7 @@ export function AssignmentsPage() {
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
             >
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {COLUMNS.map((col) => (
                   <BoardColumn
                     key={col.key}
