@@ -87,6 +87,18 @@ class StudentRepository(BaseRepository[Student]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_group_students_with_users(self, group_id: uuid.UUID) -> list[Student]:
+        """Get all students in a group with user relationship loaded."""
+        from src.core.models.user import User
+
+        stmt = (
+            select(Student)
+            .where(Student.group_id == group_id)
+            .options(selectinload(Student.user))
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_group_students(
         self,
         group_id: uuid.UUID,

@@ -2,15 +2,18 @@
 
 import uuid
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
-from src.api.deps import CurrentUser, DBSession
+from src.api.deps import CurrentUser, DBSession, RequireGroupRole, require_group_moderator
+from src.core.models.group import StudentRole
 from src.core.schemas.group import (
     GroupCreate,
     GroupResponse,
     GroupUpdate,
+    RoleUpdateRequest,
     StudentResponse,
     StudentWithGroup,
+    StudentWithUser,
 )
 from src.core.schemas.schedule import SubjectResponse
 from src.core.services.group import GroupService
@@ -71,8 +74,9 @@ async def update_group(
     data: GroupUpdate,
     user: CurrentUser,
     db: DBSession,
+    _moderator: object = Depends(require_group_moderator),
 ) -> GroupResponse:
-    """Update group settings (starosta or owner only)."""
+    """Update group settings (moderator or starosta only)."""
     group_service = GroupService(db)
     return await group_service.update_group(code, data, user.id)
 
@@ -98,13 +102,40 @@ async def get_group_subjects(
     return await group_service.get_group_subjects(code)
 
 
+@router.get("/{code}/students", response_model=list[StudentWithUser])
+async def get_group_students(
+    code: str,
+    user: CurrentUser,
+    db: DBSession,
+    _moderator: object = Depends(require_group_moderator),
+) -> list[StudentWithUser]:
+    """Get all students in a group with user info (moderator only)."""
+    group_service = GroupService(db)
+    return await group_service.get_group_students_with_users(code)
+
+
 @router.post("/{code}/verify/{user_id}", response_model=StudentResponse)
 async def verify_student(
     code: str,
     user_id: uuid.UUID,
     user: CurrentUser,
     db: DBSession,
+    _moderator: object = Depends(require_group_moderator),
 ) -> StudentResponse:
-    """Verify student membership (starosta only)."""
+    """Verify student membership (moderator only)."""
     group_service = GroupService(db)
     return await group_service.verify_student(code, user_id, user.id)
+
+
+@router.patch("/{code}/students/{user_id}/role", response_model=StudentResponse)
+async def change_student_role(
+    code: str,
+    user_id: uuid.UUID,
+    data: RoleUpdateRequest,
+    user: CurrentUser,
+    db: DBSession,
+    _moderator: object = Depends(require_group_moderator),
+) -> StudentResponse:
+    """Change a student's role (moderator only)."""
+    group_service = GroupService(db)
+    return await group_service.set_student_role(code, user_id, data.role, user.id)

@@ -82,6 +82,7 @@ class StudentRole(str, enum.Enum):
     STUDENT = "student"
     STAROSTA = "starosta"
     DEPUTY = "deputy"
+    MODERATOR = "moderator"
 
 
 class Student(Base, UUIDMixin, TimestampMixin):
