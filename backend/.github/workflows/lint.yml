@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff mypy bandit pydantic types-redis types-passlib "sqlalchemy[asyncio]"
+      - run: pip install -e ".[dev]" ruff mypy bandit
       - run: ruff check src/
       - run: ruff format --check src/
       - run: mypy --strict src/
