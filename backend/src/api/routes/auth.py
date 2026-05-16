@@ -4,14 +4,18 @@ import json
 import secrets
 import time
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from src.api.deps import ClientIP, CurrentUser, DBSession, RedisClient, UserAgent
+from src.api.rate_limit import make_rate_limit_dependency
 from src.config import settings
 from src.core.schemas.auth import DevLoginRequest, RefreshTokenRequest, TelegramAuthRequest, TokenResponse
 from src.core.services.auth import AuthService
 
 router = APIRouter()
+
+_rate_limit_telegram = make_rate_limit_dependency("/api/v1/auth/telegram")
+_rate_limit_refresh = make_rate_limit_dependency("/api/v1/auth/refresh")
 
 BOT_USERNAME = "nexora_mpu_bot"
 AUTH_TOKEN_TTL = 600  # 10 minutes
@@ -37,7 +41,7 @@ async def dev_login(
     return tokens
 
 
-@router.post("/telegram", response_model=TokenResponse)
+@router.post("/telegram", response_model=TokenResponse, dependencies=[Depends(_rate_limit_telegram)])
 async def authenticate_telegram(
     data: TelegramAuthRequest,
     db: DBSession,
@@ -57,7 +61,7 @@ async def authenticate_telegram(
     return tokens
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TokenResponse, dependencies=[Depends(_rate_limit_refresh)])
 async def refresh_tokens(
     data: RefreshTokenRequest,
     db: DBSession,
