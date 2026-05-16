@@ -67,6 +67,12 @@ const WEEKDAY_NAMES_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 // Helpers
 // ---------------------------------------------------------------------------
 
+function isCancelled(entry: ScheduleEntry): boolean {
+  if (entry.lesson_type === 'cancelled') return true
+  if (entry.overrides?.some((o) => o.field === 'cancelled' || o.value === 'cancelled')) return true
+  return false
+}
+
 function getClassType(entry: ScheduleEntry): ClassType {
   const loc = (entry.location ?? '').toLowerCase()
   const room = (entry.room ?? '').toLowerCase()
@@ -186,16 +192,22 @@ function DailyClassCard({ entry }: { entry: ScheduleEntry }) {
   const type = getClassType(entry)
   const config = classTypeConfig[type]
   const isOnline = type === 'online' || type === 'webinar'
+  const cancelled = isCancelled(entry)
 
   return (
-    <Card className="overflow-hidden">
+    <Card className={`overflow-hidden${cancelled ? ' opacity-50' : ''}`}>
       <div className="flex items-start gap-3 p-4">
         <ClassTypeIcon type={type} size={20} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium text-surface-900 dark:text-surface-50 truncate">
+            <span className={`font-medium text-surface-900 dark:text-surface-50 truncate${cancelled ? ' line-through' : ''}`}>
               {entry.subject.name}
             </span>
+            {cancelled && (
+              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                ОТМЕНЕНА
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 text-sm text-surface-500 dark:text-surface-400">
@@ -272,18 +284,24 @@ function WeeklyClassCell({ entry }: { entry: ScheduleEntry }) {
   const type = getClassType(entry)
   const config = classTypeConfig[type]
   const isOnline = type === 'online' || type === 'webinar'
+  const cancelled = isCancelled(entry)
 
   return (
-    <div className="card p-2.5 text-xs h-full flex flex-col">
+    <div className={`card p-2.5 text-xs h-full flex flex-col${cancelled ? ' opacity-50' : ''}`}>
       <div className="flex items-center gap-1.5 mb-1">
         <div
           className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${config.bg} ${config.text}`}
         >
           <Icon name={config.icon} size={12} />
         </div>
-        <span className="font-medium text-surface-900 dark:text-surface-50 truncate leading-tight">
+        <span className={`font-medium text-surface-900 dark:text-surface-50 truncate leading-tight${cancelled ? ' line-through' : ''}`}>
           {entry.subject.short_name}
         </span>
+        {cancelled && (
+          <span className="shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+            ОТМ
+          </span>
+        )}
       </div>
 
       <div className="text-surface-500 dark:text-surface-400 truncate">
