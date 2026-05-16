@@ -139,9 +139,11 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
           <div
             className={clsx(
               'flex items-center gap-1 text-[10px] font-medium mb-1.5',
-              overdue || burning
+              overdue || days < 3
                 ? 'text-danger-500'
-                : 'text-surface-500 dark:text-surface-400',
+                : days <= 7
+                  ? 'text-warning-500 dark:text-warning-400'
+                  : 'text-success-600 dark:text-success-400',
             )}
           >
             <Icon name={overdue ? 'alert-triangle' : 'clock'} size={10} />
