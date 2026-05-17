@@ -6,6 +6,7 @@ import {
   useCreateAssignment,
   useGroupContext,
   useGroupSubjects,
+  useCreateCustomSubject,
 } from '@nexora/shared'
 import clsx from 'clsx'
 import { startOfDay, addDays, isBefore } from 'date-fns'
@@ -366,6 +367,7 @@ interface CreateAssignmentModalProps {
   open: boolean
   onClose: () => void
   subjects: { id: string; name: string }[]
+  groupCode: string | null
   onSubmit: (data: {
     subjectId: string
     title: string
@@ -375,10 +377,13 @@ interface CreateAssignmentModalProps {
     link?: string
     teacher_contact?: string
     submission_link?: string
+    is_personal: boolean
   }) => void
 }
 
-function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssignmentModalProps) {
+function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }: CreateAssignmentModalProps) {
+  const createCustomSubject = useCreateCustomSubject()
+
   const [subjectId, setSubjectId] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -387,7 +392,12 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
   const [link, setLink] = useState('')
   const [teacherContact, setTeacherContact] = useState('')
   const [submissionLink, setSubmissionLink] = useState('')
+  const [isPersonal, setIsPersonal] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Custom subject inline input
+  const [showCustomSubjectInput, setShowCustomSubjectInput] = useState(false)
+  const [customSubjectName, setCustomSubjectName] = useState('')
 
   const resetForm = useCallback(() => {
     setSubjectId('')
@@ -398,7 +408,10 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
     setLink('')
     setTeacherContact('')
     setSubmissionLink('')
+    setIsPersonal(false)
     setErrors({})
+    setShowCustomSubjectInput(false)
+    setCustomSubjectName('')
   }, [])
 
   const handleClose = useCallback(() => {
@@ -413,7 +426,7 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
     if (!deadline) newErrors.deadline = 'Укажите дедлайн'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
-  }, [subjectId, title, description, deadline])
+  }, [subjectId, title, deadline])
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -428,13 +441,29 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
         link: link.trim() || undefined,
         teacher_contact: teacherContact.trim() || undefined,
         submission_link: submissionLink.trim() || undefined,
+        is_personal: isPersonal,
       })
       resetForm()
     },
-    [subjectId, title, description, deadline, priority, link, teacherContact, submissionLink, validate, onSubmit, resetForm],
+    [subjectId, title, description, deadline, priority, link, teacherContact, submissionLink, isPersonal, validate, onSubmit, resetForm],
   )
 
-  const subjectOptions = subjects.map((s) => ({ value: s.id, label: s.name }))
+  const handleCreateCustomSubject = useCallback(() => {
+    if (!customSubjectName.trim() || !groupCode) return
+    createCustomSubject.mutate(
+      { code: groupCode, name: customSubjectName.trim() },
+      {
+        onSuccess: (newSubject) => {
+          setSubjectId(newSubject.id)
+          setCustomSubjectName('')
+          setShowCustomSubjectInput(false)
+        },
+      },
+    )
+  }, [customSubjectName, groupCode, createCustomSubject])
+
+  const allSubjects = subjects
+  const subjectOptions = allSubjects.map((s) => ({ value: s.id, label: s.name }))
   const priorityOptions = [
     { value: 'low', label: 'Низкий' },
     { value: 'normal', label: 'Обычный' },
@@ -445,14 +474,59 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
   return (
     <Modal open={open} onClose={handleClose} title="Создать задание">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Select
-          label="Предмет"
-          options={subjectOptions}
-          value={subjectId}
-          onChange={setSubjectId}
-          placeholder="Выберите предмет"
-          error={errors.subjectId}
-        />
+        <div className="space-y-2">
+          <Select
+            label="Предмет"
+            options={subjectOptions}
+            value={subjectId}
+            onChange={setSubjectId}
+            placeholder="Выберите предмет"
+            error={errors.subjectId}
+          />
+          {/* Custom subject inline creation */}
+          {!showCustomSubjectInput ? (
+            <button
+              type="button"
+              onClick={() => setShowCustomSubjectInput(true)}
+              className="flex items-center gap-1 text-xs text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+            >
+              <Icon name="plus" size={12} />
+              Добавить предмет
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={customSubjectName}
+                onChange={(e) => setCustomSubjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); handleCreateCustomSubject() }
+                  if (e.key === 'Escape') { setShowCustomSubjectInput(false); setCustomSubjectName('') }
+                }}
+                placeholder="Название предмета"
+                className="input flex-1 text-sm py-1.5"
+                autoFocus
+              />
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleCreateCustomSubject}
+              >
+                {createCustomSubject.isPending ? '...' : 'Добавить'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => { setShowCustomSubjectInput(false); setCustomSubjectName('') }}
+              >
+                <Icon name="x" size={14} />
+              </Button>
+            </div>
+          )}
+        </div>
+
         <Input
           label="Название"
           value={title}
@@ -515,6 +589,35 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
           value={priority}
           onChange={setPriority}
         />
+
+        {/* Personal toggle */}
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <div
+            onClick={() => setIsPersonal(!isPersonal)}
+            className={clsx(
+              'relative w-9 h-5 rounded-full transition-colors',
+              isPersonal ? 'bg-primary-500' : 'bg-surface-300 dark:bg-surface-600',
+            )}
+          >
+            <span
+              className={clsx(
+                'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm',
+                isPersonal && 'translate-x-4',
+              )}
+            />
+          </div>
+          <div>
+            <span className="text-sm font-medium text-surface-700 dark:text-surface-300">
+              {isPersonal ? 'Только для меня' : 'Для всей группы'}
+            </span>
+            <p className="text-xs text-surface-400 dark:text-surface-500 mt-0.5">
+              {isPersonal
+                ? 'Задание видно только вам'
+                : 'Задание видно всем участникам группы'}
+            </p>
+          </div>
+        </label>
+
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" type="button" onClick={handleClose}>
             Отмена
@@ -633,10 +736,11 @@ export function AssignmentsPage() {
       link?: string
       teacher_contact?: string
       submission_link?: string
+      is_personal: boolean
     }) => {
       const extras: string[] = []
-      if (data.teacher_contact) extras.push(`📧 Преподаватель: ${data.teacher_contact}`)
-      if (data.submission_link) extras.push(`🔗 Сдать: ${data.submission_link}`)
+      if (data.teacher_contact) extras.push(`Преподаватель: ${data.teacher_contact}`)
+      if (data.submission_link) extras.push(`Сдать: ${data.submission_link}`)
       const fullDescription = extras.length > 0
         ? `${data.description}\n\n${extras.join('\n')}`
         : data.description
@@ -649,6 +753,7 @@ export function AssignmentsPage() {
         deadline: new Date(data.deadline).toISOString(),
         priority: data.priority,
         link: data.link || undefined,
+        is_personal: data.is_personal,
       })
       setCreateModalOpen(false)
     },
@@ -931,6 +1036,7 @@ export function AssignmentsPage() {
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         subjects={apiSubjects}
+        groupCode={groupCode}
         onSubmit={handleCreateTask}
       />
     </div>

@@ -23,6 +23,8 @@ export {
   useGroupStudents,
   useVerifyStudent,
   useChangeStudentRole,
+  useCreateCustomSubject,
+  useUpdateSubjectRequirements,
 } from './useGroups'
 export { useGroupContext } from './useGroupContext'
 export { useDashboard } from './useDashboard'

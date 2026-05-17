@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
-import type { GroupCreateRequest, GroupRole, GroupSearchParams, GroupUpdateRequest, Subject } from '../types'
+import type { Group, GroupCreateRequest, GroupRole, GroupSearchParams, GroupUpdateRequest, Subject } from '../types'
 
 export function useMyGroups() {
   const api = useApi()
@@ -113,6 +113,46 @@ export function useChangeStudentRole() {
       api.groups.changeRole(code, userId, { role }),
     onSuccess: (_data, { code }) => {
       queryClient.invalidateQueries({ queryKey: ['groups', code, 'students'] })
+    },
+  })
+}
+
+export function useCreateCustomSubject() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ code, name }: { code: string; name: string }) =>
+      api.groups.createCustomSubject(code, { name }),
+    onSuccess: (_data, { code }) => {
+      queryClient.invalidateQueries({ queryKey: ['groups', code, 'subjects'] })
+      queryClient.invalidateQueries({ queryKey: ['groups'] })
+    },
+  })
+}
+
+export function useUpdateSubjectRequirements() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      code,
+      subjectId,
+      total,
+      typeBreakdown,
+    }: {
+      code: string
+      subjectId: string
+      total?: number
+      typeBreakdown?: Record<string, number>
+    }): Promise<Group> =>
+      api.groups.updateSubjectRequirements(code, subjectId, {
+        total,
+        type_breakdown: typeBreakdown,
+      }),
+    onSuccess: (_data, { code }) => {
+      queryClient.invalidateQueries({ queryKey: ['groups', code] })
     },
   })
 }

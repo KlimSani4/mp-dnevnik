@@ -109,6 +109,16 @@ export function createGroupsApi(client: ApiClient) {
     changeRole(code: string, userId: string, data: RoleUpdateRequest) {
       return client.patch<void>(`/groups/${code}/students/${userId}/role`, data)
     },
+    createCustomSubject(code: string, data: { name: string }) {
+      return client.post<Subject>(`/groups/${code}/subjects/custom`, data)
+    },
+    updateSubjectRequirements(
+      code: string,
+      subjectId: string,
+      data: { total?: number; type_breakdown?: Record<string, number> },
+    ) {
+      return client.patch<Group>(`/groups/${code}/subjects/${subjectId}/requirements`, data)
+    },
   }
 }
 

@@ -11,6 +11,7 @@ export interface Assignment {
   votes_up: number
   votes_down: number
   is_verified: boolean
+  is_personal: boolean
   author_id: string
   subject: {
     id: string
@@ -27,6 +28,7 @@ export interface AssignmentCreateRequest {
   deadline: string
   priority: Priority
   link?: string
+  is_personal?: boolean
 }
 
 export interface AssignmentUpdateRequest {
@@ -35,6 +37,7 @@ export interface AssignmentUpdateRequest {
   deadline?: string
   priority?: Priority
   link?: string
+  is_personal?: boolean
 }
 
 export interface AssignmentVoteRequest {
