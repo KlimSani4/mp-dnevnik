@@ -67,6 +67,7 @@ class AssignmentService:
             priority=data.priority,
             link=data.link,
             author_id=author_id,
+            is_personal=data.is_personal,
         )
 
         await self.audit_repo.log(
@@ -107,8 +108,12 @@ class AssignmentService:
         priorities: list[str] | None = None,
         offset: int = 0,
         limit: int = 50,
+        viewer_id: uuid.UUID | None = None,
     ) -> list[AssignmentWithSubject]:
-        """Get assignments for a group."""
+        """Get assignments for a group.
+
+        Personal assignments (is_personal=True) are only visible to their author.
+        """
         assignments = await self.assignment_repo.get_group_assignments(
             group_id,
             subject_id=subject_id,
@@ -118,6 +123,12 @@ class AssignmentService:
             offset=offset,
             limit=limit,
         )
+        # Filter out personal assignments not belonging to the viewer
+        if viewer_id is not None:
+            assignments = [
+                a for a in assignments
+                if not getattr(a, "is_personal", False) or a.author_id == viewer_id
+            ]
         return [AssignmentWithSubject.model_validate(a) for a in assignments]
 
     async def update_assignment(
@@ -232,6 +243,11 @@ class AssignmentService:
             group_id,
             limit=500,
         )
+        # Filter personal assignments — only show to their author
+        assignments = [
+            a for a in assignments
+            if not getattr(a, "is_personal", False) or a.author_id == user_id
+        ]
 
         now = _dt.now(tz=UTC)
         result: list[TaskWithAssignment] = []

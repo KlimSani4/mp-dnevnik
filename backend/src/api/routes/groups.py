@@ -14,7 +14,7 @@ from src.core.schemas.group import (
     StudentWithGroup,
     StudentWithUser,
 )
-from src.core.schemas.schedule import SubjectResponse
+from src.core.schemas.schedule import SubjectCreate, SubjectRequirementsUpdate, SubjectResponse
 from src.core.services.group import GroupService
 
 router = APIRouter()
@@ -138,3 +138,29 @@ async def change_student_role(
     """Change a student's role (moderator only)."""
     group_service = GroupService(db)
     return await group_service.set_student_role(code, user_id, data.role, user.id)
+
+
+@router.post("/{code}/subjects/custom", response_model=SubjectResponse, status_code=201)
+async def create_custom_subject(
+    code: str,
+    data: SubjectCreate,
+    user: CurrentUser,
+    db: DBSession,
+) -> SubjectResponse:
+    """Create a personal custom subject for assignment tracking."""
+    group_service = GroupService(db)
+    return await group_service.create_custom_subject(code, data, user.id)
+
+
+@router.patch("/{code}/subjects/{subject_id}/requirements", response_model=GroupResponse)
+async def update_subject_requirements(
+    code: str,
+    subject_id: uuid.UUID,
+    data: SubjectRequirementsUpdate,
+    user: CurrentUser,
+    db: DBSession,
+    _moderator: object = Depends(require_group_moderator),
+) -> GroupResponse:
+    """Update assignment requirements for a subject (stored in group settings)."""
+    group_service = GroupService(db)
+    return await group_service.update_subject_requirements(code, subject_id, data, user.id)

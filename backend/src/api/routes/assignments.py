@@ -18,7 +18,7 @@ router = APIRouter()
 
 @router.get("", response_model=list[AssignmentWithSubject])
 async def list_assignments(
-    _user: CurrentUser,
+    user: CurrentUser,
     db: DBSession,
     group_id: uuid.UUID = Query(..., description="Group ID"),
     subject_id: uuid.UUID | None = Query(None, description="Filter by subject"),
@@ -41,6 +41,7 @@ async def list_assignments(
         priorities=priorities,
         offset=offset,
         limit=limit,
+        viewer_id=user.id,
     )
 
 

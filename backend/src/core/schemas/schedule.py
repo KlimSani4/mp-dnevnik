@@ -18,11 +18,24 @@ class SubjectBase(BaseModel):
     short_name: str | None = Field(None, max_length=64)
 
 
-class SubjectCreate(SubjectBase):
-    """Subject creation schema."""
+class SubjectCreate(BaseModel):
+    """Subject creation schema (used for custom subjects)."""
+
+    name: str = Field(..., max_length=255)
+
+
+class SubjectCreateFull(SubjectBase):
+    """Full subject creation schema (internal use)."""
 
     group_id: uuid.UUID | None = None
     is_custom: bool = False
+
+
+class SubjectRequirementsUpdate(BaseModel):
+    """Update assignment requirements for a subject (stored in group settings)."""
+
+    total: int | None = Field(None, ge=0)
+    type_breakdown: dict[str, int] | None = None
 
 
 class SubjectResponse(SubjectBase):

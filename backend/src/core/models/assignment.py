@@ -45,6 +45,7 @@ class Assignment(Base, UUIDMixin, TimestampMixin):
     votes_up: Mapped[int] = mapped_column(Integer, default=0)
     votes_down: Mapped[int] = mapped_column(Integer, default=0)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_personal: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
     group: Mapped["Group"] = relationship("Group", back_populates="assignments")
