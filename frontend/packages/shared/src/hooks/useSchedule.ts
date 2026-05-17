@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
 import { format, addDays, startOfWeek } from 'date-fns'
+import type { OverrideCreateRequest } from '../types'
 
 export function useTodaySchedule(groupCode?: string) {
   const api = useApi()
@@ -37,5 +38,35 @@ export function useDaySchedule(date: string, groupCode?: string) {
     queryKey: ['schedule', 'day', date, groupCode],
     queryFn: () => api.schedule.getDay(date, groupCode ?? ''),
     enabled: !!groupCode && !!date,
+  })
+}
+
+export function useCreateScheduleOverride() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: OverrideCreateRequest) => api.schedule.createOverride(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schedule'] })
+    },
+  })
+}
+
+export function useDeleteScheduleOverride() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.schedule.deleteOverride(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['schedule'] })
+    },
+  })
+}
+
+export function useMyScheduleOverrides() {
+  const api = useApi()
+  return useQuery({
+    queryKey: ['schedule', 'my-overrides'],
+    queryFn: () => api.schedule.getMyOverrides(),
   })
 }

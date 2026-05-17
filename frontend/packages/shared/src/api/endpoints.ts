@@ -20,6 +20,7 @@ import type {
   ScheduleEntry,
   ScheduleParams,
   OverrideCreateRequest,
+  ScheduleOverrideResponse,
   Assignment,
   AssignmentCreateRequest,
   AssignmentUpdateRequest,
@@ -134,10 +135,13 @@ export function createScheduleApi(client: ApiClient) {
       return client.get<ScheduleEntry[]>(`/schedule/group/${code}`)
     },
     createOverride(data: OverrideCreateRequest) {
-      return client.post<void>('/schedule/override', data)
+      return client.post<ScheduleOverrideResponse>('/schedule/override', data)
     },
     deleteOverride(id: string) {
       return client.delete<void>(`/schedule/override/${id}`)
+    },
+    getMyOverrides() {
+      return client.get<ScheduleOverrideResponse[]>('/schedule/overrides/my')
     },
   }
 }

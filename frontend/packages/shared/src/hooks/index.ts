@@ -1,6 +1,13 @@
 export { useApi } from './useApi'
 export { useCurrentUser, useLoginWithTelegram, useLogout, useTelegramBotAuth, useTelegramBotPoll } from './useAuth'
-export { useTodaySchedule, useWeekSchedule, useDaySchedule } from './useSchedule'
+export {
+  useTodaySchedule,
+  useWeekSchedule,
+  useDaySchedule,
+  useCreateScheduleOverride,
+  useDeleteScheduleOverride,
+  useMyScheduleOverrides,
+} from './useSchedule'
 export {
   useAssignments,
   useAssignment,
