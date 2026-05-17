@@ -20,7 +20,7 @@ import {
   type DragEndEvent,
   type DragOverEvent,
 } from '@dnd-kit/core'
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Button, Badge, Icon, Modal, Select, SearchInput, Input } from '../components/ui'
 import { AssignmentDetailModal } from '../components/AssignmentDetailModal'
@@ -28,7 +28,6 @@ import {
   type Priority,
   type TaskState,
   type Task,
-  SUBJECTS,
   AUTHORS,
   COLUMNS,
   PRIORITY_LABELS,
@@ -43,7 +42,6 @@ import {
   formatDeadline,
   daysLeft,
   getDayWord,
-  createMockTasks,
 } from '../types/assignments'
 
 /* ─── Board Card ─── */
@@ -499,21 +497,15 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
 /* ─── Main Component ─── */
 
 export function AssignmentsPage() {
-  const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
-
-  // ─── API hooks (always called, conditional use) ───
+  // ─── API hooks ───
   const { groupId, groupCode } = useGroupContext()
-  const tasksQuery = useTasks({ group_id: SKIP_AUTH ? '' : (groupId ?? '') })
+  const tasksQuery = useTasks({ group_id: groupId ?? '' })
   const updateTaskMutation = useUpdateTask()
   const voteAssignmentMutation = useVoteAssignment()
   const createAssignmentMutation = useCreateAssignment()
-  const groupSubjectsQuery = useGroupSubjects(SKIP_AUTH ? undefined : (groupCode ?? undefined))
+  const groupSubjectsQuery = useGroupSubjects(groupCode ?? undefined)
 
-  // Mock state (only used when SKIP_AUTH)
-  const [mockTasks, setMockTasks] = useState<Task[]>(createMockTasks)
-
-  // The active tasks source
-  const tasks = SKIP_AUTH ? mockTasks : (tasksQuery.data ?? [])
+  const tasks = tasksQuery.data ?? []
 
   // Filters
   const [search, setSearch] = useState('')
@@ -582,88 +574,34 @@ export function AssignmentsPage() {
   // ─── Actions ───
 
   const moveTask = useCallback((taskId: string, newState: TaskState) => {
-    if (SKIP_AUTH) {
-      setMockTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId ? { ...t, state: newState, updated_at: new Date().toISOString() } : t,
-        ),
-      )
-    } else {
-      const task = tasks.find((t) => t.id === taskId)
-      if (!task) return
-      updateTaskMutation.mutate({ assignmentId: task.assignment.id, data: { state: newState } })
-    }
-  }, [SKIP_AUTH, tasks, updateTaskMutation])
+    const task = tasks.find((t) => t.id === taskId)
+    if (!task) return
+    updateTaskMutation.mutate({ assignmentId: task.assignment.id, data: { state: newState } })
+  }, [tasks, updateTaskMutation])
 
   const toggleVote = useCallback(
     (assignmentId: string, direction: 'up' | 'down') => {
-      if (SKIP_AUTH) {
-        const current = userVotes[assignmentId] ?? null
-        setUserVotes((prev) => ({
-          ...prev,
-          [assignmentId]: current === direction ? null : direction,
-        }))
-        setMockTasks((prev) =>
-          prev.map((t) => {
-            if (t.assignment.id !== assignmentId) return t
-            const a = { ...t.assignment }
-            if (current === 'up') a.votes_up -= 1
-            if (current === 'down') a.votes_down -= 1
-            if (current !== direction) {
-              if (direction === 'up') a.votes_up += 1
-              if (direction === 'down') a.votes_down += 1
-            }
-            return { ...t, assignment: a }
-          }),
-        )
-      } else {
-        voteAssignmentMutation.mutate({
-          id: assignmentId,
-          data: { vote: direction === 'up' ? 1 : -1 },
-        })
-      }
+      voteAssignmentMutation.mutate({
+        id: assignmentId,
+        data: { vote: direction === 'up' ? 1 : -1 },
+      })
     },
-    [SKIP_AUTH, userVotes, voteAssignmentMutation],
+    [voteAssignmentMutation],
   )
 
   const handleCreateTask = useCallback(
     (data: { subjectId: string; title: string; description: string; deadline: string; priority: Priority }) => {
-      if (SKIP_AUTH) {
-        const subject = SUBJECTS.find((s) => s.id === data.subjectId)
-        if (!subject) return
-        const newTask: Task = {
-          id: `t${Date.now()}`,
-          state: 'todo',
-          updated_at: new Date().toISOString(),
-          assignment: {
-            id: `a${Date.now()}`,
-            title: data.title,
-            description: data.description,
-            deadline: new Date(data.deadline).toISOString(),
-            priority: data.priority,
-            link: null,
-            votes_up: 0,
-            votes_down: 0,
-            is_verified: false,
-            author_id: 'a1',
-            subject,
-            created_at: new Date().toISOString(),
-          },
-        }
-        setMockTasks((prev) => [newTask, ...prev])
-      } else {
-        createAssignmentMutation.mutate({
-          group_id: groupId!,
-          subject_id: data.subjectId,
-          title: data.title,
-          description: data.description,
-          deadline: new Date(data.deadline).toISOString(),
-          priority: data.priority,
-        })
-      }
+      createAssignmentMutation.mutate({
+        group_id: groupId!,
+        subject_id: data.subjectId,
+        title: data.title,
+        description: data.description,
+        deadline: new Date(data.deadline).toISOString(),
+        priority: data.priority,
+      })
       setCreateModalOpen(false)
     },
-    [SKIP_AUTH, groupId, createAssignmentMutation],
+    [groupId, createAssignmentMutation],
   )
 
   // ─── DnD Handlers ───
@@ -734,20 +672,6 @@ export function AssignmentsPage() {
         moveTask(activeTaskId, targetColumn)
       }
 
-      // Handle reordering within the same column
-      if (currentColumn === targetColumn && !isColumn && overId !== activeTaskId) {
-        const columnTasks = tasksByColumn[targetColumn]
-        const oldIndex = columnTasks.findIndex((t) => t.id === activeTaskId)
-        const newIndex = columnTasks.findIndex((t) => t.id === overId)
-
-        if (oldIndex !== -1 && newIndex !== -1 && SKIP_AUTH) {
-          const reordered = arrayMove(columnTasks, oldIndex, newIndex)
-          setMockTasks((prev) => {
-            const otherTasks = prev.filter((t) => t.state !== targetColumn)
-            return [...otherTasks, ...reordered]
-          })
-        }
-      }
     },
     [findColumnForTask, moveTask, tasksByColumn],
   )
@@ -762,10 +686,7 @@ export function AssignmentsPage() {
   const apiSubjects = groupSubjectsQuery.data ?? []
   const subjectOptions = [
     { value: '', label: 'Все предметы' },
-    ...(SKIP_AUTH
-      ? SUBJECTS.map((s) => ({ value: s.id, label: s.name }))
-      : apiSubjects.map((s) => ({ value: s.id, label: s.name }))
-    ),
+    ...apiSubjects.map((s) => ({ value: s.id, label: s.name })),
   ]
 
   return (
@@ -810,7 +731,7 @@ export function AssignmentsPage() {
       </div>
 
       {/* API Loading State */}
-      {!SKIP_AUTH && tasksQuery.isLoading && (
+      {tasksQuery.isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {COLUMNS.map((col) => (
             <div key={col.key} className="rounded-lg bg-surface-50 dark:bg-surface-800/50 p-3 space-y-2">
@@ -828,7 +749,7 @@ export function AssignmentsPage() {
       )}
 
       {/* API Error State */}
-      {!SKIP_AUTH && tasksQuery.error && (
+      {tasksQuery.error && (
         <div className="rounded-lg border border-danger-200 dark:border-danger-800/50 bg-danger-50/50 dark:bg-danger-950/20 p-6 text-center">
           <Icon name="alert-triangle" size={32} className="mx-auto text-danger-400 dark:text-danger-500 mb-2" />
           <p className="text-sm font-medium text-danger-700 dark:text-danger-300 mb-1">
@@ -844,7 +765,7 @@ export function AssignmentsPage() {
       )}
 
       {/* Board content — hidden when API is loading or errored */}
-      {(SKIP_AUTH || (!tasksQuery.isLoading && !tasksQuery.error)) && (
+      {!tasksQuery.isLoading && !tasksQuery.error && (
         <>
           {/* Mobile: Column Tabs */}
           <div className="flex md:hidden gap-1 p-1 bg-surface-100 dark:bg-surface-800 rounded-lg mb-4">
@@ -959,7 +880,7 @@ export function AssignmentsPage() {
       <CreateAssignmentModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        subjects={SKIP_AUTH ? SUBJECTS : apiSubjects}
+        subjects={apiSubjects}
         onSubmit={handleCreateTask}
       />
     </div>
