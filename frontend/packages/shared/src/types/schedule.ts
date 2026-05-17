@@ -5,7 +5,9 @@ export type OverrideScope = 'group' | 'personal'
 export interface Subject {
   id: string
   name: string
-  short_name: string
+  short_name: string | null
+  group_id: string | null
+  is_custom: boolean
 }
 
 export interface ScheduleOverride {
