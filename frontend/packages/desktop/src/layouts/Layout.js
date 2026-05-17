@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { clsx } from 'clsx';
+import { useCurrentUser, useGroupContext } from '@nexora/shared';
 const mainNav = [
     { to: '/', label: 'Главная', icon: HomeIcon },
     { to: '/schedule', label: 'Расписание', icon: CalendarIcon },
@@ -21,6 +22,11 @@ const tabBarItems = [
 ];
 export function Layout() {
     const [collapsed, setCollapsed] = useState(false);
+    const currentUserQuery = useCurrentUser();
+    const { groupCode } = useGroupContext();
+    const user = currentUserQuery.data;
+    const displayName = user?.display_name || 'Пользователь';
+    const initial = displayName.trim()[0]?.toUpperCase() || '?';
     const [darkMode, setDarkMode] = useState(() => {
         if (typeof window !== 'undefined') {
             return document.documentElement.classList.contains('dark');
@@ -43,7 +49,7 @@ export function Layout() {
                                         ? 'bg-white dark:bg-surface-600 text-surface-900 dark:text-surface-50 shadow-sm'
                                         : 'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-300'), children: [_jsx(SunIcon, { className: "w-3.5 h-3.5" }), "\u0421\u0432\u0435\u0442\u043B\u0430\u044F"] }), _jsxs("button", { onClick: () => setDarkMode(true), className: clsx('flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors', darkMode
                                         ? 'bg-white dark:bg-surface-600 text-surface-900 dark:text-surface-50 shadow-sm'
-                                        : 'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-300'), children: [_jsx(MoonIcon, { className: "w-3.5 h-3.5" }), "\u0422\u0451\u043C\u043D\u0430\u044F"] })] })) }), _jsx("div", { className: clsx('py-3 border-t border-surface-200 dark:border-surface-700', collapsed ? 'px-1.5' : 'px-3'), children: _jsxs("div", { className: clsx('flex items-center', collapsed ? 'justify-center' : 'gap-3'), children: [_jsx("div", { className: clsx('rounded-full bg-surface-200 dark:bg-surface-600 flex items-center justify-center flex-shrink-0', collapsed ? 'w-8 h-8' : 'w-9 h-9'), children: _jsx("span", { className: "text-sm font-medium text-surface-600 dark:text-surface-300", children: "\u0410" }) }), !collapsed && (_jsxs("div", { className: "flex-1 min-w-0", children: [_jsx("div", { className: "text-sm font-medium text-surface-900 dark:text-surface-50 truncate", children: "\u0410\u043D\u0430\u0441\u0442\u0430\u0441\u0438\u044F" }), _jsx("div", { className: "text-xs text-surface-500 dark:text-surface-400 truncate", children: "241-237" })] }))] }) })] }), _jsx("main", { className: "flex-1 min-w-0 pb-20 md:pb-0", children: _jsx("div", { className: "p-4 md:p-8", children: _jsx(Outlet, {}) }) }), _jsx("nav", { className: "flex md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 z-50", children: _jsx("div", { className: "flex w-full pb-[env(safe-area-inset-bottom)]", children: tabBarItems.map(({ to, label, icon: Icon }) => (_jsxs(NavLink, { to: to, end: to === '/', className: ({ isActive }) => clsx('flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors', isActive
+                                        : 'text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-300'), children: [_jsx(MoonIcon, { className: "w-3.5 h-3.5" }), "\u0422\u0451\u043C\u043D\u0430\u044F"] })] })) }), _jsx("div", { className: clsx('py-3 border-t border-surface-200 dark:border-surface-700', collapsed ? 'px-1.5' : 'px-3'), children: _jsxs("div", { className: clsx('flex items-center', collapsed ? 'justify-center' : 'gap-3'), children: [_jsx("div", { className: clsx('rounded-full bg-surface-200 dark:bg-surface-600 flex items-center justify-center flex-shrink-0', collapsed ? 'w-8 h-8' : 'w-9 h-9'), children: _jsx("span", { className: "text-sm font-medium text-surface-600 dark:text-surface-300", children: initial }) }), !collapsed && (_jsxs("div", { className: "flex-1 min-w-0", children: [_jsx("div", { className: "text-sm font-medium text-surface-900 dark:text-surface-50 truncate", children: displayName }), _jsx("div", { className: "text-xs text-surface-500 dark:text-surface-400 truncate", children: groupCode ?? 'Без группы' })] }))] }) })] }), _jsx("main", { className: "flex-1 min-w-0 pb-20 md:pb-0", children: _jsx("div", { className: "p-4 md:p-8", children: _jsx(Outlet, {}) }) }), _jsx("nav", { className: "flex md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 z-50", children: _jsx("div", { className: "flex w-full pb-[env(safe-area-inset-bottom)]", children: tabBarItems.map(({ to, label, icon: Icon }) => (_jsxs(NavLink, { to: to, end: to === '/', className: ({ isActive }) => clsx('flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors', isActive
                             ? 'text-primary-500'
                             : 'text-surface-400 dark:text-surface-500'), children: [_jsx(Icon, { className: "w-5 h-5" }), _jsx("span", { className: "text-2xs font-medium", children: label })] }, to))) }) })] }));
 }

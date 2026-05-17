@@ -17,7 +17,6 @@ export const AUTHORS = {
 };
 export const COLUMNS = [
     { key: 'todo', label: 'Нужно сделать' },
-    { key: 'doing', label: 'В работе' },
     { key: 'review', label: 'На проверке' },
     { key: 'done', label: 'Зачтено' },
 ];
@@ -41,13 +40,11 @@ export const DEADLINE_FILTER_OPTIONS = [
 ];
 export const COLUMN_COLORS = {
     todo: 'border-t-blue-500',
-    doing: 'border-t-violet-500',
     review: 'border-t-amber-500',
     done: 'border-t-green-500',
 };
 export const COLUMN_COUNT_COLORS = {
     todo: 'bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400',
-    doing: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400',
     review: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
     done: 'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-400',
 };
@@ -108,7 +105,7 @@ export function createMockTasks() {
         },
         {
             id: 't2',
-            state: 'doing',
+            state: 'todo',
             updated_at: now.toISOString(),
             assignment: {
                 id: 'a2',
@@ -127,7 +124,7 @@ export function createMockTasks() {
         },
         {
             id: 't3',
-            state: 'doing',
+            state: 'todo',
             updated_at: now.toISOString(),
             assignment: {
                 id: 'a3',
