@@ -16,6 +16,7 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  useDroppable,
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
@@ -256,14 +257,15 @@ interface BoardColumnProps {
   userVotes: Record<string, 'up' | 'down' | null>
   onVote: (assignmentId: string, direction: 'up' | 'down') => void
   onTaskClick: (task: Task) => void
-  isOver?: boolean
 }
 
-function BoardColumn({ state, label, tasks, userVotes, onVote, onTaskClick, isOver }: BoardColumnProps) {
+function BoardColumn({ state, label, tasks, userVotes, onVote, onTaskClick }: BoardColumnProps) {
   const taskIds = useMemo(() => tasks.map((t) => t.id), [tasks])
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: state })
 
   return (
     <div
+      ref={setDroppableRef}
       className={clsx(
         'flex flex-col rounded-lg bg-surface-50 dark:bg-surface-800/50 border-t-[3px] min-w-0',
         COLUMN_COLORS[state] ?? 'border-t-surface-300',
@@ -370,6 +372,9 @@ interface CreateAssignmentModalProps {
     description: string
     deadline: string
     priority: Priority
+    link?: string
+    teacher_contact?: string
+    submission_link?: string
   }) => void
 }
 
@@ -379,6 +384,9 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
   const [description, setDescription] = useState('')
   const [deadline, setDeadline] = useState('')
   const [priority, setPriority] = useState<string>('normal')
+  const [link, setLink] = useState('')
+  const [teacherContact, setTeacherContact] = useState('')
+  const [submissionLink, setSubmissionLink] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const resetForm = useCallback(() => {
@@ -387,6 +395,9 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
     setDescription('')
     setDeadline('')
     setPriority('normal')
+    setLink('')
+    setTeacherContact('')
+    setSubmissionLink('')
     setErrors({})
   }, [])
 
@@ -414,10 +425,13 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
         description: description.trim(),
         deadline,
         priority: priority as Priority,
+        link: link.trim() || undefined,
+        teacher_contact: teacherContact.trim() || undefined,
+        submission_link: submissionLink.trim() || undefined,
       })
       resetForm()
     },
-    [subjectId, title, description, deadline, priority, validate, onSubmit, resetForm],
+    [subjectId, title, description, deadline, priority, link, teacherContact, submissionLink, validate, onSubmit, resetForm],
   )
 
   const subjectOptions = subjects.map((s) => ({ value: s.id, label: s.name }))
@@ -468,6 +482,26 @@ function CreateAssignmentModal({ open, onClose, subjects, onSubmit }: CreateAssi
             <p className="text-xs text-danger-500">{errors.description}</p>
           )}
         </div>
+        <Input
+          label="Ссылка на задание"
+          type="url"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="https://docs.google.com/..."
+        />
+        <Input
+          label="Контакт преподавателя"
+          value={teacherContact}
+          onChange={(e) => setTeacherContact(e.target.value)}
+          placeholder="Иванов И.И., ivanov@mospolytech.ru"
+        />
+        <Input
+          label="Ссылка для сдачи"
+          type="url"
+          value={submissionLink}
+          onChange={(e) => setSubmissionLink(e.target.value)}
+          placeholder="https://..."
+        />
         <Input
           label="Дедлайн"
           type="date"
@@ -590,14 +624,31 @@ export function AssignmentsPage() {
   )
 
   const handleCreateTask = useCallback(
-    (data: { subjectId: string; title: string; description: string; deadline: string; priority: Priority }) => {
+    (data: {
+      subjectId: string
+      title: string
+      description: string
+      deadline: string
+      priority: Priority
+      link?: string
+      teacher_contact?: string
+      submission_link?: string
+    }) => {
+      const extras: string[] = []
+      if (data.teacher_contact) extras.push(`📧 Преподаватель: ${data.teacher_contact}`)
+      if (data.submission_link) extras.push(`🔗 Сдать: ${data.submission_link}`)
+      const fullDescription = extras.length > 0
+        ? `${data.description}\n\n${extras.join('\n')}`
+        : data.description
+
       createAssignmentMutation.mutate({
         group_id: groupId!,
         subject_id: data.subjectId,
         title: data.title,
-        description: data.description,
+        description: fullDescription,
         deadline: new Date(data.deadline).toISOString(),
         priority: data.priority,
+        link: data.link || undefined,
       })
       setCreateModalOpen(false)
     },
@@ -834,7 +885,6 @@ export function AssignmentsPage() {
                     userVotes={userVotes}
                     onVote={toggleVote}
                     onTaskClick={setSelectedTask}
-                    isOver={overColumnId === col.key}
                   />
                 ))}
               </div>
