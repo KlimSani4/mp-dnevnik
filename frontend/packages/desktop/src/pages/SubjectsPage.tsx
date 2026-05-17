@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Card, Badge, ProgressBar, Icon, Button, Input } from '../components/ui'
 import {
   useGroupSubjects,
@@ -8,6 +8,7 @@ import {
   useMyGroups,
   useUpdateSubjectRequirements,
   useGroup,
+  useTasks,
 } from '@nexora/shared'
 import type { Subject } from '@nexora/shared'
 
@@ -106,6 +107,7 @@ function RequirementsEditor({ subjectId, groupCode, currentTotal, onClose }: Req
 export function SubjectsPage() {
   const { groupId, groupCode } = useGroupContext()
   const subjectsQuery = useGroupSubjects(groupCode ?? undefined)
+  const tasksQuery = useTasks({ group_id: groupId ?? '' })
   const myGroupsQuery = useMyGroups()
   const groupQuery = useGroup(groupCode ?? '')
 
@@ -118,6 +120,20 @@ export function SubjectsPage() {
   const groupSettings = (groupQuery.data?.settings ?? {}) as Record<string, unknown>
 
   const subjects = (subjectsQuery.data ?? []) as Array<Subject & { assignments?: AssignmentGroup[]; teacher?: string; control?: string }>
+
+  // Calculate done/total per subject from real tasks data
+  const tasksBySubject = useMemo(() => {
+    const tasks = tasksQuery.data ?? []
+    const map: Record<string, { total: number; done: number }> = {}
+    for (const t of tasks) {
+      const sid = t.assignment.subject?.id
+      if (!sid) continue
+      if (!map[sid]) map[sid] = { total: 0, done: 0 }
+      map[sid].total += 1
+      if (t.state === 'done') map[sid].done += 1
+    }
+    return map
+  }, [tasksQuery.data])
 
   if (!groupCode) {
     return (
@@ -184,19 +200,12 @@ export function SubjectsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {subjects.map((subject) => {
             const requirements = getRequirements(groupSettings, subject.id)
-            const progress = (() => {
-              if (subject.assignments && subject.assignments.length > 0) {
-                return getSubjectProgress(subject)
-              }
-              // If requirements set, progress = 0 (no done yet from assignments)
-              return 0
-            })()
+            const taskStats = tasksBySubject[subject.id] ?? { total: 0, done: 0 }
+            const reqTotal = requirements.total ?? taskStats.total
+            const done = taskStats.done
+            const progress = reqTotal > 0 ? Math.round((done / reqTotal) * 100) : 0
             const admitted = isAdmitted(progress)
-            const assignmentsLabel = (() => {
-              if (formatAssignments(subject.assignments)) return formatAssignments(subject.assignments)
-              if (requirements.total != null) return `0/${requirements.total}`
-              return ''
-            })()
+            const assignmentsLabel = reqTotal > 0 ? `${done}/${reqTotal} заданий` : (taskStats.total > 0 ? `${done}/${taskStats.total} заданий` : '')
             const isEditing = editingSubjectId === subject.id
 
             return (
