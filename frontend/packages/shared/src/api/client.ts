@@ -42,7 +42,8 @@ export class ApiClient {
 
     this.isRefreshing = true
     try {
-      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+      const refreshUrl = this.baseUrl.startsWith('http') ? `${this.baseUrl}/auth/refresh` : `${window.location.origin}${this.baseUrl}/auth/refresh`
+      const response = await fetch(refreshUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -83,7 +84,8 @@ export class ApiClient {
   ): Promise<T> {
     const { body, params, auth = true } = options
 
-    const url = new URL(`${this.baseUrl}${path}`)
+    const fullPath = `${this.baseUrl}${path}`
+    const url = fullPath.startsWith('http') ? new URL(fullPath) : new URL(fullPath, window.location.origin)
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined) {
