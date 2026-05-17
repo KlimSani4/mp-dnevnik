@@ -287,7 +287,7 @@ function WeeklyClassCell({ entry }: { entry: ScheduleEntry }) {
   const cancelled = isCancelled(entry)
 
   return (
-    <div className={`card p-2.5 text-xs h-full flex flex-col${cancelled ? ' opacity-50' : ''}`}>
+    <div className={`card p-2.5 text-xs h-full flex flex-col overflow-hidden${cancelled ? ' opacity-50' : ''}`}>
       <div className="flex items-center gap-1.5 mb-1">
         <div
           className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${config.bg} ${config.text}`}
@@ -316,8 +316,8 @@ function WeeklyClassCell({ entry }: { entry: ScheduleEntry }) {
             {entry.room}
           </span>
         )}
-        <div className="text-surface-400 dark:text-surface-500 truncate mt-0.5">
-          {entry.teacher}
+        <div className="text-surface-400 dark:text-surface-500 truncate mt-0.5" title={entry.teacher ?? ''}>
+          {entry.teacher?.split(',')[0]}
         </div>
       </div>
     </div>
@@ -497,7 +497,7 @@ function WeeklyView({
 
       {/* Grid */}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse min-w-[800px]">
+        <table className="w-full border-collapse min-w-[800px] table-fixed">
           <thead>
             <tr>
               <th className="w-[80px] p-2 text-xs font-medium text-surface-400 dark:text-surface-500 text-left">
