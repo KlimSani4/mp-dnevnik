@@ -24,6 +24,7 @@ class AssignmentCreate(AssignmentBase):
 
     group_id: uuid.UUID
     subject_id: uuid.UUID
+    is_personal: bool = False
 
 
 class AssignmentUpdate(BaseModel):
@@ -34,6 +35,7 @@ class AssignmentUpdate(BaseModel):
     deadline: datetime | None = None
     priority: str | None = Field(None, pattern="^(low|normal|high|urgent)$")
     link: str | None = None
+    is_personal: bool | None = None
 
 
 class AssignmentResponse(AssignmentBase):
@@ -48,6 +50,7 @@ class AssignmentResponse(AssignmentBase):
     votes_up: int
     votes_down: int
     is_verified: bool
+    is_personal: bool
     created_at: datetime
     updated_at: datetime
 

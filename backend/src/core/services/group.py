@@ -17,7 +17,7 @@ from src.core.schemas.group import (
     StudentWithGroup,
     StudentWithUser,
 )
-from src.core.schemas.schedule import SubjectResponse
+from src.core.schemas.schedule import SubjectCreate, SubjectRequirementsUpdate, SubjectResponse
 from src.shared.exceptions import AuthorizationError, ConflictError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -205,6 +205,69 @@ class GroupService:
             raise NotFoundError(f"Group {group_code} not found")
         subjects = await self.subject_repo.get_group_subjects(group.id)
         return [SubjectResponse.model_validate(s) for s in subjects]
+
+    async def create_custom_subject(
+        self,
+        group_code: str,
+        data: SubjectCreate,
+        user_id: uuid.UUID,
+    ) -> SubjectResponse:
+        """Create a custom personal subject linked to this group."""
+        group = await self.group_repo.get_by_code(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+
+        # User must be a member
+        student = await self.student_repo.get_by_user_and_group(user_id, group.id)
+        if not student:
+            raise AuthorizationError("Not a member of this group")
+
+        subject = await self.subject_repo.create(
+            name=data.name,
+            group_id=group.id,
+            is_custom=True,
+        )
+        await self.session.commit()
+
+        logger.info(
+            "Custom subject created",
+            extra={"subject_id": str(subject.id), "group_code": group_code},
+        )
+
+        return SubjectResponse.model_validate(subject)
+
+    async def update_subject_requirements(
+        self,
+        group_code: str,
+        subject_id: uuid.UUID,
+        data: SubjectRequirementsUpdate,
+        user_id: uuid.UUID,
+    ) -> "GroupResponse":
+        """Update assignment requirements for a subject in group settings JSON."""
+        from src.core.schemas.group import GroupResponse
+
+        group = await self.group_repo.get_by_code(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+
+        settings = dict(group.settings or {})
+        requirements = dict(settings.get("subject_requirements", {}))
+
+        subject_key = str(subject_id)
+        entry = dict(requirements.get(subject_key, {}))
+
+        if data.total is not None:
+            entry["total"] = data.total
+        if data.type_breakdown is not None:
+            entry["type_breakdown"] = data.type_breakdown
+
+        requirements[subject_key] = entry
+        settings["subject_requirements"] = requirements
+
+        group = await self.group_repo.update(group, settings=settings)
+        await self.session.commit()
+
+        return GroupResponse.model_validate(group)
 
     async def join_group_by_telegram(
         self,
