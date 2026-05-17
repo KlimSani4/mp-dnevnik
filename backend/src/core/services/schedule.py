@@ -207,23 +207,25 @@ class ScheduleService:
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
 
-        # Delete existing schedule
-        await self.entry_repo.delete_group_schedule(group.id)
+        # Upsert: match by (group_id, weekday, pair_number, subject_name) to keep stable IDs
+        existing_entries = await self.entry_repo.get_group_schedule(group.id, with_subject=True)
+        existing_map: dict[tuple[int, int, str], Any] = {}
+        for e in existing_entries:
+            key = (e.weekday, e.pair_number, e.subject.name if e.subject else "")
+            existing_map[key] = e
 
+        seen_keys: set[tuple[int, int, str]] = set()
         count = 0
         for item in schedule_data:
-            # Get or create subject
             subject = await self.subject_repo.get_or_create(
                 name=item["subject"],
                 short_name=item.get("short_name"),
                 group_id=group.id,
             )
 
-            # Parse times
             start_time = time.fromisoformat(item["start_time"])
             end_time = time.fromisoformat(item["end_time"])
 
-            # Parse dates if present
             date_from = None
             date_to = None
             if item.get("date_from"):
@@ -231,7 +233,28 @@ class ScheduleService:
             if item.get("date_to"):
                 date_to = date.fromisoformat(item["date_to"])
 
-            # Create entry
+            key = (item["weekday"], item["pair_number"], item["subject"])
+            seen_keys.add(key)
+
+            existing = existing_map.get(key)
+            if existing:
+                # Update in place — keep same ID
+                existing.subject_id = subject.id
+                existing.start_time = start_time
+                existing.end_time = end_time
+                existing.location = item.get("location")
+                existing.room = item.get("room")
+                existing.teacher = item.get("teacher")
+                existing.lesson_type = item.get("lesson_type")
+                existing.date_from = date_from
+                existing.date_to = date_to
+                existing.week_parity = item.get("week_parity")
+                existing.external_link = item.get("external_link")
+                existing.raw_data = item.get("raw_data", {})
+                count += 1
+                continue
+
+            # New entry
             await self.entry_repo.create(
                 group_id=group.id,
                 subject_id=subject.id,
@@ -250,6 +273,11 @@ class ScheduleService:
                 raw_data=item.get("raw_data", {}),
             )
             count += 1
+
+        # Remove entries that no longer exist in source (but keep custom/personal ones)
+        for key, entry in existing_map.items():
+            if key not in seen_keys:
+                await self.entry_repo.delete(entry)
 
         await self.session.commit()
 
