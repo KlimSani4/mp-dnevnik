@@ -157,6 +157,17 @@ async def create_override(
     return OverrideResponse.model_validate(override)
 
 
+@router.get("/overrides/my", response_model=list[OverrideResponse])
+async def get_my_overrides(
+    user: CurrentUser,
+    db: DBSession,
+) -> list[OverrideResponse]:
+    """Get all overrides created by the current user."""
+    schedule_service = ScheduleService(db)
+    overrides = await schedule_service.get_user_overrides(user.id)
+    return [OverrideResponse.model_validate(o) for o in overrides]
+
+
 @router.delete("/override/{override_id}", status_code=204)
 async def delete_override(
     override_id: uuid.UUID,

@@ -19,7 +19,11 @@ from src.core.repositories.schedule import (
     ScheduleOverrideRepository,
     SubjectRepository,
 )
-from src.core.schemas.schedule import DayScheduleResponse, ScheduleEntryWithSubject
+from src.core.schemas.schedule import (
+    DayScheduleResponse,
+    ScheduleEntryWithSubject,
+    SubjectResponse,
+)
 from src.integrations.rasp_parser import fetch_group_schedule
 from src.shared.exceptions import AuthorizationError, NotFoundError
 
@@ -95,10 +99,89 @@ class ScheduleService:
 
             result_entries.append(ScheduleEntryWithSubject.model_validate(entry))
 
+        # Include ADD overrides (custom events) as synthetic entries
+        add_overrides = await self.override_repo.get_add_overrides_for_date(
+            group.id,
+            target_date,
+            author_id=user_id,
+        )
+        for override in add_overrides:
+            synthetic = self._synthetic_entry_from_add_override(override)
+            if synthetic:
+                result_entries.append(synthetic)
+
+        # Sort by pair_number / start_time
+        result_entries.sort(key=lambda e: (e.pair_number, e.start_time))
+
         return DayScheduleResponse(
             schedule_date=target_date,
             weekday=target_date.isoweekday(),
             entries=result_entries,
+        )
+
+    def _synthetic_entry_from_add_override(
+        self,
+        override: ScheduleOverride,
+    ) -> ScheduleEntryWithSubject | None:
+        """Build a synthetic ScheduleEntryWithSubject from an ADD override's value JSON."""
+        import json
+
+        if not override.value:
+            return None
+
+        try:
+            data: dict[str, Any] = json.loads(override.value)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+        subject_name = data.get("subject") or "Пользовательское занятие"
+        start_str = data.get("start_time", "00:00")
+        end_str = data.get("end_time", "00:00")
+
+        try:
+            start = time.fromisoformat(start_str)
+            end = time.fromisoformat(end_str)
+        except ValueError:
+            return None
+
+        # Derive pair_number from start time (best-effort)
+        pair_number = 9  # default: after all regular pairs
+        pair_start_map = {
+            "09:00": 1, "10:40": 2, "12:20": 3, "14:30": 4, "16:10": 5,
+            "17:50": 6, "19:30": 7,
+        }
+        for ts, pn in pair_start_map.items():
+            if start_str.startswith(ts):
+                pair_number = pn
+                break
+
+        subject = SubjectResponse(
+            id=override.id,
+            name=subject_name,
+            short_name=data.get("short_name") or subject_name[:16],
+            group_id=None,
+            is_custom=True,
+        )
+
+        return ScheduleEntryWithSubject(
+            id=override.id,
+            group_id=override.entry_id,  # placeholder — entry_id is the anchor entry
+            subject_id=override.id,
+            weekday=override.date.isoweekday() if override.date else 0,
+            pair_number=pair_number,
+            start_time=start,
+            end_time=end,
+            location=data.get("location"),
+            room=data.get("room"),
+            teacher=data.get("teacher"),
+            lesson_type=data.get("lesson_type") or "custom",
+            week_parity=None,
+            external_link=data.get("external_link"),
+            date_from=override.date,
+            date_to=override.date,
+            created_at=override.created_at,
+            updated_at=override.created_at,
+            subject=subject,
         )
 
     async def get_group_schedule(
@@ -197,9 +280,9 @@ class ScheduleService:
         if not entry:
             raise NotFoundError("Schedule entry not found")
 
-        # Check permissions
-        if scope == OverrideScope.GROUP:
-            # Only starosta can create group overrides
+        # Check permissions — only starosta can create group SKIP/CANCEL overrides;
+        # any group member can share ADD overrides (custom events) with the group
+        if scope == OverrideScope.GROUP and override_type not in (OverrideType.ADD,):
             students = await self.student_repo.get_user_students(author_id)
             group_student = next((s for s in students if s.group_id == entry.group_id), None)
             if not group_student or group_student.role == "student":
@@ -217,6 +300,10 @@ class ScheduleService:
 
         await self.session.commit()
         return override
+
+    async def get_user_overrides(self, user_id: uuid.UUID) -> list[ScheduleOverride]:
+        """Get all overrides created by a user."""
+        return await self.override_repo.get_by_author(user_id)
 
     async def delete_override(
         self,

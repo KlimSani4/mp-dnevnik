@@ -97,6 +97,7 @@ class OverrideType(enum.StrEnum):
     ROOM = "room"
     NOTE = "note"
     SKIP = "skip"
+    ADD = "add"  # Virtual event stored entirely in value JSON
 
 
 class ScheduleOverride(Base, UUIDMixin, TimestampMixin):
