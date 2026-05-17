@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from src.core.models.schedule import (
     OverrideScope,
+    OverrideType,
     ScheduleEntry,
     ScheduleOverride,
     Subject,
@@ -196,5 +197,48 @@ class ScheduleOverrideRepository(BaseRepository[ScheduleOverride]):
             stmt = stmt.where(
                 (ScheduleOverride.date == target_date) | (ScheduleOverride.date.is_(None))
             )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_by_author(self, author_id: uuid.UUID) -> list[ScheduleOverride]:
+        """Get all overrides created by a specific user."""
+        stmt = select(ScheduleOverride).where(ScheduleOverride.author_id == author_id)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_add_overrides_for_date(
+        self,
+        group_id: uuid.UUID,
+        target_date: date,
+        *,
+        author_id: uuid.UUID | None = None,
+    ) -> list[ScheduleOverride]:
+        """Get ADD-type overrides for a date (custom events).
+
+        Returns group-scoped ADD overrides visible to all, plus personal ones
+        for author_id (if provided).
+        """
+        conditions = [
+            ScheduleOverride.override_type == OverrideType.ADD,
+            (ScheduleOverride.date == target_date) | (ScheduleOverride.date.is_(None)),
+        ]
+
+        scope_conditions = [ScheduleOverride.scope == OverrideScope.GROUP]
+        if author_id is not None:
+            scope_conditions.append(
+                (ScheduleOverride.scope == OverrideScope.PERSONAL)
+                & (ScheduleOverride.author_id == author_id)
+            )
+
+        from sqlalchemy import or_
+        stmt = (
+            select(ScheduleOverride)
+            .join(ScheduleEntry)
+            .where(
+                ScheduleEntry.group_id == group_id,
+                *conditions,
+                or_(*scope_conditions),
+            )
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
