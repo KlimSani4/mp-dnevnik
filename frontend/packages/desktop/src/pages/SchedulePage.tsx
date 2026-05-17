@@ -442,7 +442,6 @@ function DailyClassCard({
   targetDate: string
   anchorEntryId: string
 }) {
-  const [hovered, setHovered] = useState(false)
   const skipOverride = useCreateScheduleOverride()
   const createOverride = useCreateScheduleOverride()
 
@@ -452,7 +451,9 @@ function DailyClassCard({
   const cancelled = isCancelled(entry)
   const custom = isCustomEvent(entry)
 
-  async function handleSkip() {
+  async function handleSkip(e: React.MouseEvent) {
+    e.stopPropagation()
+    e.preventDefault()
     await skipOverride.mutateAsync({
       entry_id: entry.id,
       scope: 'personal',
@@ -486,16 +487,14 @@ function DailyClassCard({
   return (
     <Card
       className={`overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
-      {/* Hide button (top-right, on hover, only for regular entries) */}
-      {!custom && hovered && !cancelled && (
+      {/* Hide button (top-right, on hover) */}
+      {!custom && !cancelled && (
         <button
           onClick={handleSkip}
           disabled={skipOverride.isPending}
           title="Скрыть занятие"
-          className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors"
+          className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
         >
           <Icon name="x" size={12} />
           Скрыть
@@ -640,17 +639,15 @@ function WeeklyClassCell({
 
   return (
     <div
-      className={`card p-2.5 text-xs h-full flex flex-col overflow-hidden relative${cancelled ? ' opacity-50' : ''}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className={`card p-2.5 text-xs h-full flex flex-col overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
     >
       {/* Hide button */}
-      {hovered && !cancelled && !custom && (
+      {!cancelled && !custom && (
         <button
           onClick={handleSkip}
           disabled={skipOverride.isPending}
           title="Скрыть"
-          className="absolute top-1 right-1 z-10 w-5 h-5 flex items-center justify-center rounded bg-surface-200 dark:bg-surface-600 text-surface-500 dark:text-surface-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/40 dark:hover:text-red-400 transition-colors"
+          className="absolute top-1 right-1 z-10 w-5 h-5 flex items-center justify-center rounded bg-surface-200/80 dark:bg-surface-600/80 text-surface-500 dark:text-surface-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/40 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
         >
           <Icon name="x" size={10} />
         </button>
