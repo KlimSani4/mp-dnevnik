@@ -295,7 +295,14 @@ class AssignmentService:
         task = await self.task_repo.update_state(task, state)
         await self.session.commit()
 
-        return TaskStatusResponse.model_validate(task)
+        return TaskStatusResponse(
+            id=task.id,
+            student_id=task.student_id,
+            assignment_id=task.assignment_id,
+            state=task.state,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
 
     async def bulk_update_tasks(
         self,
