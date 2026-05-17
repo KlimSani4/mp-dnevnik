@@ -1,5 +1,5 @@
 export type WeekParity = 'odd' | 'even' | null
-export type OverrideType = 'cancel' | 'online' | 'link' | 'room' | 'note' | 'skip'
+export type OverrideType = 'cancel' | 'online' | 'link' | 'room' | 'note' | 'skip' | 'add'
 export type OverrideScope = 'group' | 'personal'
 
 export interface Subject {
@@ -48,6 +48,29 @@ export interface OverrideCreateRequest {
   entry_id: string
   scope: OverrideScope
   override_type: OverrideType
-  value: string
-  target_date: string
+  value?: string | null
+  target_date?: string | null
+}
+
+export interface ScheduleOverrideResponse {
+  id: string
+  entry_id: string
+  scope: OverrideScope
+  override_type: OverrideType
+  value: string | null
+  target_date: string | null
+  author_id: string
+}
+
+/** Payload stored in `value` for an ADD override. */
+export interface AddEventPayload {
+  subject: string
+  short_name?: string
+  start_time: string
+  end_time: string
+  location?: string
+  room?: string
+  teacher?: string
+  lesson_type?: string
+  external_link?: string
 }

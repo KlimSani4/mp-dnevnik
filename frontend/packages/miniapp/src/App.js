@@ -60,10 +60,16 @@ function AuthGate({ children }) {
 function AppInner() {
     const { webApp, isReady } = useTelegramWebApp();
     useEffect(() => {
-        if (webApp && isReady) {
-            webApp.ready();
-            webApp.expand();
-        }
+        if (!webApp || !isReady)
+            return;
+        webApp.ready();
+        webApp.expand();
+        // Wire up back button — theme sync happens inside useTelegramWebApp
+        const handleBack = () => window.history.back();
+        webApp.BackButton.onClick(handleBack);
+        return () => {
+            webApp.BackButton.offClick(handleBack);
+        };
     }, [webApp, isReady]);
     return (_jsx(AuthGate, { children: _jsx(BrowserRouter, { children: _jsxs("div", { className: "min-h-screen pb-20", children: [_jsxs(Routes, { children: [_jsx(Route, { path: "/", element: _jsx(HomePage, {}) }), _jsx(Route, { path: "/assignments", element: _jsx(AssignmentsPage, {}) }), _jsx(Route, { path: "/tasks", element: _jsx(TasksPage, {}) }), _jsx(Route, { path: "/profile", element: _jsx(ProfilePage, {}) })] }), _jsx(TabBar, {})] }) }) }));
 }

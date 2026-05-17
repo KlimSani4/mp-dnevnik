@@ -2,7 +2,6 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useTasks, useUpdateTask, useGroupContext } from '@nexora/shared';
 const STATE_LABELS = {
     todo: 'Нужно сделать',
-    doing: 'В процессе',
     review: 'На проверке',
     done: 'Зачтено',
 };
@@ -63,7 +62,6 @@ function Spinner() {
 }
 const GROUPS = [
     { state: 'todo', label: 'Нужно сделать' },
-    { state: 'doing', label: 'В процессе' },
     { state: 'review', label: 'На проверке' },
     { state: 'done', label: 'Зачтено' },
 ];
