@@ -241,7 +241,7 @@ class GroupService:
         group_code: str,
         subject_id: uuid.UUID,
         data: SubjectRequirementsUpdate,
-        user_id: uuid.UUID,
+        _user_id: uuid.UUID,
     ) -> "GroupResponse":
         """Update assignment requirements for a subject in group settings JSON."""
         from src.core.schemas.group import GroupResponse
