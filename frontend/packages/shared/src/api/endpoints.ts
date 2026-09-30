@@ -1,0 +1,212 @@
+import type { ApiClient } from './client'
+import type {
+  AuthTokens,
+  TelegramAuthRequest,
+  TelegramBotInitResponse,
+  TelegramBotPollResponse,
+  RefreshTokenRequest,
+  User,
+  UserUpdateRequest,
+  UserDataExport,
+  Group,
+  GroupMembership,
+  GroupCreateRequest,
+  GroupUpdateRequest,
+  GroupSearchParams,
+  GroupStudent,
+  RoleUpdateRequest,
+  Subject,
+  DaySchedule,
+  ScheduleEntry,
+  ScheduleParams,
+  OverrideCreateRequest,
+  ScheduleOverrideResponse,
+  Assignment,
+  AssignmentCreateRequest,
+  AssignmentUpdateRequest,
+  AssignmentVoteRequest,
+  AssignmentSearchParams,
+  Task,
+  TaskUpdateRequest,
+  TaskSearchParams,
+  BulkTaskUpdateRequest,
+  DashboardResponse,
+  DashboardParams,
+  NotificationListResponse,
+  NotificationListParams,
+  NotificationPreferencesResponse,
+  NotificationPreferencesUpdate,
+} from '../types'
+
+export function createAuthApi(client: ApiClient) {
+  return {
+    loginWithTelegram(data: TelegramAuthRequest) {
+      return client.post<AuthTokens>('/auth/telegram', data)
+    },
+    devLogin(data: { telegram_id: string }) {
+      return client.post<AuthTokens>('/auth/dev', data)
+    },
+    refresh(data: RefreshTokenRequest) {
+      return client.post<AuthTokens>('/auth/refresh', data)
+    },
+    logout() {
+      return client.post<void>('/auth/logout')
+    },
+    telegramBotInit() {
+      return client.post<TelegramBotInitResponse>('/auth/telegram/init')
+    },
+    telegramBotPoll(token: string) {
+      return client.get<TelegramBotPollResponse>(`/auth/telegram/poll/${token}`)
+    },
+  }
+}
+
+export function createUsersApi(client: ApiClient) {
+  return {
+    getMe() {
+      return client.get<User>('/users/me')
+    },
+    updateMe(data: UserUpdateRequest) {
+      return client.patch<User>('/users/me', data)
+    },
+    deleteMe() {
+      return client.delete<void>('/users/me')
+    },
+    exportData() {
+      return client.get<UserDataExport>('/users/me/data')
+    },
+  }
+}
+
+export function createGroupsApi(client: ApiClient) {
+  return {
+    list(params?: GroupSearchParams) {
+      return client.get<Group[]>('/groups', params)
+    },
+    create(data: GroupCreateRequest) {
+      return client.post<Group>('/groups', data)
+    },
+    getMy() {
+      return client.get<GroupMembership[]>('/groups/my')
+    },
+    getByCode(code: string) {
+      return client.get<Group>(`/groups/${code}`)
+    },
+    update(code: string, data: GroupUpdateRequest) {
+      return client.patch<Group>(`/groups/${code}`, data)
+    },
+    join(code: string) {
+      return client.post<GroupMembership>(`/groups/${code}/join`)
+    },
+    verify(code: string, userId: string) {
+      return client.post<void>(`/groups/${code}/verify/${userId}`)
+    },
+    getSubjects(code: string) {
+      return client.get<Subject[]>(`/groups/${code}/subjects`)
+    },
+    getStudents(code: string) {
+      return client.get<GroupStudent[]>(`/groups/${code}/students`)
+    },
+    changeRole(code: string, userId: string, data: RoleUpdateRequest) {
+      return client.patch<void>(`/groups/${code}/students/${userId}/role`, data)
+    },
+    createCustomSubject(code: string, data: { name: string }) {
+      return client.post<Subject>(`/groups/${code}/subjects/custom`, data)
+    },
+    updateSubjectRequirements(
+      code: string,
+      subjectId: string,
+      data: { total?: number; type_breakdown?: Record<string, number> },
+    ) {
+      return client.patch<Group>(`/groups/${code}/subjects/${subjectId}/requirements`, data)
+    },
+  }
+}
+
+export function createScheduleApi(client: ApiClient) {
+  return {
+    getWeek(params: ScheduleParams) {
+      return client.get<DaySchedule[]>('/schedule', params)
+    },
+    getDay(date: string, group: string) {
+      return client.get<DaySchedule>(`/schedule/day/${date}`, { group })
+    },
+    getGroupSchedule(code: string) {
+      return client.get<ScheduleEntry[]>(`/schedule/group/${code}`)
+    },
+    createOverride(data: OverrideCreateRequest) {
+      return client.post<ScheduleOverrideResponse>('/schedule/override', data)
+    },
+    deleteOverride(id: string) {
+      return client.delete<void>(`/schedule/override/${id}`)
+    },
+    getMyOverrides() {
+      return client.get<ScheduleOverrideResponse[]>('/schedule/overrides/my')
+    },
+  }
+}
+
+export function createAssignmentsApi(client: ApiClient) {
+  return {
+    list(params: AssignmentSearchParams) {
+      return client.get<Assignment[]>('/assignments', params)
+    },
+    get(id: string) {
+      return client.get<Assignment>(`/assignments/${id}`)
+    },
+    create(data: AssignmentCreateRequest) {
+      return client.post<Assignment>('/assignments', data)
+    },
+    update(id: string, data: AssignmentUpdateRequest) {
+      return client.patch<Assignment>(`/assignments/${id}`, data)
+    },
+    delete(id: string) {
+      return client.delete<void>(`/assignments/${id}`)
+    },
+    vote(id: string, data: AssignmentVoteRequest) {
+      return client.post<void>(`/assignments/${id}/vote`, data)
+    },
+  }
+}
+
+export function createTasksApi(client: ApiClient) {
+  return {
+    list(params: TaskSearchParams) {
+      return client.get<Task[]>('/tasks', params)
+    },
+    update(assignmentId: string, data: TaskUpdateRequest) {
+      return client.patch<Task>(`/tasks/${assignmentId}`, data)
+    },
+    bulkUpdate(data: BulkTaskUpdateRequest) {
+      return client.patch<Task[]>('/tasks/bulk', data)
+    },
+  }
+}
+
+export function createDashboardApi(client: ApiClient) {
+  return {
+    get(params: DashboardParams) {
+      return client.get<DashboardResponse>('/dashboard', params)
+    },
+  }
+}
+
+export function createNotificationsApi(client: ApiClient) {
+  return {
+    getList(params?: NotificationListParams) {
+      return client.get<NotificationListResponse>('/notifications', params as Record<string, unknown>)
+    },
+    markRead(id: string) {
+      return client.patch<void>(`/notifications/${id}`, { is_read: true })
+    },
+    markAllRead() {
+      return client.patch<void>('/notifications/read-all', {})
+    },
+    getPreferences() {
+      return client.get<NotificationPreferencesResponse>('/notifications/settings')
+    },
+    updatePreferences(data: NotificationPreferencesUpdate) {
+      return client.patch<NotificationPreferencesResponse>('/notifications/settings', data)
+    },
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "nexora-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Студенческая платформа для Московского Политеха",
+  "scripts": {
+    "dev:desktop": "pnpm --filter @nexora/desktop dev",
+    "dev:miniapp": "pnpm --filter @nexora/miniapp dev",
+    "build:desktop": "pnpm --filter @nexora/desktop build",
+    "build:miniapp": "pnpm --filter @nexora/miniapp build",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}
