@@ -25,6 +25,10 @@ REPO = os.environ["REPO"]
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 
 
+class ApiError(Exception):
+    pass
+
+
 def call(method, path, body=None):
     req = urllib.request.Request(
         f"{API}{path}",
@@ -41,7 +45,7 @@ def call(method, path, body=None):
             data = resp.read()
             return json.loads(data) if data else None
     except urllib.error.HTTPError as e:
-        sys.exit(f"{method} {path} → {e.code}: {e.read().decode()}")
+        raise ApiError(f"{method} {path} → {e.code}: {e.read().decode()}") from e
 
 
 def paginate(path):
@@ -101,7 +105,14 @@ def main():
         login = people.get(task.get("owner", ""), "")
         if login:
             body["assignees"] = [login]
-        issue = write("POST", f"{repo}/issues", body, f"issue: {task['title']}")
+        try:
+            issue = write("POST", f"{repo}/issues", body, f"issue: {task['title']}")
+        except ApiError as e:
+            if "assignees" not in body:
+                raise
+            print(f"  ⚠ {login} нельзя назначить (не коллаборатор?) — создаю без исполнителя")
+            body.pop("assignees")
+            issue = write("POST", f"{repo}/issues", body, f"issue: {task['title']}")
         if issue and task.get("closed"):
             write("PATCH", f"{repo}/issues/{issue['number']}",
                   {"state": "closed", "state_reason": "completed"}, f"  закрыт: #{issue['number']}")
@@ -111,4 +122,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ApiError as e:
+        sys.exit(str(e))
