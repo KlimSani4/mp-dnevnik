@@ -1,0 +1,32 @@
+# Зависимости
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Сборка
+dist/
+build/
+.vite/
+coverage/
+*.egg-info/
+
+# Окружение и секреты
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE и ОС
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log
+npm-debug.log*

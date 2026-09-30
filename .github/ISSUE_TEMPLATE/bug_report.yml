@@ -1,0 +1,48 @@
+name: Баг
+description: Что-то работает не так
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что случилось
+      description: Коротко опишите проблему.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Открыть «Расписание»
+        2. Переключить неделю
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Устройство
+      options:
+        - Телефон (iOS)
+        - Телефон (Android)
+        - Компьютер
+        - Telegram-бот
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Браузер и версия
+      placeholder: Chrome 128, Safari 18...
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Скриншоты или видео

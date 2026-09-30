@@ -1,0 +1,41 @@
+name: Фича
+description: Предложить новую возможность или улучшение
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решаем
+      description: Что неудобно сейчас и кому.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+    validations:
+      required: true
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Для кого
+      multiple: true
+      options:
+        - Студент
+        - Староста
+        - Преподаватель
+        - Команда разработки
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерии готовности
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
