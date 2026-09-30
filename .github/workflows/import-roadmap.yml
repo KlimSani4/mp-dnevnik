@@ -30,7 +30,7 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::Добавьте секрет ROADMAP_TOKEN — personal access token с правом Issues: Read and write"
+            echo "::error::Добавьте секрет ROADMAP_TOKEN — classic personal access token со scope repo и project"
             exit 1
           fi
           python .github/roadmap/import_issues.py
