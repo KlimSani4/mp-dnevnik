@@ -1,0 +1,412 @@
+# Источник задач для импорта в GitHub Issues.
+# Запуск: Actions → «Импорт задач из roadmap» → Run workflow.
+# Импорт идемпотентный: issue с таким же заголовком повторно не создаётся.
+
+# Имя из дока → GitHub-логин. Пустой логин — задача без исполнителя.
+people:
+  Феликс: thehaffk
+  Настя: whynotfu
+  Илья: ""
+  Алина: ""
+
+milestones:
+  - title: "Фаза 0 — Гигиена"
+    description: "Порядок в репозитории, баги, производительность, безопасность"
+  - title: "Фаза 1 — Комфорт"
+    description: "Ежедневные сценарии студента: расписание, напоминания, офлайн"
+  - title: "Фаза 2 — Учёба"
+    description: "Задания, сессия, материалы, посещаемость"
+  - title: "Фаза 3 — Интеграции"
+    description: "Зачётная книжка, ПД, физкультура, ДПО"
+  - title: "Фаза 4 — Преподаватели"
+    description: "Интерфейс и сценарии для преподавателей"
+  - title: "Продукт и продвижение"
+    description: "Презентации, отчётность, маркетинг, исследования"
+
+labels:
+  - {name: "type: feature",     color: "1f6feb", description: "Новая функциональность"}
+  - {name: "type: bug",         color: "d73a4a", description: "Что-то работает не так"}
+  - {name: "type: tech-debt",   color: "8250df", description: "Производительность, безопасность, инфраструктура"}
+  - {name: "type: docs",        color: "0075ca", description: "Документация"}
+  - {name: "type: non-dev",     color: "bf8700", description: "Задачи вне кода"}
+  - {name: "area: schedule",    color: "c5def5", description: "Расписание"}
+  - {name: "area: tasks",       color: "c5def5", description: "Задания"}
+  - {name: "area: notifications", color: "c5def5", description: "Уведомления и бот"}
+  - {name: "area: groups",      color: "c5def5", description: "Группы и роли"}
+  - {name: "area: ui",          color: "c5def5", description: "Интерфейс и дизайн"}
+  - {name: "area: infra",       color: "c5def5", description: "Деплой, хостинг, CI"}
+  - {name: "area: integrations", color: "c5def5", description: "Внешние системы университета"}
+  - {name: "area: teacher",     color: "c5def5", description: "Функции для преподавателей"}
+  - {name: "area: marketing",   color: "c5def5", description: "Продвижение и отчётность"}
+  - {name: "size: S",           color: "0e8a16", description: "Изи — до дня"}
+  - {name: "size: M",           color: "fbca04", description: "Средне — 2–4 дня"}
+  - {name: "size: L",           color: "b60205", description: "Сложно — неделя и больше"}
+
+tasks:
+  # ───────────── Фаза 0 — Гигиена ─────────────
+  - title: "Привести в порядок репозиторий"
+    phase: 0
+    labels: ["type: docs", "area: infra", "size: S"]
+    owner: Феликс
+    closed: true
+    body: |
+      README, документация, roadmap, CONTRIBUTING, SECURITY, CHANGELOG, шаблоны issues и PR, структура папок.
+      - [x] Документация и шаблоны в репозитории
+      - [x] Структура `frontend/`, `backend/`, `deploy/`
+
+  - title: "Перенести исходный код в репозиторий"
+    phase: 0
+    labels: ["type: tech-debt", "area: infra", "size: M"]
+    owner: Феликс
+    body: |
+      Код фронтенда и бэкенда сейчас не в репозитории. Перенести в `frontend/` и `backend/`, добавить инструкции запуска и `.env.example`.
+      - [ ] Код в репозитории, секреты вычищены из истории
+      - [ ] Проект запускается локально по README
+
+  - title: "CI: сборка и линтеры на каждый PR"
+    phase: 0
+    labels: ["type: tech-debt", "area: infra", "size: S"]
+    owner: Феликс
+    body: |
+      GitHub Actions: установка зависимостей, линтер, сборка фронта и бэка.
+      - [ ] PR нельзя слить при красном CI
+      - [ ] Защита ветки `main`: только через PR с approve
+
+  - title: "Провести тестирование сайта и составить отчёт о недочётах"
+    phase: 0
+    labels: ["type: bug", "area: ui", "size: M"]
+    owner: Илья
+    body: |
+      Пройти все сценарии на телефоне и компьютере, каждый найденный баг — отдельный issue по шаблону.
+      - [ ] Отчёт с чек-листом сценариев
+      - [ ] Баги заведены issues
+
+  - title: "Не работают чекбоксы на главной"
+    phase: 0
+    labels: ["type: bug", "area: ui", "size: S"]
+    body: |
+      Чекбоксы на главной не переключаются.
+      - [ ] Отметка сохраняется и переживает перезагрузку
+
+  - title: "Исправить перемещение виджетов в задачах"
+    phase: 0
+    labels: ["type: bug", "area: tasks", "size: M"]
+    body: |
+      Drag-and-drop карточек заданий работает некорректно.
+      - [ ] Перемещение работает мышью и пальцем
+      - [ ] Статус сохраняется на сервере
+
+  - title: "Исправить процесс сохранения расписания"
+    phase: 0
+    labels: ["type: bug", "area: schedule", "size: L"]
+    body: |
+      Разобраться, почему изменения расписания сохраняются некорректно, и переделать процесс.
+      - [ ] Описан текущий поток данных и причина проблемы
+      - [ ] Изменения сохраняются стабильно
+
+  - title: "Убрать тестовые данные из production-сборки"
+    phase: 0
+    labels: ["type: tech-debt", "area: ui", "size: S"]
+    body: |
+      В бандле лежат моковые имена («Анатолий Жмышенко» и др.).
+      - [ ] Моки только в dev-режиме или тестах
+
+  - title: "Ускорить переключение между неделями"
+    phase: 0
+    labels: ["type: tech-debt", "area: schedule", "size: M"]
+    owner: Феликс
+    body: |
+      Предзагрузка соседних недель, кэш запросов, разбиение бандла на чанки и lazy-загрузка страниц.
+      - [ ] Переключение недели без видимой загрузки
+      - [ ] Размер первого JS-чанка уменьшен
+
+  - title: "Отдавать manifest.json и robots.txt как файлы"
+    phase: 0
+    labels: ["type: tech-debt", "area: infra", "size: S"]
+    body: |
+      Сейчас эти пути отдают `index.html` через SPA-fallback.
+      - [ ] Корректные файлы и content-type
+
+  - title: "Заголовки безопасности: CSP, HSTS, X-Frame-Options"
+    phase: 0
+    labels: ["type: tech-debt", "area: infra", "size: S"]
+    body: |
+      - [ ] Заголовки настроены на веб-сервере или в Cloudflare
+      - [ ] Сайт работает без ошибок CSP в консоли
+
+  - title: "Подключить продуктовую аналитику"
+    phase: 0
+    labels: ["type: tech-debt", "area: infra", "size: S"]
+    owner: Настя
+    body: |
+      Считать активных пользователей, популярные экраны, воронку онбординга.
+      - [ ] Выбран сервис, учтена приватность
+      - [ ] Дашборд с ключевыми метриками
+
+  - title: "Изучить и выбрать хостинг"
+    phase: 0
+    labels: ["type: non-dev", "area: infra", "size: S"]
+    owner: Настя
+    body: |
+      - [ ] Сравнение 3–5 вариантов: цена, надёжность, доступность из РФ
+      - [ ] Рекомендация
+
+  - title: "Перенести сайт на новый домен и хостинг"
+    phase: 0
+    labels: ["type: tech-debt", "area: infra", "size: M"]
+    body: |
+      - [ ] Сайт работает на новом домене, старый редиректит
+      - [ ] Telegram-бот и авторизация работают
+
+  # ───────────── Фаза 1 — Комфорт ─────────────
+  - title: "Создать логотип"
+    phase: 1
+    labels: ["type: feature", "area: ui", "size: M"]
+    owner: Илья
+    body: |
+      В процессе.
+      - [ ] Логотип, иконка приложения, favicon
+
+  - title: "Поправить дизайн сайта"
+    phase: 1
+    labels: ["type: feature", "area: ui", "size: M"]
+    owner: Илья
+    body: |
+      - [ ] Макеты ключевых экранов
+      - [ ] Внедрено во фронтенд
+
+  - title: "Карточка «следующая пара»"
+    phase: 1
+    labels: ["type: feature", "area: schedule", "size: S"]
+    body: |
+      На главной: предмет, аудитория, корпус, обратный отсчёт.
+      - [ ] Работает на телефоне и в дашборде
+
+  - title: "Напоминание за 10–15 минут до пары"
+    phase: 1
+    labels: ["type: feature", "area: notifications", "size: S"]
+    body: |
+      Аудитория или ссылка на вебинар в Telegram.
+      - [ ] Включается и выключается в настройках
+
+  - title: "Предупреждение о переезде между корпусами"
+    phase: 1
+    labels: ["type: feature", "area: schedule", "size: M"]
+    body: |
+      Если следующая пара в другом корпусе — показать время в пути.
+      - [ ] Справочник корпусов и времени переезда
+      - [ ] Предупреждение в расписании
+
+  - title: "Экспорт расписания в календарь (ICS)"
+    phase: 1
+    labels: ["type: feature", "area: schedule", "size: S"]
+    body: |
+      Персональная ссылка-подписка для Google / Apple Calendar.
+      - [ ] Изменения расписания подтягиваются автоматически
+
+  - title: "PWA и офлайн-режим расписания"
+    phase: 1
+    labels: ["type: feature", "area: ui", "size: M"]
+    body: |
+      - [ ] Установка на главный экран
+      - [ ] Расписание доступно без сети
+
+  - title: "Инвайт-ссылка и QR для вступления в группу"
+    phase: 1
+    labels: ["type: feature", "area: groups", "size: S"]
+    body: |
+      - [ ] Староста получает ссылку и QR
+      - [ ] Переход по ссылке сразу отправляет заявку
+
+  - title: "Подгруппы и элективы"
+    phase: 1
+    labels: ["type: feature", "area: schedule", "size: M"]
+    body: |
+      Фильтрация пар по подгруппе вместо ручного скрытия.
+      - [ ] Выбор подгруппы в настройках
+
+  - title: "Гибкая настройка уведомлений в Telegram"
+    phase: 1
+    labels: ["type: feature", "area: notifications", "size: M"]
+    owner: Настя
+    body: |
+      Время дайджеста, дни, типы событий.
+      - [ ] Настройки в приложении применяются в боте
+
+  - title: "Поп-ап уведомления в приложении"
+    phase: 1
+    labels: ["type: feature", "area: notifications", "size: M"]
+    body: |
+      - [ ] Всплывающие уведомления о новых событиях
+      - [ ] Не дублируют Telegram, если пользователь в приложении
+
+  - title: "Резервный канал входа и уведомлений"
+    phase: 1
+    labels: ["type: feature", "area: notifications", "size: M"]
+    body: |
+      Web push и/или email на случай недоступности Telegram.
+      - [ ] Альтернативный вход
+      - [ ] Web push для ключевых уведомлений
+
+  - title: "Верификация старосты"
+    phase: 1
+    labels: ["type: feature", "area: groups", "size: M"]
+    body: |
+      Сейчас старостой становится первый вступивший.
+      - [ ] Подтверждение старосты модератором
+      - [ ] Передача роли
+
+  # ───────────── Фаза 2 — Учёба ─────────────
+  - title: "Интегрировать расписание сессии в общее расписание"
+    phase: 2
+    labels: ["type: feature", "area: schedule", "size: M"]
+    owner: Алина
+    body: |
+      - [ ] Экзамены и консультации в расписании
+      - [ ] Отдельная отметка типа занятия
+
+  - title: "Расписание пересдач"
+    phase: 2
+    labels: ["type: feature", "area: schedule", "size: M"]
+    body: |
+      - [ ] Пересдачи видны студентам с долгами
+
+  - title: "Режим сессии"
+    phase: 2
+    labels: ["type: feature", "area: schedule", "size: M"]
+    body: |
+      Обратный отсчёт до экзаменов, консультации, чек-лист подготовки.
+
+  - title: "Привязка задания к паре"
+    phase: 2
+    labels: ["type: feature", "area: tasks", "size: S"]
+    body: |
+      «К следующей практике» вместо даты.
+      - [ ] Дедлайн вычисляется из расписания
+
+  - title: "Повторяющиеся задания и подзадачи"
+    phase: 2
+    labels: ["type: feature", "area: tasks", "size: M"]
+    body: |
+      - [ ] Еженедельные задания
+      - [ ] Чек-лист внутри задания
+
+  - title: "Материалы по предмету"
+    phase: 2
+    labels: ["type: feature", "area: tasks", "size: S"]
+    body: |
+      Закреплённые ссылки: СДО, методички, папка группы.
+
+  - title: "Заметки и фото к паре"
+    phase: 2
+    labels: ["type: feature", "area: schedule", "size: M"]
+
+  - title: "Личный трекер посещаемости"
+    phase: 2
+    labels: ["type: feature", "area: schedule", "size: M"]
+    body: |
+      - [ ] Счётчик пропусков по предмету
+      - [ ] Предупреждение о лимите
+
+  - title: "Калькулятор баллов и допуска"
+    phase: 2
+    labels: ["type: feature", "area: tasks", "size: M"]
+
+  - title: "Расписание любого преподавателя и группы, поиск свободной аудитории"
+    phase: 2
+    labels: ["type: feature", "area: schedule", "size: M"]
+
+  - title: "Кнопка «сообщить о неточности» в расписании"
+    phase: 2
+    labels: ["type: feature", "area: schedule", "size: S"]
+    body: |
+      Сообщение уходит старосте или модератору.
+
+  # ───────────── Фаза 3 — Интеграции ─────────────
+  - title: "Итоговые оценки из зачётной книжки"
+    phase: 3
+    labels: ["type: feature", "area: integrations", "size: L"]
+    body: |
+      Только через официальный доступ, без хранения паролей студентов.
+
+  - title: "Подтягивание расписания проектной деятельности"
+    phase: 3
+    labels: ["type: feature", "area: integrations", "size: M"]
+
+  - title: "Интегрировать расписание физкультуры"
+    phase: 3
+    labels: ["type: feature", "area: integrations", "size: M"]
+
+  - title: "Интеграция с ДПО"
+    phase: 3
+    labels: ["type: feature", "area: integrations", "size: L"]
+
+  # ───────────── Фаза 4 — Преподаватели ─────────────
+  - title: "Спроектировать взаимодействие преподавателя с сайтом"
+    phase: 4
+    labels: ["type: feature", "area: teacher", "size: L"]
+    body: |
+      - [ ] Интервью с 3–5 преподавателями
+      - [ ] Сценарии и макеты
+
+  - title: "Отмена и добавление занятий преподавателем"
+    phase: 4
+    labels: ["type: feature", "area: teacher", "size: M"]
+
+  - title: "Формирование групп преподавателем"
+    phase: 4
+    labels: ["type: feature", "area: teacher", "size: M"]
+    body: |
+      Если в группе нет старосты.
+
+  - title: "Отдельная логика для иностранных языков и физкультуры"
+    phase: 4
+    labels: ["type: feature", "area: teacher", "size: L"]
+
+  - title: "Сдача работ преподавателю"
+    phase: 4
+    labels: ["type: feature", "area: teacher", "size: L"]
+
+  - title: "Очередь на сдачу лабораторных через Telegram-бота"
+    phase: 4
+    labels: ["type: feature", "area: teacher", "size: L"]
+    body: |
+      Очередь видят преподаватель и студенты. Порядок — случайный или по номеру ЛР.
+
+  - title: "Опрос «кто придёт на пару»"
+    phase: 4
+    labels: ["type: feature", "area: teacher", "size: M"]
+
+  - title: "Отчётность для преподавателей"
+    phase: 4
+    labels: ["type: feature", "area: teacher", "size: L"]
+
+  # ───────────── Продукт и продвижение ─────────────
+  - title: "Презентация продукта для смежной команды"
+    phase: 5
+    labels: ["type: non-dev", "area: marketing", "size: S"]
+    owner: Настя
+
+  - title: "Отчётность и презентация для ЦПД"
+    phase: 5
+    labels: ["type: non-dev", "area: marketing", "size: M"]
+
+  - title: "План продвижения и интеграции приложения"
+    phase: 5
+    labels: ["type: non-dev", "area: marketing", "size: M"]
+    owner: Настя
+
+  - title: "Рекламный ролик и постер"
+    phase: 5
+    labels: ["type: non-dev", "area: marketing", "size: M"]
+
+  - title: "Договориться о рекламе"
+    phase: 5
+    labels: ["type: non-dev", "area: marketing", "size: M"]
+
+  - title: "Опрос аудитории других факультетов"
+    phase: 5
+    labels: ["type: non-dev", "area: marketing", "size: M"]
+    body: |
+      - [ ] Анкета и сбор ответов
+      - [ ] Выводы и новые задачи в backlog
