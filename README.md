@@ -102,7 +102,7 @@ pnpm --filter @nexora/desktop dev   # http://localhost:5173
 
 Проект создан в рамках проектной деятельности Московского Политеха под руководством Чернова В. М.
 
-Идея и реализация: [thehaffk](https://github.com/thehaffk), [whynotfu](https://github.com/whynotfu), [plaguess](https://github.com/plaguess), [KlimSani4](https://github.com/KlimSani4).
+Идея и реализация: [thehaffk](https://github.com/thehaffk), [whynotfu](https://github.com/whynotfu), [plaguess](https://github.com/plaguess), [KlimSani4](https://github.com/KlimSani4), [PiuiP](https://github.com/PiuiP), [Ilyaaa-a](https://github.com/Ilyaaa-a).
 
 ## Лицензия
 
