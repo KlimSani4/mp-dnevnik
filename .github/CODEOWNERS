@@ -1,9 +1,4 @@
 # Ревьюверы назначаются автоматически на каждый pull request.
 # Нужен минимум один approve от человека, кроме автора PR.
 
-*           @whynotfu @thehaffk @plaguess
-
-/backend/   @thehaffk @plaguess @whynotfu
-/frontend/  @plaguess @whynotfu @thehaffk
-/.github/   @thehaffk @whynotfu
-/docs/      @whynotfu @thehaffk @plaguess
+*           @whynotfu @thehaffk @PiuiP @Ilyaaa-a
