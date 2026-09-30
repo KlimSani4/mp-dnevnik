@@ -1,0 +1,36 @@
+name: Импорт задач из roadmap
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Только показать, что будет создано"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pyyaml
+
+      - name: Импорт
+        env:
+          GH_TOKEN: ${{ secrets.ROADMAP_TOKEN }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Добавьте секрет ROADMAP_TOKEN — personal access token с правом Issues: Read and write"
+            exit 1
+          fi
+          python .github/roadmap/import_issues.py
