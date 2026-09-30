@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Изменено
+- Код бэкенда (`KlimSani4/Nexora`) и фронтенда (`KlimSani4/nexora-frontend`) перенесён в `backend/` и `frontend/` с полной историей.
+- CI разделён по папкам: Backend CI и Frontend CI.
 - Проект переименован в nexoraPoly.
 - Обновлён README, добавлены документация, roadmap, правила контрибьюта, шаблоны issues и PR.
 

@@ -51,12 +51,40 @@ nexoraPoly (ранее `mp-dnevnik`) — веб-приложение, котор
 
 ```
 .
-├── frontend/   # веб-клиент (SPA)
-├── backend/    # API /api/v1 и Telegram-бот
-├── deploy/     # конфигурация развёртывания
+├── backend/    # FastAPI: API /api/v1, Telegram-бот, миграции, тесты
+├── frontend/   # pnpm-монорепо: shared, desktop (сайт), miniapp (Telegram Mini App)
+│   └── k8s/    # манифесты Kubernetes
+├── deploy/     # заметки по развёртыванию
 ├── docs/       # документация проекта
-└── .github/    # шаблоны issues и pull request'ов
+└── .github/    # CI, шаблоны issues и PR, импорт roadmap
 ```
+
+## Быстрый старт
+
+```bash
+# Бэкенд — Python 3.12, Docker
+cd backend
+docker compose up -d postgres redis
+pip install -e ".[dev,test]"
+alembic upgrade head
+uvicorn src.main:app --reload --port 8000
+
+# Фронтенд — Node.js 20, pnpm 9
+cd frontend
+pnpm install
+pnpm --filter @nexora/desktop dev   # http://localhost:5173
+```
+
+Подробнее — [backend/README.md](backend/README.md) и [frontend/README.md](frontend/README.md).
+
+## CI/CD
+
+| Workflow | Когда запускается | Что делает |
+|---|---|---|
+| Backend CI | изменения в `backend/` | ruff, mypy, bandit, тесты с PostgreSQL и Redis, сборка Docker-образа |
+| Frontend CI | изменения в `frontend/` | typecheck, сборка, сборка Docker-образа |
+
+Деплой пока идёт из старых репозиториев `KlimSani4/Nexora` и `KlimSani4/nexora-frontend`. План переключения — [docs/deploy-migration.md](docs/deploy-migration.md).
 
 ## Документация
 
@@ -64,6 +92,8 @@ nexoraPoly (ранее `mp-dnevnik`) — веб-приложение, котор
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Компоненты, стек, API, авторизация |
 | [docs/roadmap.md](docs/roadmap.md) | План развития по фазам |
+| [docs/deploy-migration.md](docs/deploy-migration.md) | Переключение деплоя на этот репозиторий |
+| [backend/docs/](backend/docs/) | API, архитектура и схема БД бэкенда |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Как вести ветки, коммиты, issues и PR |
 | [SECURITY.md](SECURITY.md) | Как сообщить об уязвимости |
 | [CHANGELOG.md](CHANGELOG.md) | История изменений |

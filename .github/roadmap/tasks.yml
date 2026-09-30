@@ -58,10 +58,40 @@ tasks:
     phase: 0
     labels: ["type: tech-debt", "area: infra", "size: M"]
     owner: Феликс
+    closed: true
     body: |
-      Код фронтенда и бэкенда сейчас не в репозитории. Перенести в `frontend/` и `backend/`, добавить инструкции запуска и `.env.example`.
-      - [ ] Код в репозитории, секреты вычищены из истории
-      - [ ] Проект запускается локально по README
+      Код из `KlimSani4/Nexora` и `KlimSani4/nexora-frontend` перенесён в `backend/` и `frontend/` с полной историей.
+      - [x] Код в репозитории с историей коммитов
+      - [x] CI по папкам: линтеры, тесты, сборка
+      - [x] Проект запускается локально по README
+
+  - title: "Переключить деплой на монорепозиторий"
+    phase: 0
+    labels: ["type: tech-debt", "area: infra", "size: M"]
+    owner: Феликс
+    body: |
+      Пошагово — `docs/deploy-migration.md`.
+      - [ ] Доступ пакетов ghcr.io для `mp-dnevnik`
+      - [ ] Workflow деплоя в этом репозитории
+      - [ ] ArgoCD смотрит на `frontend/k8s` (сейчас — на несуществующую ветку `dev`)
+      - [ ] Старые репозитории заархивированы
+
+  - title: "Зафиксировать версии зависимостей бэкенда"
+    phase: 0
+    labels: ["type: bug", "area: infra", "size: S"]
+    body: |
+      Зависимости указаны как `>=`, поэтому свежая установка тянет SQLAlchemy 2.1, где нет mypy-плагина — `mypy --strict` падает. Новый прод-образ соберётся с другими версиями, чем текущий.
+      - [ ] Верхние границы или lock-файл (`uv lock`)
+      - [ ] mypy в CI зелёный
+
+  - title: "Починить упавшие тесты и форматирование бэкенда"
+    phase: 0
+    labels: ["type: bug", "area: infra", "size: S"]
+    body: |
+      Было сломано ещё в старом репозитории.
+      - [ ] `test_assignment_service::test_creates_successfully` и `test_schedule_service::test_creates_entries` — моки не совпадают с кодом
+      - [ ] `ruff format` для 3 файлов
+      - [ ] Вернуть в CI пропущенные `tests/test_api` и `test_schedule_parser`
 
   - title: "CI: сборка и линтеры на каждый PR"
     phase: 0
