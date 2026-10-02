@@ -103,7 +103,7 @@ class TestImportSchedule:
         subject = _make_subject(group.id)
 
         svc.group_repo.get_by_code = AsyncMock(return_value=group)
-        svc.entry_repo.delete_group_schedule = AsyncMock()
+        svc.entry_repo.get_group_schedule = AsyncMock(return_value=[])
         svc.subject_repo.get_or_create = AsyncMock(return_value=subject)
         svc.entry_repo.create = AsyncMock()
 
@@ -128,7 +128,8 @@ class TestImportSchedule:
 
         assert count == 2
         assert svc.entry_repo.create.await_count == 2
-        svc.entry_repo.delete_group_schedule.assert_awaited_once_with(group.id)
+        svc.entry_repo.get_group_schedule.assert_awaited_once()
+        svc.entry_repo.delete.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_invalidates_redis_cache(self) -> None:
