@@ -1,11 +1,12 @@
 """Schedule routes."""
 
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import date
 
 from fastapi import APIRouter, Query, Response
 
 from src.api.deps import CurrentUser, CurrentUserOptional, DBSession, RedisClient
+from src.core.ics import build_ics, count_events
 from src.core.schemas.schedule import (
     DayScheduleResponse,
     OverrideCreate,
@@ -13,84 +14,12 @@ from src.core.schemas.schedule import (
     ScheduleEntryWithSubject,
 )
 from src.core.services.schedule import ScheduleService
+from src.shared.exceptions import NotFoundError
 
 router = APIRouter()
 
-_WEEKDAY_TO_BYDAY = {1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "SU"}
-
-
-def _build_ical(group_code: str, entries: list[ScheduleEntryWithSubject]) -> str:
-    """Build RFC 5545 iCalendar string for a list of schedule entries."""
-    now_stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
-
-    # Find the next occurrence of each weekday starting from the coming Monday
-    today = date.today()
-    # Monday of the current week
-    monday = today - timedelta(days=today.weekday())
-
-    lines: list[str] = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Nexora//Schedule Export//RU",
-        f"X-WR-CALNAME:Расписание {group_code}",
-        "X-WR-TIMEZONE:Europe/Moscow",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-    ]
-
-    for entry in entries:
-        # Compute the date for the first occurrence of this weekday
-        days_ahead = (entry.weekday - 1) - monday.weekday()
-        if days_ahead < 0:
-            days_ahead += 7
-        first_date = monday + timedelta(days=days_ahead)
-
-        dtstart = datetime(
-            first_date.year,
-            first_date.month,
-            first_date.day,
-            entry.start_time.hour,
-            entry.start_time.minute,
-            entry.start_time.second,
-        )
-        dtend = datetime(
-            first_date.year,
-            first_date.month,
-            first_date.day,
-            entry.end_time.hour,
-            entry.end_time.minute,
-            entry.end_time.second,
-        )
-
-        dt_fmt = "%Y%m%dT%H%M%S"
-        byday = _WEEKDAY_TO_BYDAY.get(entry.weekday, "MO")
-
-        description_parts = []
-        if entry.teacher:
-            description_parts.append(f"Преподаватель: {entry.teacher}")
-        if entry.lesson_type:
-            description_parts.append(f"Тип: {entry.lesson_type}")
-        description = "\\n".join(description_parts)
-
-        location = entry.room or entry.location or ""
-
-        uid = f"{entry.id}@nexora.prdx.so"
-
-        lines += [
-            "BEGIN:VEVENT",
-            f"UID:{uid}",
-            f"DTSTAMP:{now_stamp}",
-            f"DTSTART;TZID=Europe/Moscow:{dtstart.strftime(dt_fmt)}",
-            f"DTEND;TZID=Europe/Moscow:{dtend.strftime(dt_fmt)}",
-            f"RRULE:FREQ=WEEKLY;BYDAY={byday}",
-            f"SUMMARY:{entry.subject.name}",
-            f"LOCATION:{location}",
-            f"DESCRIPTION:{description}",
-            "END:VEVENT",
-        ]
-
-    lines.append("END:VCALENDAR")
-    return "\r\n".join(lines) + "\r\n"
+DEFAULT_EXPORT_WEEKS = 18  # примерно семестр
+MAX_EXPORT_WEEKS = 26
 
 
 @router.get("", response_model=list[DayScheduleResponse])
@@ -182,17 +111,37 @@ async def delete_override(
 
 @router.get("/export")
 async def export_ical(
-    _user: CurrentUser,
+    user: CurrentUser,
     db: DBSession,
     redis: RedisClient,
     group_code: str = Query(..., description="Group code (e.g., 231-329)"),
+    start_date: date | None = Query(
+        None, description="Any date of the first exported week (defaults to current week)"
+    ),
+    weeks: int = Query(
+        DEFAULT_EXPORT_WEEKS,
+        ge=1,
+        le=MAX_EXPORT_WEEKS,
+        description="How many weeks to export",
+    ),
 ) -> Response:
-    """Export group schedule as iCalendar (.ics) file."""
+    """Export schedule as an iCalendar (.ics) file (one-off download, no subscription).
+
+    Every lesson becomes a separate event on its real date, so week parity, date ranges,
+    cancellations and the user's personal overrides are already applied.
+    """
     schedule_service = ScheduleService(db, redis)
-    entries = await schedule_service.get_group_schedule(group_code)
-    ical_content = _build_ical(group_code, entries)
+    days = await schedule_service.get_schedule_range(
+        group_code,
+        start_date,
+        weeks,
+        user_id=user.id,
+    )
+    if count_events(days) == 0:
+        raise NotFoundError("В расписании группы пока нет занятий для экспорта")
+
     return Response(
-        content=ical_content,
+        content=build_ics(group_code, days),
         media_type="text/calendar; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="schedule-{group_code}.ics"',
