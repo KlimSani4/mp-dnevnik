@@ -64,6 +64,8 @@ const PAIR_TIMES: Record<number, { start: string; end: string }> = {
   3: { start: '12:20', end: '13:50' },
   4: { start: '14:30', end: '16:00' },
   5: { start: '16:10', end: '17:40' },
+  6: { start: '17:50', end: '19:20' },
+  7: { start: '19:30', end: '21:00' },
 }
 
 const WEEKDAY_NAMES_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
@@ -857,7 +859,7 @@ function WeeklyView({
 
   const weekParity = getWeekParity(weekOffset)
 
-  const pairNumbers = [1, 2, 3, 4, 5]
+  const pairNumbers = [1, 2, 3, 4, 5, 6, 7]
 
   // State for "add event" modal per day column
   const [addModalForDate, setAddModalForDate] = useState<string | null>(null)

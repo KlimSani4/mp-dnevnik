@@ -46,10 +46,10 @@ export function Layout() {
   }, [darkMode])
 
   return (
-    <div className="flex min-h-screen bg-surface-50 dark:bg-surface-900">
+    <div className="flex h-screen overflow-hidden bg-surface-50 dark:bg-surface-900">
       {/* Desktop Sidebar */}
       <aside className={clsx(
-        'hidden md:flex flex-col border-r border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 transition-all duration-200',
+        'hidden md:flex h-screen shrink-0 flex-col border-r border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 transition-all duration-200',
         collapsed ? 'w-[60px]' : 'w-52',
       )}>
         {/* Logo */}
@@ -179,7 +179,7 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 pb-20 md:pb-0">
+      <main className="h-screen flex-1 min-w-0 overflow-y-auto pb-20 md:pb-0">
         <div className="p-4 md:p-8">
           <Outlet />
         </div>
