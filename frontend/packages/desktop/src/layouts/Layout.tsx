@@ -55,16 +55,16 @@ export function Layout() {
         {/* Logo */}
         <div className={clsx('flex items-center gap-3 py-5', collapsed ? 'px-3 justify-center' : 'px-4')}>
           <div
-            className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center cursor-pointer flex-shrink-0"
+            className="w-11 h-11 flex items-center justify-center cursor-pointer flex-shrink-0"
             onClick={() => setCollapsed(!collapsed)}
             title={collapsed ? 'Развернуть' : 'Свернуть'}
           >
-            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            
+            <img src="/logo_nexora.png" alt="Логотип" className="w-full h-full object-contain" />
+
           </div>
           {!collapsed && (
-            <div className="leading-tight min-w-0">
+            <div className="leading-tight min-w-0 translate-y-1">
               <div className="text-xs font-semibold text-surface-900 dark:text-surface-50 truncate">Московский</div>
               <div className="text-xs font-semibold text-surface-900 dark:text-surface-50 truncate">Политех</div>
             </div>
