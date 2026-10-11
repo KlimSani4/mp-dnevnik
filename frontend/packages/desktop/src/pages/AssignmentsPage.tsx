@@ -703,7 +703,11 @@ export function AssignmentsPage() {
   const tasksByColumn = useMemo(() => {
     const grouped: Record<TaskState, Task[]> = { todo: [], review: [], done: [] }
     for (const task of filteredTasks) {
-      grouped[task.state].push(task)
+      // The API also has a `doing` state, which is shown in the TODO column here.
+      const column = task.state === 'todo' || task.state === 'review' || task.state === 'done'
+        ? task.state
+        : 'todo'
+      grouped[column].push(task)
     }
     return grouped
   }, [filteredTasks])
