@@ -144,7 +144,7 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit })
         { value: 'high', label: 'Высокий' },
         { value: 'urgent', label: 'Срочный' },
     ];
-    return (_jsx(Modal, { open: open, onClose: handleClose, title: "\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0437\u0430\u0434\u0430\u043D\u0438\u0435", children: _jsxs("form", { onSubmit: handleSubmit, className: "space-y-4", children: [_jsxs("div", { className: "space-y-2", children: [_jsx(Select, { label: "\u041F\u0440\u0435\u0434\u043C\u0435\u0442", options: subjectOptions, value: subjectId, onChange: setSubjectId, placeholder: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043F\u0440\u0435\u0434\u043C\u0435\u0442", error: errors.subjectId }), !showCustomSubjectInput ? (_jsxs("button", { type: "button", onClick: () => setShowCustomSubjectInput(true), className: "flex items-center gap-1 text-xs text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors", children: [_jsx(Icon, { name: "plus", size: 12 }), "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u0440\u0435\u0434\u043C\u0435\u0442"] })) : (_jsxs("div", { className: "flex items-center gap-2", children: [_jsx("input", { type: "text", value: customSubjectName, onChange: (e) => setCustomSubjectName(e.target.value), onKeyDown: (e) => {
+    return (_jsx(Modal, { open: open, onClose: handleClose, title: "\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u0437\u0430\u0434\u0430\u043D\u0438\u0435", className: "!max-h-[calc(100dvh-2rem)] !overflow-y-auto", children: _jsxs("form", { onSubmit: handleSubmit, className: "space-y-4", children: [_jsxs("div", { className: "space-y-2", children: [_jsx(Select, { label: "\u041F\u0440\u0435\u0434\u043C\u0435\u0442", options: subjectOptions, value: subjectId, onChange: setSubjectId, placeholder: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043F\u0440\u0435\u0434\u043C\u0435\u0442", error: errors.subjectId }), !showCustomSubjectInput ? (_jsxs("button", { type: "button", onClick: () => setShowCustomSubjectInput(true), className: "flex items-center gap-1 text-xs text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors", children: [_jsx(Icon, { name: "plus", size: 12 }), "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u0440\u0435\u0434\u043C\u0435\u0442"] })) : (_jsxs("div", { className: "flex items-center gap-2", children: [_jsx("input", { type: "text", value: customSubjectName, onChange: (e) => setCustomSubjectName(e.target.value), onKeyDown: (e) => {
                                         if (e.key === 'Enter') {
                                             e.preventDefault();
                                             handleCreateCustomSubject();
@@ -220,7 +220,11 @@ export function AssignmentsPage() {
     const tasksByColumn = useMemo(() => {
         const grouped = { todo: [], review: [], done: [] };
         for (const task of filteredTasks) {
-            grouped[task.state].push(task);
+            // The API also has a `doing` state, which is shown in the TODO column here.
+            const column = task.state === 'todo' || task.state === 'review' || task.state === 'done'
+                ? task.state
+                : 'todo';
+            grouped[column].push(task);
         }
         return grouped;
     }, [filteredTasks]);
