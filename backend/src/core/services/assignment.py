@@ -126,7 +126,8 @@ class AssignmentService:
         # Filter out personal assignments not belonging to the viewer
         if viewer_id is not None:
             assignments = [
-                a for a in assignments
+                a
+                for a in assignments
                 if not getattr(a, "is_personal", False) or a.author_id == viewer_id
             ]
         return [AssignmentWithSubject.model_validate(a) for a in assignments]
@@ -245,8 +246,7 @@ class AssignmentService:
         )
         # Filter personal assignments — only show to their author
         assignments = [
-            a for a in assignments
-            if not getattr(a, "is_personal", False) or a.author_id == user_id
+            a for a in assignments if not getattr(a, "is_personal", False) or a.author_id == user_id
         ]
 
         now = _dt.now(tz=UTC)
