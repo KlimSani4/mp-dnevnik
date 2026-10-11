@@ -218,6 +218,21 @@ Create schedule override.
 
 Delete schedule override.
 
+### GET /schedule/export
+
+Download the schedule as an iCalendar file (`.ics`) to import into Google/Apple Calendar.
+This is a one-off download: the file does not update itself, download it again to get fresh data.
+Requires authentication.
+
+**Query params:**
+- `group_code` (required) - Group code
+- `start_date` - Any date of the first exported week (default: current week)
+- `weeks` - Number of weeks to export, 1-26 (default: 18)
+
+**Response:** `200 OK`, `text/calendar`, file `schedule-<group_code>.ics`.
+Every lesson is a separate event on its real date (week parity, date ranges, cancellations
+and the user's personal overrides are already applied). `404` if the schedule has no lessons.
+
 ---
 
 ## Assignments
