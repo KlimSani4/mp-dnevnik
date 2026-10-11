@@ -191,8 +191,8 @@ async def seed(session: AsyncSession) -> None:
             room=room,
             teacher=teacher,
             lesson_type=ltype,
-            date_from=date(2025, 9, 1),
-            date_to=date(2026, 6, 30),
+            date_from=date(2026, 9, 1),
+            date_to=date(2027, 6, 30),
             week_parity="both",
             external_link=link,
             raw_data={},
@@ -276,9 +276,9 @@ async def seed(session: AsyncSession) -> None:
     # ─── Semester ───
     semester = Semester(
         id=SEMESTER_ID,
-        name="Весна 2025-2026",
-        start_date=date(2026, 2, 1),
-        end_date=date(2026, 6, 30),
+        name="2026-2027 учебный год",
+        start_date=date(2026, 9, 1),
+        end_date=date(2027, 6, 30),
         is_current=True,
     )
     session.add(semester)
