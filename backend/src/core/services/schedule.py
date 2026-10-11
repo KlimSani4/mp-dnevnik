@@ -50,6 +50,7 @@ class ScheduleService:
         target_date: date,
         *,
         user_id: uuid.UUID | None = None,
+        auto_import: bool = True,
     ) -> DayScheduleResponse:
         """Get schedule for a specific day with overrides applied."""
         group = await self.group_repo.get_by_code(group_code)
@@ -60,7 +61,7 @@ class ScheduleService:
         entries = await self.entry_repo.get_day_schedule(group.id, target_date)
 
         # Auto-import from rasp.dmami.ru if no entries in DB
-        if not entries:
+        if not entries and auto_import:
             try:
                 schedule_data = await fetch_group_schedule(group_code)
                 if schedule_data:
@@ -147,8 +148,13 @@ class ScheduleService:
         # Derive pair_number from start time (best-effort)
         pair_number = 9  # default: after all regular pairs
         pair_start_map = {
-            "09:00": 1, "10:40": 2, "12:20": 3, "14:30": 4, "16:10": 5,
-            "17:50": 6, "19:30": 7,
+            "09:00": 1,
+            "10:40": 2,
+            "12:20": 3,
+            "14:30": 4,
+            "16:10": 5,
+            "17:50": 6,
+            "19:30": 7,
         }
         for ts, pn in pair_start_map.items():
             if start_str.startswith(ts):
@@ -368,5 +374,36 @@ class ScheduleService:
             day = start_date + timedelta(days=i)
             day_schedule = await self.get_day_schedule(group_code, day, user_id=user_id)
             days.append(day_schedule)
+
+        return days
+
+    async def get_schedule_range(
+        self,
+        group_code: str,
+        start_date: date | None = None,
+        weeks: int = 1,
+        *,
+        user_id: uuid.UUID | None = None,
+    ) -> list[DayScheduleResponse]:
+        """Get schedule for several weeks in a row (Mon-Sat), starting from the Monday of start_date.
+
+        Never calls rasp.dmami.ru: otherwise every empty day would trigger an import.
+        """
+        if start_date is None:
+            start_date = date.today()
+        monday = start_date - timedelta(days=start_date.weekday())
+
+        days: list[DayScheduleResponse] = []
+        for week in range(weeks):
+            for offset in range(6):  # Mon-Sat
+                day = monday + timedelta(weeks=week, days=offset)
+                days.append(
+                    await self.get_day_schedule(
+                        group_code,
+                        day,
+                        user_id=user_id,
+                        auto_import=False,
+                    )
+                )
 
         return days
