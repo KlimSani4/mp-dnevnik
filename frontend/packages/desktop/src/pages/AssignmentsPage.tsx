@@ -472,7 +472,12 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
   ]
 
   return (
-    <Modal open={open} onClose={handleClose} title="Создать задание">
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title="Создать задание"
+      className="!max-h-[calc(100dvh-2rem)] !overflow-y-auto"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Select
@@ -703,7 +708,11 @@ export function AssignmentsPage() {
   const tasksByColumn = useMemo(() => {
     const grouped: Record<TaskState, Task[]> = { todo: [], review: [], done: [] }
     for (const task of filteredTasks) {
-      grouped[task.state].push(task)
+      // The API also has a `doing` state, which is shown in the TODO column here.
+      const column = task.state === 'todo' || task.state === 'review' || task.state === 'done'
+        ? task.state
+        : 'todo'
+      grouped[column].push(task)
     }
     return grouped
   }, [filteredTasks])

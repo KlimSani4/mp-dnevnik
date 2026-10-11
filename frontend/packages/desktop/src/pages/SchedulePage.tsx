@@ -4,13 +4,13 @@ import {
   addDays,
   startOfWeek,
   isToday,
-  isSameDay,
   differenceInMinutes,
   parse,
 } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import {
   useWeekSchedule,
+  useDaySchedule,
   useGroupContext,
   useCreateScheduleOverride,
   useDeleteScheduleOverride,
@@ -64,6 +64,8 @@ const PAIR_TIMES: Record<number, { start: string; end: string }> = {
   3: { start: '12:20', end: '13:50' },
   4: { start: '14:30', end: '16:00' },
   5: { start: '16:10', end: '17:40' },
+  6: { start: '17:50', end: '19:20' },
+  7: { start: '19:30', end: '21:00' },
 }
 
 const WEEKDAY_NAMES_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
@@ -703,21 +705,17 @@ function DailyView({
   onPrev,
   onNext,
   onToday,
-  weekData,
+  daySchedule,
 }: {
   dayOffset: number
   onPrev: () => void
   onNext: () => void
   onToday: () => void
-  weekData: DaySchedule[]
+  daySchedule?: DaySchedule
 }) {
   const targetDate = addDays(new Date(), dayOffset)
   const targetDateStr = format(targetDate, 'yyyy-MM-dd')
   const [showAddModal, setShowAddModal] = useState(false)
-
-  const daySchedule = useMemo(() => {
-    return weekData.find((d) => isSameDay(parse(d.schedule_date, 'yyyy-MM-dd', new Date()), targetDate))
-  }, [weekData, targetDate])
 
   const dateLabel = format(targetDate, 'd MMMM, EEEE', { locale: ru })
   const entries = daySchedule?.entries ?? []
@@ -857,7 +855,7 @@ function WeeklyView({
 
   const weekParity = getWeekParity(weekOffset)
 
-  const pairNumbers = [1, 2, 3, 4, 5]
+  const pairNumbers = [1, 2, 3, 4, 5, 6, 7]
 
   // State for "add event" modal per day column
   const [addModalForDate, setAddModalForDate] = useState<string | null>(null)
@@ -1048,12 +1046,18 @@ export function SchedulePage() {
 
   const { groupCode } = useGroupContext()
   const weekScheduleQuery = useWeekSchedule(groupCode ?? undefined, weekOffset)
+  const dailyDate = format(addDays(new Date(), dayOffset), 'yyyy-MM-dd')
+  const dailyGroupCode = isMobile || viewMode === 'daily' ? groupCode : undefined
+  const dayScheduleQuery = useDaySchedule(dailyDate, dailyGroupCode ?? undefined)
 
   const weekData = useMemo(() => {
     return (weekScheduleQuery.data as DaySchedule[] | undefined) ?? []
   }, [weekScheduleQuery.data])
+  const dayData = dayScheduleQuery.data as unknown as DaySchedule | undefined
 
-  const isLoading = weekScheduleQuery.isLoading
+  const isLoading = isMobile || viewMode === 'daily'
+    ? dayScheduleQuery.isLoading
+    : weekScheduleQuery.isLoading
 
   return (
     <div>
@@ -1101,7 +1105,7 @@ export function SchedulePage() {
           onPrev={() => setDayOffset((d) => d - 1)}
           onNext={() => setDayOffset((d) => d + 1)}
           onToday={() => setDayOffset(0)}
-          weekData={weekData}
+          daySchedule={dayData}
         />
       ) : (
         <WeeklyView

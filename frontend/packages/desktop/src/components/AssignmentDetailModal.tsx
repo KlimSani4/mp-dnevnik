@@ -245,14 +245,6 @@ function AssignmentDetailModal({
           )}
         </div>
 
-        {/* Close button */}
-        <button
-          onClick={handleClose}
-          className="btn btn-ghost btn-icon shrink-0 -mt-1 -mr-2"
-          aria-label="Закрыть"
-        >
-          <Icon name="x" size={20} />
-        </button>
       </div>
 
       {/* ─── Body ─── */}
