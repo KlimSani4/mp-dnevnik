@@ -472,7 +472,12 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
   ]
 
   return (
-    <Modal open={open} onClose={handleClose} title="Создать задание">
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title="Создать задание"
+      className="!max-h-[calc(100dvh-2rem)] !overflow-y-auto"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Select
