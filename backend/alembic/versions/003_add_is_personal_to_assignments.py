@@ -16,10 +16,12 @@ depends_on: str | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "assignments",
-        sa.Column("is_personal", sa.Boolean(), nullable=False, server_default=sa.false()),
-    )
+    columns = [c["name"] for c in sa.inspect(op.get_bind()).get_columns("assignments")]
+    if "is_personal" not in columns:
+        op.add_column(
+            "assignments",
+            sa.Column("is_personal", sa.Boolean(), nullable=False, server_default=sa.false()),
+        )
 
 
 def downgrade() -> None:
