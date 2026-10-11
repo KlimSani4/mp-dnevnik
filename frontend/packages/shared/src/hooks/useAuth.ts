@@ -21,6 +21,21 @@ export function useCurrentUser() {
   })
 }
 
+export function useDevLogin() {
+  const api = useApi()
+  const setTokens = useAuthStore((s) => s.setTokens)
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (telegramId: string): Promise<AuthTokens> =>
+      api.auth.devLogin({ telegram_id: telegramId }),
+    onSuccess: (tokens) => {
+      setTokens(tokens)
+      queryClient.invalidateQueries({ queryKey: ['user'] })
+    },
+  })
+}
+
 export function useLoginWithTelegram() {
   const api = useApi()
   const setTokens = useAuthStore((s) => s.setTokens)

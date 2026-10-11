@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Button, Card, Input } from '../components/ui'
-import { useSearchGroups, useJoinGroup, useAuthStore, useTelegramBotAuth, useTelegramBotPoll, useTodaySchedule } from '@nexora/shared'
+import { useSearchGroups, useJoinGroup, useAuthStore, useDevLogin, useTelegramBotAuth, useTelegramBotPoll, useTodaySchedule } from '@nexora/shared'
 import type { GroupMembership } from '@nexora/shared'
 
 type Step = 'welcome' | 'group' | 'preview' | 'done'
@@ -30,6 +30,7 @@ export function OnboardingPage() {
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const botAuthMutation = useTelegramBotAuth()
+  const devLoginMutation = useDevLogin()
   const searchGroupsQuery = useSearchGroups(
     groupCode.length >= 2 ? { search: groupCode } : undefined
   )
@@ -48,6 +49,16 @@ export function OnboardingPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const telegramContainerRef = useRef<HTMLDivElement>(null)
+
+  const handleDevLogin = async () => {
+    setLoginError(null)
+    try {
+      await devLoginMutation.mutateAsync('12345')
+      setStep('group')
+    } catch {
+      setLoginError('Dev-вход доступен только при APP_ENV=development на backend.')
+    }
+  }
 
   const handleBotAuth = async () => {
     setLoginError(null)
@@ -197,6 +208,17 @@ export function OnboardingPage() {
                   Отмена
                 </button>
               </div>
+            )}
+
+            {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !awaitingBot && (
+              <Button
+                variant="secondary"
+                className="w-full max-w-xs mx-auto mt-2"
+                onClick={handleDevLogin}
+                disabled={devLoginMutation.isPending}
+              >
+                {devLoginMutation.isPending ? 'Входим...' : 'Войти как разработчик'}
+              </Button>
             )}
 
             {loginError && (
