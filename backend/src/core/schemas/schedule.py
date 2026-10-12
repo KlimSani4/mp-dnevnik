@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, time
-from typing import Any
+from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.core.models.schedule import OverrideScope, OverrideType
+from src.core.session import is_session_lesson
 
 
 class SubjectBase(BaseModel):
@@ -95,6 +96,13 @@ class ScheduleEntryResponse(ScheduleEntryBase):
     external_link: str | None
     created_at: datetime
     updated_at: datetime
+    # Занятие сессии (экзамен, консультация, зачёт) - для отдельной отметки в интерфейсе.
+    is_session: bool = False
+
+    @model_validator(mode="after")
+    def _mark_session(self) -> Self:
+        self.is_session = is_session_lesson(self.lesson_type)
+        return self
 
 
 class ScheduleEntryWithSubject(ScheduleEntryResponse):
