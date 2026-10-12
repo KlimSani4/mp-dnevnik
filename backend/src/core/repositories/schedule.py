@@ -231,6 +231,7 @@ class ScheduleOverrideRepository(BaseRepository[ScheduleOverride]):
             )
 
         from sqlalchemy import or_
+
         stmt = (
             select(ScheduleOverride)
             .join(ScheduleEntry)

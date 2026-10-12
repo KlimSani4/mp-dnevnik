@@ -81,8 +81,9 @@ pnpm --filter @nexora/desktop dev   # http://localhost:5173
 
 | Workflow | Когда запускается | Что делает |
 |---|---|---|
-| Backend CI | изменения в `backend/` | ruff, mypy, bandit, тесты с PostgreSQL и Redis, сборка Docker-образа |
-| Frontend CI | изменения в `frontend/` | typecheck, сборка, сборка Docker-образа |
+| CI → backend | изменения в `backend/` | ruff, mypy, bandit, тесты с PostgreSQL и Redis, сборка Docker-образа |
+| CI → frontend | изменения в `frontend/` | typecheck, сборка, сборка Docker-образа |
+| CI passed | всегда | итоговая проверка: зелёная, если всё нужное прошло. Обязательна для merge в `main` |
 
 Деплой пока идёт из старых репозиториев `KlimSani4/Nexora` и `KlimSani4/nexora-frontend`. План переключения — [docs/deploy-migration.md](docs/deploy-migration.md).
 

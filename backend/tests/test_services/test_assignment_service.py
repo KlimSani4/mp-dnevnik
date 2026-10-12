@@ -76,6 +76,7 @@ def _make_service(session: MagicMock) -> AssignmentService:
     svc.group_repo = AsyncMock()
     svc.student_repo = AsyncMock()
     svc.subject_repo = AsyncMock()
+    svc.audit_repo = AsyncMock()
     return svc
 
 
