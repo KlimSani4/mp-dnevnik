@@ -80,9 +80,10 @@ export class ApiClient {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       params?: Record<string, any>
       auth?: boolean
+      responseType?: 'json' | 'blob'
     } = {}
   ): Promise<T> {
-    const { body, params, auth = true } = options
+    const { body, params, auth = true, responseType = 'json' } = options
 
     const fullPath = `${this.baseUrl}${path}`
     const url = fullPath.startsWith('http') ? new URL(fullPath) : new URL(fullPath, window.location.origin)
@@ -115,37 +116,22 @@ export class ApiClient {
         body: body ? JSON.stringify(body) : undefined,
       })
 
-    const response = await fetch(url.toString(), {
+    let response = await fetch(url.toString(), {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
     })
 
     if (response.status === 401) {
-      const retried = await this.handleUnauthorized(makeRequest)
-      if (retried.status === 204) {
-        return undefined as T
-      }
-      const retriedData = await retried.json()
-      if (!retried.ok) {
-        if (isApiError(retriedData)) {
-          throw new ApiClientError(retriedData.detail, retriedData.code, retried.status)
-        }
-        if (isValidationError(retriedData)) {
-          throw new ValidationClientError(retriedData.detail, retried.status)
-        }
-        throw new ApiClientError('Unknown error', 'UNKNOWN', retried.status)
-      }
-      return retriedData as T
+      response = await this.handleUnauthorized(makeRequest)
     }
 
     if (response.status === 204) {
       return undefined as T
     }
 
-    const data = await response.json()
-
     if (!response.ok) {
+      const data: unknown = await response.json().catch(() => null)
       if (isApiError(data)) {
         throw new ApiClientError(data.detail, data.code, response.status)
       }
@@ -155,12 +141,19 @@ export class ApiClient {
       throw new ApiClientError('Unknown error', 'UNKNOWN', response.status)
     }
 
-    return data as T
+    if (responseType === 'blob') {
+      return (await response.blob()) as T
+    }
+    return (await response.json()) as T
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get<T>(path: string, params?: Record<string, any>) {
     return this.request<T>('GET', path, { params })
+  }
+
+  getBlob(path: string, params?: Record<string, any>) {
+    return this.request<Blob>('GET', path, { params, responseType: 'blob' })
   }
 
   post<T>(path: string, body?: unknown) {

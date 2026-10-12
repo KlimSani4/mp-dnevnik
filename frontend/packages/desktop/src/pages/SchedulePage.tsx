@@ -14,12 +14,15 @@ import {
   useGroupContext,
   useCreateScheduleOverride,
   useDeleteScheduleOverride,
+  useApi,
+  ApiClientError,
 } from '@nexora/shared'
 import type { AddEventPayload } from '@nexora/shared'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Icon } from '../components/ui/Icon'
+import { Modal } from '../components/ui/Modal'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -161,6 +164,151 @@ function formatGap(entry1: ScheduleEntry, entry2: ScheduleEntry): string | null 
   if (hours > 0 && remainMins > 0) return `Окно ${hours}ч ${remainMins}мин`
   if (hours > 0) return `Окно ${hours}ч`
   return `Окно ${remainMins}мин`
+}
+
+function ExportCalendarButton({ groupCode }: { groupCode: string }) {
+  const api = useApi()
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedWeeks, setSelectedWeeks] = useState(18)
+  const [isExporting, setIsExporting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  async function handleExport() {
+    setIsExporting(true)
+    setErrorMessage(null)
+
+    try {
+      const startDate = format(new Date(), 'yyyy-MM-dd')
+      const file = await api.schedule.exportCalendar({
+        group_code: groupCode,
+        start_date: startDate,
+        weeks: selectedWeeks,
+      })
+      const objectUrl = URL.createObjectURL(file)
+      const link = document.createElement('a')
+      const safeGroupCode = groupCode.replace(/[^a-zA-Z0-9_-]/g, '_')
+      link.href = objectUrl
+      link.download = `nexora-schedule-${safeGroupCode}-${startDate}.ics`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+      setDialogOpen(false)
+    } catch (error) {
+      const status = error instanceof ApiClientError
+        ? error.status
+        : typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number'
+          ? error.status
+          : undefined
+
+      if (status === 404) {
+        setErrorMessage('В расписании группы пока нет занятий для экспорта')
+      } else if (status === 422) {
+        setErrorMessage('Не удалось выгрузить расписание: проверьте параметры и попробуйте снова')
+      } else if (status === 429) {
+        setErrorMessage('Слишком много запросов. Попробуйте скачать расписание позже')
+      } else if (status === 401) {
+        setErrorMessage('Сессия истекла. Войдите в приложение снова')
+      } else {
+        setErrorMessage('Не удалось скачать расписание. Попробуйте позже')
+      }
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  function closeDialog() {
+    if (!isExporting) setDialogOpen(false)
+  }
+
+  return (
+    <>
+      <div className="flex justify-center md:justify-end">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Icon name="download" size={16} />}
+          onClick={() => {
+            setErrorMessage(null)
+            setDialogOpen(true)
+          }}
+        >
+          Экспорт в календарь
+        </Button>
+      </div>
+
+      <Modal
+        open={dialogOpen}
+        onClose={closeDialog}
+        hideCloseButton
+        className="!max-w-md !overflow-hidden !rounded-2xl !border-[#d4d4d4] !bg-[#eeeeee] dark:!border-surface-700 dark:!bg-surface-900"
+      >
+        <div className="-mx-6 -my-4">
+          <div className="mx-2 mt-2 flex items-center justify-between rounded-2xl bg-white px-4 pt-5 pb-4 dark:bg-surface-800">
+            <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50">
+              Экспорт расписания
+            </h2>
+            <button
+              type="button"
+              onClick={closeDialog}
+              aria-label="Закрыть"
+              className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-surface-200 bg-surface-50 text-surface-600 transition hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-700 dark:text-surface-300 dark:hover:bg-surface-600"
+            >
+              <Icon name="x" size={18} />
+            </button>
+          </div>
+
+          <div className="space-y-3 bg-[#eeeeee] px-2 py-3 dark:bg-surface-900">
+            <section className="space-y-4 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
+              <div>
+                <p className="text-sm font-medium text-surface-800 dark:text-surface-100">
+                  На сколько недель выгрузить расписание?
+                </p>
+                <p className="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                  Это разовый файл. Изменения в расписании автоматически не синхронизируются.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {[4, 8, 18].map((weeks) => (
+                  <button
+                    key={weeks}
+                    type="button"
+                    aria-pressed={selectedWeeks === weeks}
+                    disabled={isExporting}
+                    onClick={() => setSelectedWeeks(weeks)}
+                    className={`rounded-xl border px-2 py-3 text-center transition-colors ${
+                      selectedWeeks === weeks
+                        ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300'
+                        : 'border-surface-200 text-surface-600 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-700'
+                    }`}
+                  >
+                    <span className="block text-lg font-semibold">{weeks}</span>
+                    <span className="block text-xs">{weeks === 4 ? 'недели' : 'недель'}</span>
+                  </button>
+                ))}
+              </div>
+
+              {errorMessage && (
+                <p role="alert" className="text-sm text-danger-500">
+                  {errorMessage}
+                </p>
+              )}
+            </section>
+
+            <div className="mb-2 ml-auto flex w-fit max-w-full items-center justify-end gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-surface-800">
+              <Button variant="secondary" onClick={closeDialog} disabled={isExporting}>
+                Отмена
+              </Button>
+              <Button variant="primary" onClick={handleExport} disabled={isExporting}>
+                {isExporting ? 'Подготовка файла...' : 'Скачать .ics'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+    </>
+  )
 }
 
 function useIsMobile(): boolean {
@@ -1115,6 +1263,12 @@ export function SchedulePage() {
           onToday={() => setWeekOffset(0)}
           weekData={weekData}
         />
+      )}
+
+      {groupCode && !isLoading && (
+        <div className="mt-12">
+          <ExportCalendarButton groupCode={groupCode} />
+        </div>
       )}
     </div>
   )
