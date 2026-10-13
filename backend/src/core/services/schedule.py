@@ -24,6 +24,7 @@ from src.core.schemas.schedule import (
     ScheduleEntryWithSubject,
     SubjectResponse,
 )
+from src.core.session import has_session_marker, normalize_session_item
 from src.integrations.rasp_parser import fetch_group_schedule
 from src.shared.exceptions import AuthorizationError, NotFoundError
 
@@ -217,6 +218,8 @@ class ScheduleService:
         existing_entries = await self.entry_repo.get_group_schedule(group.id, with_subject=True)
         existing_map: dict[tuple[int, int, str], Any] = {}
         for e in existing_entries:
+            if has_session_marker(e):
+                continue  # exams/consultations are managed by import_session_schedule
             key = (e.weekday, e.pair_number, e.subject.name if e.subject else "")
             existing_map[key] = e
 
@@ -294,6 +297,102 @@ class ScheduleService:
         logger.info(
             "Schedule imported",
             extra={"group_code": group_code, "entries_count": count},
+        )
+
+        return count
+
+    async def import_session_schedule(
+        self,
+        group_code: str,
+        items: list[dict[str, Any]],
+    ) -> int:
+        """Import session schedule (exams, consultations). Returns number of entries saved.
+
+        Items are stored as ordinary schedule entries on a single date, marked with
+        raw_data["kind"] == "session". Only such entries are updated or removed here,
+        so regular lessons are never touched (and import_schedule never touches these).
+        """
+        group = await self.group_repo.get_by_code(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+
+        existing_entries = await self.entry_repo.get_group_schedule(group.id, with_subject=True)
+        existing_map: dict[tuple[date, int, str, str], Any] = {}
+        for e in existing_entries:
+            if not has_session_marker(e) or e.date_from is None:
+                continue
+            key = (
+                e.date_from,
+                e.pair_number,
+                e.subject.name if e.subject else "",
+                e.lesson_type or "",
+            )
+            existing_map[key] = e
+
+        seen_keys: set[tuple[date, int, str, str]] = set()
+        count = 0
+        skipped = 0
+        for raw_item in items:
+            item = normalize_session_item(raw_item)
+            if item is None:
+                skipped += 1
+                continue
+
+            subject = await self.subject_repo.get_or_create(
+                name=item["subject"],
+                short_name=item["short_name"],
+                group_id=group.id,
+            )
+
+            key = (item["date"], item["pair_number"], item["subject"], item["lesson_type"])
+            seen_keys.add(key)
+
+            existing = existing_map.get(key)
+            if existing:
+                existing.subject_id = subject.id
+                existing.weekday = item["weekday"]
+                existing.start_time = item["start_time"]
+                existing.end_time = item["end_time"]
+                existing.location = item["location"]
+                existing.room = item["room"]
+                existing.teacher = item["teacher"]
+                existing.external_link = item["external_link"]
+                existing.raw_data = item["raw_data"]
+                count += 1
+                continue
+
+            await self.entry_repo.create(
+                group_id=group.id,
+                subject_id=subject.id,
+                weekday=item["weekday"],
+                pair_number=item["pair_number"],
+                start_time=item["start_time"],
+                end_time=item["end_time"],
+                location=item["location"],
+                room=item["room"],
+                teacher=item["teacher"],
+                lesson_type=item["lesson_type"],
+                date_from=item["date"],
+                date_to=item["date"],
+                week_parity=None,
+                external_link=item["external_link"],
+                raw_data=item["raw_data"],
+            )
+            count += 1
+
+        # Remove session entries that are no longer in the source
+        for key, entry in existing_map.items():
+            if key not in seen_keys:
+                await self.entry_repo.delete(entry)
+
+        await self.session.commit()
+
+        if self.redis:
+            await self.redis.delete(f"schedule:{group_code}")
+
+        logger.info(
+            "Session schedule imported",
+            extra={"group_code": group_code, "entries_count": count, "skipped": skipped},
         )
 
         return count
