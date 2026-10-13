@@ -475,163 +475,191 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
     <Modal
       open={open}
       onClose={handleClose}
-      title="Создать задание"
-      className="!max-h-[calc(100dvh-2rem)] !overflow-y-auto"
+      hideCloseButton
+      scrollOnOverflow
+      className="!max-w-4xl !overflow-visible !rounded-2xl !border-[#d4d4d4] !bg-[#eeeeee] dark:!border-surface-700 dark:!bg-surface-900"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Select
-            label="Предмет"
-            options={subjectOptions}
-            value={subjectId}
-            onChange={setSubjectId}
-            placeholder="Выберите предмет"
-            error={errors.subjectId}
-          />
-          {/* Custom subject inline creation */}
-          {!showCustomSubjectInput ? (
-            <button
-              type="button"
-              onClick={() => setShowCustomSubjectInput(true)}
-              className="flex items-center gap-1 text-xs text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
-            >
-              <Icon name="plus" size={12} />
-              Добавить предмет
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={customSubjectName}
-                onChange={(e) => setCustomSubjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.preventDefault(); handleCreateCustomSubject() }
-                  if (e.key === 'Escape') { setShowCustomSubjectInput(false); setCustomSubjectName('') }
-                }}
-                placeholder="Название предмета"
-                className="input flex-1 text-sm py-1.5"
-                autoFocus
+      <div className="-mx-6 -my-4">
+        <div className="mx-2 mt-2 flex items-center justify-between rounded-2xl bg-white px-4 pt-5 pb-4 dark:bg-surface-800">
+          <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50">
+            Создать задание
+          </h2>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Закрыть"
+            className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-surface-200 bg-surface-50 text-surface-600 transition hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-700 dark:text-surface-300 dark:hover:bg-surface-600"
+          >
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3 bg-[#eeeeee] px-2 py-3 dark:bg-surface-900">
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+            <div className="space-y-3">
+              <section className="space-y-4 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
+            <div className="space-y-2">
+              <Select
+                label="Предмет"
+                options={subjectOptions}
+                value={subjectId}
+                onChange={setSubjectId}
+                placeholder="Выберите предмет"
+                error={errors.subjectId}
               />
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={handleCreateCustomSubject}
-              >
-                {createCustomSubject.isPending ? '...' : 'Добавить'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => { setShowCustomSubjectInput(false); setCustomSubjectName('') }}
-              >
-                <Icon name="x" size={14} />
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <Input
-          label="Название"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Например: ПЗ №5 — Графы"
-          error={errors.title}
-        />
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor="create-description"
-            className="text-sm font-medium text-surface-700 dark:text-surface-300"
-          >
-            Описание
-          </label>
-          <textarea
-            id="create-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Что нужно сделать..."
-            rows={3}
-            className={clsx(
-              'input resize-none',
-              errors.description && 'border-danger-500 focus:ring-danger-500/20 focus:border-danger-500',
-            )}
-          />
-          {errors.description && (
-            <p className="text-xs text-danger-500">{errors.description}</p>
-          )}
-        </div>
-        <Input
-          label="Ссылка на задание"
-          type="url"
-          value={link}
-          onChange={(e) => setLink(e.target.value)}
-          placeholder="https://docs.google.com/..."
-        />
-        <Input
-          label="Контакт преподавателя"
-          value={teacherContact}
-          onChange={(e) => setTeacherContact(e.target.value)}
-          placeholder="Иванов И.И., ivanov@mospolytech.ru"
-        />
-        <Input
-          label="Ссылка для сдачи"
-          type="url"
-          value={submissionLink}
-          onChange={(e) => setSubmissionLink(e.target.value)}
-          placeholder="https://..."
-        />
-        <Input
-          label="Дедлайн"
-          type="date"
-          value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}
-          error={errors.deadline}
-        />
-        <Select
-          label="Приоритет"
-          options={priorityOptions}
-          value={priority}
-          onChange={setPriority}
-        />
-
-        {/* Personal toggle */}
-        <label className="flex items-center gap-3 cursor-pointer select-none">
-          <div
-            onClick={() => setIsPersonal(!isPersonal)}
-            className={clsx(
-              'relative w-9 h-5 rounded-full transition-colors',
-              isPersonal ? 'bg-primary-500' : 'bg-surface-300 dark:bg-surface-600',
-            )}
-          >
-            <span
-              className={clsx(
-                'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm',
-                isPersonal && 'translate-x-4',
+              {/* Custom subject inline creation */}
+              {!showCustomSubjectInput ? (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomSubjectInput(true)}
+                  className="flex items-center gap-1 text-xs text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                >
+                  <Icon name="plus" size={12} />
+                  Добавить предмет
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={customSubjectName}
+                    onChange={(e) => setCustomSubjectName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); handleCreateCustomSubject() }
+                      if (e.key === 'Escape') { setShowCustomSubjectInput(false); setCustomSubjectName('') }
+                    }}
+                    placeholder="Название предмета"
+                    className="input flex-1 text-sm py-1.5"
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleCreateCustomSubject}
+                  >
+                    {createCustomSubject.isPending ? '...' : 'Добавить'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setShowCustomSubjectInput(false); setCustomSubjectName('') }}
+                  >
+                    <Icon name="x" size={14} />
+                  </Button>
+                </div>
               )}
-            />
           </div>
-          <div>
-            <span className="text-sm font-medium text-surface-700 dark:text-surface-300">
-              {isPersonal ? 'Только для меня' : 'Для всей группы'}
-            </span>
-            <p className="text-xs text-surface-400 dark:text-surface-500 mt-0.5">
-              {isPersonal
-                ? 'Задание видно только вам'
-                : 'Задание видно всем участникам группы'}
-            </p>
-          </div>
-        </label>
 
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" type="button" onClick={handleClose}>
-            Отмена
-          </Button>
-          <Button variant="primary" type="submit">
-            Создать
-          </Button>
-        </div>
-      </form>
+            <Input
+              label="Название"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Например: ПЗ №5 — Графы"
+              error={errors.title}
+            />
+            </section>
+            <section className="rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="create-description"
+                className="text-sm font-medium text-surface-700 dark:text-surface-300"
+              >
+                Описание
+              </label>
+              <textarea
+                id="create-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Что нужно сделать..."
+                rows={8}
+                className={clsx(
+                  'input resize-none',
+                  errors.description && 'border-danger-500 focus:ring-danger-500/20 focus:border-danger-500',
+                )}
+              />
+              {errors.description && (
+                <p className="text-xs text-danger-500">{errors.description}</p>
+              )}
+            </div>
+          </section>
+            </div>
+            <div className="space-y-3">
+              <section className="grid grid-cols-1 gap-3 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
+            <Input
+              label="Ссылка на задание"
+              type="url"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              placeholder="https://docs.google.com/..."
+            />
+            <Input
+              label="Контакт преподавателя"
+              value={teacherContact}
+              onChange={(e) => setTeacherContact(e.target.value)}
+              placeholder="Иванов И.И., ivanov@mospolytech.ru"
+            />
+            <Input
+              label="Ссылка для сдачи"
+              type="url"
+              value={submissionLink}
+              onChange={(e) => setSubmissionLink(e.target.value)}
+              placeholder="https://..."
+            />
+            <Input
+              label="Дедлайн"
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              error={errors.deadline}
+            />
+            <Select
+              label="Приоритет"
+              options={priorityOptions}
+              value={priority}
+              onChange={setPriority}
+            />
+              </section>
+
+              {/* Personal toggle */}
+              <label className="flex items-center gap-3 cursor-pointer select-none rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
+            <div
+              onClick={() => setIsPersonal(!isPersonal)}
+              className={clsx(
+                'relative w-9 h-5 rounded-full transition-colors',
+                isPersonal ? 'bg-primary-500' : 'bg-surface-300 dark:bg-surface-600',
+              )}
+            >
+              <span
+                className={clsx(
+                  'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm',
+                  isPersonal && 'translate-x-4',
+                )}
+              />
+            </div>
+            <div>
+              <span className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                {isPersonal ? 'Только для меня' : 'Для всей группы'}
+              </span>
+              <p className="text-xs text-surface-400 dark:text-surface-500 mt-0.5">
+                {isPersonal
+                  ? 'Задание видно только вам'
+                  : 'Задание видно всем участникам группы'}
+              </p>
+            </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="mb-2 ml-auto mr-2 flex w-fit max-w-full items-center justify-end gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-surface-800">
+            <Button variant="secondary" type="button" onClick={handleClose}>
+              Отмена
+            </Button>
+            <Button variant="primary" type="submit">
+              Создать
+            </Button>
+          </div>
+        </form>
+      </div>
     </Modal>
   )
 }

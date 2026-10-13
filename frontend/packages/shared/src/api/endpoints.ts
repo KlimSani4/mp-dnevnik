@@ -134,6 +134,9 @@ export function createScheduleApi(client: ApiClient) {
     getGroupSchedule(code: string) {
       return client.get<ScheduleEntry[]>(`/schedule/group/${code}`)
     },
+    exportCalendar(params: { group_code: string; start_date?: string; weeks?: number }) {
+      return client.getBlob('/schedule/export', params)
+    },
     createOverride(data: OverrideCreateRequest) {
       return client.post<ScheduleOverrideResponse>('/schedule/override', data)
     },

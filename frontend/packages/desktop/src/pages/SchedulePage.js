@@ -1,12 +1,13 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { format, addDays, startOfWeek, isToday, differenceInMinutes, parse, } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { useWeekSchedule, useDaySchedule, useGroupContext, useCreateScheduleOverride, } from '@nexora/shared';
+import { useWeekSchedule, useDaySchedule, useGroupContext, useCreateScheduleOverride, useApi, ApiClientError, } from '@nexora/shared';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Icon } from '../components/ui/Icon';
+import { Modal } from '../components/ui/Modal';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -103,6 +104,70 @@ function formatGap(entry1, entry2) {
     if (hours > 0)
         return `Окно ${hours}ч`;
     return `Окно ${remainMins}мин`;
+}
+function ExportCalendarButton({ groupCode }) {
+    const api = useApi();
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [selectedWeeks, setSelectedWeeks] = useState(18);
+    const [isExporting, setIsExporting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState(null);
+    async function handleExport() {
+        setIsExporting(true);
+        setErrorMessage(null);
+        try {
+            const startDate = format(new Date(), 'yyyy-MM-dd');
+            const file = await api.schedule.exportCalendar({
+                group_code: groupCode,
+                start_date: startDate,
+                weeks: selectedWeeks,
+            });
+            const objectUrl = URL.createObjectURL(file);
+            const link = document.createElement('a');
+            const safeGroupCode = groupCode.replace(/[^a-zA-Z0-9_-]/g, '_');
+            link.href = objectUrl;
+            link.download = `nexora-schedule-${safeGroupCode}-${startDate}.ics`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            setDialogOpen(false);
+        }
+        catch (error) {
+            const status = error instanceof ApiClientError
+                ? error.status
+                : typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number'
+                    ? error.status
+                    : undefined;
+            if (status === 404) {
+                setErrorMessage('В расписании группы пока нет занятий для экспорта');
+            }
+            else if (status === 422) {
+                setErrorMessage('Не удалось выгрузить расписание: проверьте параметры и попробуйте снова');
+            }
+            else if (status === 429) {
+                setErrorMessage('Слишком много запросов. Попробуйте скачать расписание позже');
+            }
+            else if (status === 401) {
+                setErrorMessage('Сессия истекла. Войдите в приложение снова');
+            }
+            else {
+                setErrorMessage('Не удалось скачать расписание. Попробуйте позже');
+            }
+        }
+        finally {
+            setIsExporting(false);
+        }
+    }
+    function closeDialog() {
+        if (!isExporting)
+            setDialogOpen(false);
+    }
+    return (_jsxs(_Fragment, { children: [_jsx("div", { className: "flex justify-center md:justify-end", children: _jsx(Button, { variant: "secondary", size: "sm", icon: _jsx(Icon, { name: "download", size: 16 }), onClick: () => {
+                        setErrorMessage(null);
+                        setDialogOpen(true);
+                    }, children: "\u042D\u043A\u0441\u043F\u043E\u0440\u0442 \u0432 \u043A\u0430\u043B\u0435\u043D\u0434\u0430\u0440\u044C" }) }), _jsx(Modal, { open: dialogOpen, onClose: closeDialog, hideCloseButton: true, className: "!max-w-md !overflow-hidden !rounded-2xl !border-[#d4d4d4] !bg-[#eeeeee] dark:!border-surface-700 dark:!bg-surface-900", children: _jsxs("div", { className: "-mx-6 -my-4", children: [_jsxs("div", { className: "mx-2 mt-2 flex items-center justify-between rounded-2xl bg-white px-4 pt-5 pb-4 dark:bg-surface-800", children: [_jsx("h2", { className: "text-lg font-semibold text-surface-900 dark:text-surface-50", children: "\u042D\u043A\u0441\u043F\u043E\u0440\u0442 \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u044F" }), _jsx("button", { type: "button", onClick: closeDialog, "aria-label": "\u0417\u0430\u043A\u0440\u044B\u0442\u044C", className: "ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-surface-200 bg-surface-50 text-surface-600 transition hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-700 dark:text-surface-300 dark:hover:bg-surface-600", children: _jsx(Icon, { name: "x", size: 18 }) })] }), _jsxs("div", { className: "space-y-3 bg-[#eeeeee] px-2 py-3 dark:bg-surface-900", children: [_jsxs("section", { className: "space-y-4 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800", children: [_jsxs("div", { children: [_jsx("p", { className: "text-sm font-medium text-surface-800 dark:text-surface-100", children: "\u041D\u0430 \u0441\u043A\u043E\u043B\u044C\u043A\u043E \u043D\u0435\u0434\u0435\u043B\u044C \u0432\u044B\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435?" }), _jsx("p", { className: "mt-1 text-xs text-surface-500 dark:text-surface-400", children: "\u042D\u0442\u043E \u0440\u0430\u0437\u043E\u0432\u044B\u0439 \u0444\u0430\u0439\u043B. \u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0432 \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0438 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043D\u0435 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u0443\u044E\u0442\u0441\u044F." })] }), _jsx("div", { className: "grid grid-cols-3 gap-2", children: [4, 8, 18].map((weeks) => (_jsxs("button", { type: "button", "aria-pressed": selectedWeeks === weeks, disabled: isExporting, onClick: () => setSelectedWeeks(weeks), className: `rounded-xl border px-2 py-3 text-center transition-colors ${selectedWeeks === weeks
+                                                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300'
+                                                    : 'border-surface-200 text-surface-600 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-700'}`, children: [_jsx("span", { className: "block text-lg font-semibold", children: weeks }), _jsx("span", { className: "block text-xs", children: weeks === 4 ? 'недели' : 'недель' })] }, weeks))) }), errorMessage && (_jsx("p", { role: "alert", className: "text-sm text-danger-500", children: errorMessage }))] }), _jsxs("div", { className: "mb-2 ml-auto flex w-fit max-w-full items-center justify-end gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-surface-800", children: [_jsx(Button, { variant: "secondary", onClick: closeDialog, disabled: isExporting, children: "\u041E\u0442\u043C\u0435\u043D\u0430" }), _jsx(Button, { variant: "primary", onClick: handleExport, disabled: isExporting, children: isExporting ? 'Подготовка файла...' : 'Скачать .ics' })] })] })] }) })] }));
 }
 function useIsMobile() {
     const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
@@ -334,5 +399,5 @@ export function SchedulePage() {
     const isLoading = isMobile || viewMode === 'daily'
         ? dayScheduleQuery.isLoading
         : weekScheduleQuery.isLoading;
-    return (_jsxs("div", { children: [!isMobile && (_jsxs("div", { className: "flex items-center gap-1 mb-4", children: [_jsx(Button, { variant: viewMode === 'weekly' ? 'secondary' : 'ghost', size: "sm", onClick: () => setViewMode('weekly'), icon: _jsx(Icon, { name: "calendar", size: 16 }), children: "\u041D\u0435\u0434\u0435\u043B\u044F" }), _jsx(Button, { variant: viewMode === 'daily' ? 'secondary' : 'ghost', size: "sm", onClick: () => setViewMode('daily'), icon: _jsx(Icon, { name: "clock", size: 16 }), children: "\u0414\u0435\u043D\u044C" })] })), !groupCode ? (_jsxs("div", { className: "flex flex-col items-center justify-center py-20", children: [_jsx("p", { className: "text-surface-500 dark:text-surface-400 font-medium", children: "\u0420\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E" }), _jsx("p", { className: "text-sm text-surface-400 dark:text-surface-500 mt-1", children: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0433\u0440\u0443\u043F\u043F\u0443 \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445, \u0447\u0442\u043E\u0431\u044B \u0443\u0432\u0438\u0434\u0435\u0442\u044C \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435" })] })) : isLoading ? (_jsxs("div", { className: "flex flex-col items-center justify-center py-20", children: [_jsx("div", { className: "w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" }), _jsx("p", { className: "mt-4 text-sm text-surface-500 dark:text-surface-400", children: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u044F..." })] })) : viewMode === 'daily' ? (_jsx(DailyView, { dayOffset: dayOffset, onPrev: () => setDayOffset((d) => d - 1), onNext: () => setDayOffset((d) => d + 1), onToday: () => setDayOffset(0), daySchedule: dayData })) : (_jsx(WeeklyView, { weekOffset: weekOffset, onPrevWeek: () => setWeekOffset((w) => w - 1), onNextWeek: () => setWeekOffset((w) => w + 1), onToday: () => setWeekOffset(0), weekData: weekData }))] }));
+    return (_jsxs("div", { children: [!isMobile && (_jsxs("div", { className: "flex items-center gap-1 mb-4", children: [_jsx(Button, { variant: viewMode === 'weekly' ? 'secondary' : 'ghost', size: "sm", onClick: () => setViewMode('weekly'), icon: _jsx(Icon, { name: "calendar", size: 16 }), children: "\u041D\u0435\u0434\u0435\u043B\u044F" }), _jsx(Button, { variant: viewMode === 'daily' ? 'secondary' : 'ghost', size: "sm", onClick: () => setViewMode('daily'), icon: _jsx(Icon, { name: "clock", size: 16 }), children: "\u0414\u0435\u043D\u044C" })] })), !groupCode ? (_jsxs("div", { className: "flex flex-col items-center justify-center py-20", children: [_jsx("p", { className: "text-surface-500 dark:text-surface-400 font-medium", children: "\u0420\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E" }), _jsx("p", { className: "text-sm text-surface-400 dark:text-surface-500 mt-1", children: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0433\u0440\u0443\u043F\u043F\u0443 \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445, \u0447\u0442\u043E\u0431\u044B \u0443\u0432\u0438\u0434\u0435\u0442\u044C \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435" })] })) : isLoading ? (_jsxs("div", { className: "flex flex-col items-center justify-center py-20", children: [_jsx("div", { className: "w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" }), _jsx("p", { className: "mt-4 text-sm text-surface-500 dark:text-surface-400", children: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0440\u0430\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u044F..." })] })) : viewMode === 'daily' ? (_jsx(DailyView, { dayOffset: dayOffset, onPrev: () => setDayOffset((d) => d - 1), onNext: () => setDayOffset((d) => d + 1), onToday: () => setDayOffset(0), daySchedule: dayData })) : (_jsx(WeeklyView, { weekOffset: weekOffset, onPrevWeek: () => setWeekOffset((w) => w - 1), onNextWeek: () => setWeekOffset((w) => w + 1), onToday: () => setWeekOffset(0), weekData: weekData })), groupCode && !isLoading && (_jsx("div", { className: "mt-12", children: _jsx(ExportCalendarButton, { groupCode: groupCode }) }))] }));
 }
