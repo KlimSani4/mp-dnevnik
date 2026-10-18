@@ -122,10 +122,12 @@ export function useUpdateTask() {
         queryClient.setQueryData(key, data)
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['assignments'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['assignments'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ])
     },
   })
 }

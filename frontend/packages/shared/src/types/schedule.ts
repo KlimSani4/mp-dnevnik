@@ -27,6 +27,7 @@ export interface ScheduleEntry {
   room: string | null
   teacher: string | null
   lesson_type: string | null
+  is_session?: boolean
   week_parity: WeekParity
   subject: Subject
   overrides?: ScheduleOverride[]

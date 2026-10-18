@@ -4,7 +4,7 @@ import { format, formatDistanceToNow, differenceInMinutes, isBefore } from 'date
 import { ru } from 'date-fns/locale'
 import clsx from 'clsx'
 import { Card, Badge, ProgressBar, Button, Icon, Avatar } from '../components/ui'
-import { useCurrentUser, useTodaySchedule, useTasks, useGroupContext, useDashboard } from '@nexora/shared'
+import { useCurrentUser, useTodaySchedule, useTasks, useUpdateTask, useGroupContext, useDashboard } from '@nexora/shared'
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -19,6 +19,7 @@ interface ScheduleEntry {
   room: string | null
   teacher: string | null
   lesson_type: 'очно' | 'онлайн' | 'вебинар'
+  is_session?: boolean
   subject: { id: string; name: string; short_name?: string | null }
   link?: string
 }
@@ -164,6 +165,11 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
             <span className="font-medium text-surface-900 dark:text-surface-50 truncate">
               {entry.subject.name}
             </span>
+            {entry.is_session && (
+              <span className="shrink-0 rounded bg-warning-100 px-1.5 py-0.5 text-[9px] font-semibold text-warning-600 dark:bg-warning-500/20 dark:text-warning-500">
+                СЕССИЯ
+              </span>
+            )}
             {isActive && (
               <span className="shrink-0 w-2 h-2 rounded-full bg-success-500 animate-pulse" />
             )}
@@ -302,8 +308,18 @@ function DeadlineCard({ assignment }: { assignment: Assignment }) {
   )
 }
 
-function TaskItem({ task, onToggle }: { task: Task; onToggle: (id: string) => void }) {
+function TaskItem({ task }: { task: Task }) {
+  const updateTaskMutation = useUpdateTask()
   const isDone = task.state === 'done'
+  const disabled = updateTaskMutation.isPending
+
+  function handleToggle() {
+    const nextState = isDone ? 'todo' : 'done'
+    updateTaskMutation.mutate(
+      { assignmentId: task.assignment.id, data: { state: nextState } },
+      { onError: (error) => console.error('Failed to update task state', error) },
+    )
+  }
 
   return (
     <div
@@ -313,15 +329,25 @@ function TaskItem({ task, onToggle }: { task: Task; onToggle: (id: string) => vo
       )}
     >
       <button
-        onClick={() => onToggle(task.id)}
-        className={clsx(
-          'shrink-0 mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors',
-          isDone
-            ? 'bg-success-500 border-success-500 text-white'
-            : 'border-surface-300 dark:border-surface-600 hover:border-primary-500',
-        )}
+        type="button"
+        role="checkbox"
+        aria-checked={isDone}
+        aria-busy={disabled}
+        disabled={disabled}
+        aria-label={`${isDone ? 'Снять отметку' : 'Отметить выполненным'}: ${task.assignment.title}`}
+        onClick={handleToggle}
+        className="-ml-2 -mt-2.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-wait disabled:opacity-60"
       >
-        {isDone && <Icon name="check" size={12} strokeWidth={3} />}
+        <span
+          className={clsx(
+            'flex h-5 w-5 items-center justify-center rounded border-2 transition-colors',
+            isDone
+              ? 'border-success-500 bg-success-500 text-white'
+              : 'border-surface-300 hover:border-primary-500 dark:border-surface-600',
+          )}
+        >
+          {isDone && <Icon name="check" size={12} strokeWidth={3} />}
+        </span>
       </button>
       <div className="flex-1 min-w-0">
         <div
@@ -350,6 +376,40 @@ function TaskItem({ task, onToggle }: { task: Task; onToggle: (id: string) => vo
         </div>
       </div>
     </div>
+  )
+}
+
+function TaskList({
+  tasks,
+  completedCount,
+  totalCount,
+}: {
+  tasks: Task[]
+  completedCount: number
+  totalCount: number
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
+          Что нужно сделать
+        </h2>
+        <span className="text-xs text-surface-400 dark:text-surface-500">
+          {completedCount}/{totalCount}
+        </span>
+      </div>
+      <Card>
+        {tasks.length === 0 ? (
+          <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
+            Нет активных задач
+          </p>
+        ) : (
+          tasks.map((task) => (
+            <TaskItem key={task.id} task={task} />
+          ))
+        )}
+      </Card>
+    </>
   )
 }
 
@@ -397,6 +457,7 @@ export function HomePage() {
       room: entry.room,
       teacher: entry.teacher,
       lesson_type: isWebinar ? 'вебинар' : isOnline ? 'онлайн' : 'очно',
+      is_session: entry.is_session,
       subject: entry.subject,
       link,
     }
@@ -419,11 +480,6 @@ export function HomePage() {
     const interval = setInterval(() => setTick((t) => t + 1), 60_000)
     return () => clearInterval(interval)
   }, [])
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleToggleTask = (_id: string) => {
-    // Task toggle is handled via AssignmentsPage / Kanban
-  }
 
   // Build schedule list with windows
   const scheduleWithGaps = useMemo(() => {
@@ -586,25 +642,11 @@ export function HomePage() {
 
         {/* RIGHT COLUMN — Task list */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-              Что нужно сделать
-            </h2>
-            <span className="text-xs text-surface-400 dark:text-surface-500">
-              {completedCount}/{totalCount}
-            </span>
-          </div>
-          <Card>
-            {activeTasks.length === 0 ? (
-              <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
-                Нет активных задач
-              </p>
-            ) : (
-              activeTasks.map((task) => (
-                <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
-              ))
-            )}
-          </Card>
+          <TaskList
+            tasks={activeTasks}
+            completedCount={completedCount}
+            totalCount={totalCount}
+          />
         </div>
       </div>
 
@@ -690,25 +732,11 @@ export function HomePage() {
 
         {/* Tasks */}
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-              Что нужно сделать
-            </h2>
-            <span className="text-xs text-surface-400 dark:text-surface-500">
-              {completedCount}/{totalCount}
-            </span>
-          </div>
-          <Card>
-            {activeTasks.length === 0 ? (
-              <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
-                Нет активных задач
-              </p>
-            ) : (
-              activeTasks.map((task) => (
-                <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
-              ))
-            )}
-          </Card>
+          <TaskList
+            tasks={activeTasks}
+            completedCount={completedCount}
+            totalCount={totalCount}
+          />
         </section>
       </div>
     </div>
