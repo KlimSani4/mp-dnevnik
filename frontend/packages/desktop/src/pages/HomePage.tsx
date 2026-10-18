@@ -4,7 +4,7 @@ import { format, formatDistanceToNow, differenceInMinutes, isBefore } from 'date
 import { ru } from 'date-fns/locale'
 import clsx from 'clsx'
 import { Card, Badge, ProgressBar, Button, Icon, Avatar } from '../components/ui'
-import { useCurrentUser, useTodaySchedule, useTasks, useGroupContext, useDashboard } from '@nexora/shared'
+import { useCurrentUser, useTodaySchedule, useTasks, useUpdateTask, useGroupContext, useDashboard } from '@nexora/shared'
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -53,6 +53,18 @@ function getGreeting(): string {
   if (hour >= 12 && hour < 18) return 'Добрый день'
   if (hour >= 18 && hour < 23) return 'Добрый вечер'
   return 'Доброй ночи'
+}
+
+function getTaskUpdateErrorMessage(error: unknown): string {
+  const status =
+    typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number'
+      ? error.status
+      : undefined
+  const detail = error instanceof Error ? error.message : undefined
+
+  if (status) return `Не удалось обновить задачу (HTTP ${status}).`
+  if (detail) return `Не удалось обновить задачу: ${detail}`
+  return 'Не удалось обновить задачу. Попробуйте ещё раз.'
 }
 
 function getPairCountText(n: number): string {
@@ -302,7 +314,7 @@ function DeadlineCard({ assignment }: { assignment: Assignment }) {
   )
 }
 
-function TaskItem({ task, onToggle }: { task: Task; onToggle: (id: string) => void }) {
+function TaskItem({ task, onToggle, disabled = false }: { task: Task; onToggle: (id: string) => void; disabled?: boolean }) {
   const isDone = task.state === 'done'
 
   return (
@@ -313,15 +325,25 @@ function TaskItem({ task, onToggle }: { task: Task; onToggle: (id: string) => vo
       )}
     >
       <button
+        type="button"
+        role="checkbox"
+        aria-checked={isDone}
+        aria-busy={disabled}
+        disabled={disabled}
+        aria-label={`${isDone ? 'Снять отметку' : 'Отметить выполненным'}: ${task.assignment.title}`}
         onClick={() => onToggle(task.id)}
-        className={clsx(
-          'shrink-0 mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors',
-          isDone
-            ? 'bg-success-500 border-success-500 text-white'
-            : 'border-surface-300 dark:border-surface-600 hover:border-primary-500',
-        )}
+        className="-ml-2 -mt-2.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
-        {isDone && <Icon name="check" size={12} strokeWidth={3} />}
+        <span
+          className={clsx(
+            'flex h-5 w-5 items-center justify-center rounded border-2 transition-colors',
+            isDone
+              ? 'border-success-500 bg-success-500 text-white'
+              : 'border-surface-300 hover:border-primary-500 dark:border-surface-600',
+          )}
+        >
+          {isDone && <Icon name="check" size={12} strokeWidth={3} />}
+        </span>
       </button>
       <div className="flex-1 min-w-0">
         <div
@@ -363,6 +385,12 @@ export function HomePage() {
   const currentUserQuery = useCurrentUser()
   const todayScheduleQuery = useTodaySchedule(groupCode ?? undefined)
   const tasksQuery = useTasks({ group_id: groupId ?? '' })
+  const updateTaskMutation = useUpdateTask({ optimistic: false })
+  const [taskUpdateError, setTaskUpdateError] = useState<string | null>(null)
+  const [lastTaskToggle, setLastTaskToggle] = useState<{
+    assignmentId: string
+    state: Task['state']
+  } | null>(null)
   const dashboardQuery = useDashboard(
     groupId && groupCode ? { group_id: groupId, group_code: groupCode } : undefined
   )
@@ -408,6 +436,15 @@ export function HomePage() {
 
   const activeTasks: Task[] = tasksQuery.data ?? []
 
+  useEffect(() => {
+    if (!lastTaskToggle) return
+    const confirmedTask = activeTasks.find((task) => task.assignment.id === lastTaskToggle.assignmentId)
+    if (confirmedTask?.state === lastTaskToggle.state) {
+      setTaskUpdateError(null)
+      setLastTaskToggle(null)
+    }
+  }, [activeTasks, lastTaskToggle])
+
   // Assignments for deadlines — derive from active tasks
   const assignments: Assignment[] = activeTasks
     .filter((t) => t.state !== 'done')
@@ -420,9 +457,17 @@ export function HomePage() {
     return () => clearInterval(interval)
   }, [])
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleToggleTask = (_id: string) => {
-    // Task toggle is handled via AssignmentsPage / Kanban
+  const handleToggleTask = (taskId: string) => {
+    const task = activeTasks.find((item) => item.id === taskId)
+    if (!task) return
+
+    const nextState = task.state === 'done' ? 'todo' : 'done'
+    setTaskUpdateError(null)
+    setLastTaskToggle({ assignmentId: task.assignment.id, state: nextState })
+    updateTaskMutation.mutate(
+      { assignmentId: task.assignment.id, data: { state: nextState } },
+      { onError: (error) => setTaskUpdateError(getTaskUpdateErrorMessage(error)) },
+    )
   }
 
   // Build schedule list with windows
@@ -595,13 +640,18 @@ export function HomePage() {
             </span>
           </div>
           <Card>
+            {updateTaskMutation.isError && (
+              <p role="alert" className="mb-2 text-sm text-danger-500">
+                {taskUpdateError}
+              </p>
+            )}
             {activeTasks.length === 0 ? (
               <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
                 Нет активных задач
               </p>
             ) : (
               activeTasks.map((task) => (
-                <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
+                <TaskItem key={task.assignment.id} task={task} onToggle={handleToggleTask} disabled={updateTaskMutation.isPending} />
               ))
             )}
           </Card>
@@ -699,13 +749,18 @@ export function HomePage() {
             </span>
           </div>
           <Card>
+            {updateTaskMutation.isError && (
+              <p role="alert" className="mb-2 text-sm text-danger-500">
+                {taskUpdateError}
+              </p>
+            )}
             {activeTasks.length === 0 ? (
               <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
                 Нет активных задач
               </p>
             ) : (
               activeTasks.map((task) => (
-                <TaskItem key={task.id} task={task} onToggle={handleToggleTask} />
+                <TaskItem key={task.assignment.id} task={task} onToggle={handleToggleTask} disabled={updateTaskMutation.isPending} />
               ))
             )}
           </Card>

@@ -37,6 +37,7 @@ interface ScheduleEntry {
   room: string | null
   teacher: string | null
   lesson_type: string | null
+  is_session?: boolean
   week_parity: 'odd' | 'even' | null
   subject: { id: string; name: string; short_name: string | null; is_custom?: boolean }
   overrides?: ScheduleOverride[]
@@ -789,7 +790,7 @@ function WeeklyClassCell({
 
   return (
     <div
-      className={`card p-2.5 text-xs h-full flex flex-col overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
+      className={`card min-h-[90px] p-2.5 text-xs flex flex-col overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
     >
       {/* Hide button */}
       {!cancelled && !custom && (
@@ -809,9 +810,14 @@ function WeeklyClassCell({
         >
           <Icon name={config.icon} size={12} />
         </div>
-        <span className={`font-medium text-surface-900 dark:text-surface-50 truncate leading-tight${cancelled ? ' line-through' : ''}`}>
+        <span className={`min-w-0 flex-1 font-medium text-surface-900 dark:text-surface-50 truncate leading-tight${cancelled ? ' line-through' : ''}`}>
           {entry.subject.short_name ?? entry.subject.name}
         </span>
+        {entry.is_session && (
+          <span className="shrink-0 rounded bg-warning-100 px-1 py-0.5 text-[9px] font-semibold text-warning-600 dark:bg-warning-500/20 dark:text-warning-500">
+            СЕССИЯ
+          </span>
+        )}
         {cancelled && (
           <span className="shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
             ОТМ
@@ -827,6 +833,11 @@ function WeeklyClassCell({
       <div className="text-surface-500 dark:text-surface-400 truncate">
         {entry.lesson_type ? (lessonTypeLabels[entry.lesson_type] ?? entry.lesson_type) : 'Занятие'}
       </div>
+      {entry.is_session && (
+        <div className="text-[10px] text-primary-600 dark:text-primary-400">
+          {formatTimeDisplay(entry.start_time)}–{formatTimeDisplay(entry.end_time)}
+        </div>
+      )}
 
       <div className="mt-auto pt-1">
         {isOnline ? (
@@ -1113,25 +1124,32 @@ function WeeklyView({
                 {weekData.map((day) => {
                   const date = parse(day.schedule_date, 'yyyy-MM-dd', new Date())
                   const current = isToday(date)
-                  const entry = day.entries.find((e) => e.pair_number === pn)
+                  const entries = day.entries
+                    .filter((entry) => entry.pair_number === pn)
+                    .sort((a, b) => a.start_time.localeCompare(b.start_time))
                   const anchorId = day.entries.find((e) => !isCustomEvent(e))?.id ?? ''
 
                   return (
                     <td
                       key={`${day.schedule_date}-${pn}`}
-                      className={`p-1 align-top h-[90px] ${
+                      className={`p-1 align-top ${
                         current
                           ? 'bg-primary-50/50 dark:bg-primary-900/10'
                           : ''
                       }`}
                     >
-                      {entry ? (
-                        <WeeklyClassCell
-                          entry={entry}
-                          targetDate={day.schedule_date}
-                          anchorEntryId={anchorId}
-                        />
-                      ) : null}
+                      {entries.length > 0 && (
+                        <div className="space-y-1">
+                          {entries.map((entry) => (
+                            <WeeklyClassCell
+                              key={entry.id}
+                              entry={entry}
+                              targetDate={day.schedule_date}
+                              anchorEntryId={anchorId}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </td>
                   )
                 })}

@@ -93,7 +93,7 @@ export function useTasks(params: TaskSearchParams) {
   })
 }
 
-export function useUpdateTask() {
+export function useUpdateTask({ optimistic = true }: { optimistic?: boolean } = {}) {
   const api = useApi()
   const queryClient = useQueryClient()
 
@@ -102,6 +102,7 @@ export function useUpdateTask() {
       api.tasks.update(assignmentId, data),
     onMutate: async ({ assignmentId, data }) => {
       await queryClient.cancelQueries({ queryKey: ['tasks'] })
+      if (!optimistic) return undefined
       const snapshots = queryClient.getQueriesData<Task[]>({ queryKey: ['tasks'] })
       for (const [key, prev] of snapshots) {
         if (!prev) continue
@@ -123,9 +124,9 @@ export function useUpdateTask() {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['assignments'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['assignments'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
 }
