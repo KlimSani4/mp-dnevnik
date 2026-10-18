@@ -88,6 +88,10 @@ function isCustomEvent(entry: ScheduleEntry): boolean {
   return entry.lesson_type === 'custom' || !!entry.subject.is_custom
 }
 
+function canAnchorEvent(entry: ScheduleEntry): boolean {
+  return !isCustomEvent(entry) && !entry.is_session
+}
+
 function getClassType(entry: ScheduleEntry): ClassType {
   if (isCustomEvent(entry)) return 'custom'
   const loc = (entry.location ?? '').toLowerCase()
@@ -335,7 +339,7 @@ function useIsMobile(): boolean {
 interface AddEventModalProps {
   date: string
   onClose: () => void
-  /** The "anchor" entry_id used to attach the ADD override (first entry in day, or a dummy). */
+  /** The non-custom, non-session entry used to attach the ADD override. */
   anchorEntryId: string
 }
 
@@ -640,7 +644,7 @@ function DailyClassCard({
       className={`overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
     >
       {/* Hide button (top-right, on hover) */}
-      {!custom && !cancelled && (
+      {!custom && !cancelled && !entry.is_session && (
         <button
           onClick={handleSkip}
           disabled={skipOverride.isPending}
@@ -659,6 +663,11 @@ function DailyClassCard({
             <span className={`font-medium text-surface-900 dark:text-surface-50 truncate${cancelled ? ' line-through' : ''}`}>
               {entry.subject.name}
             </span>
+            {entry.is_session && (
+              <span className="shrink-0 rounded bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-600 dark:bg-warning-500/20 dark:text-warning-500">
+                СЕССИЯ
+              </span>
+            )}
             {cancelled && (
               <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
                 ОТМЕНЕНА
@@ -793,7 +802,7 @@ function WeeklyClassCell({
       className={`card min-h-[90px] p-2.5 text-xs flex flex-col overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
     >
       {/* Hide button */}
-      {!cancelled && !custom && (
+      {!cancelled && !custom && !entry.is_session && (
         <button
           onClick={handleSkip}
           disabled={skipOverride.isPending}
@@ -878,11 +887,15 @@ function DailyView({
 
   const dateLabel = format(targetDate, 'd MMMM, EEEE', { locale: ru })
   const entries = daySchedule?.entries ?? []
-  const sorted = [...entries].sort((a, b) => a.pair_number - b.pair_number)
+  const sorted = [...entries].sort(
+    (a, b) =>
+      a.pair_number - b.pair_number ||
+      parseTimeFlexible(a.start_time).getTime() - parseTimeFlexible(b.start_time).getTime(),
+  )
 
-  // First entry id as anchor for ADD overrides; fall back to a sentinel (won't be used)
+  // Use a regular, non-session entry so imports can replace session entries safely.
   const anchorEntryId = useMemo(
-    () => sorted.find((e) => !isCustomEvent(e))?.id ?? '',
+    () => sorted.find(canAnchorEvent)?.id ?? '',
     [sorted],
   )
 
@@ -938,7 +951,7 @@ function DailyView({
               <DailyClassCard
                 entry={entry}
                 targetDate={targetDateStr}
-                anchorEntryId={anchorEntryId || entry.id}
+                anchorEntryId={anchorEntryId || (isCustomEvent(entry) ? entry.id : '')}
               />
             </div>
           ))}
@@ -1021,7 +1034,7 @@ function WeeklyView({
   const [addModalAnchorId, setAddModalAnchorId] = useState<string>('')
 
   function openAddModal(dateStr: string, dayEntries: ScheduleEntry[]) {
-    const anchor = dayEntries.find((e) => !isCustomEvent(e))?.id ?? ''
+    const anchor = dayEntries.find(canAnchorEvent)?.id ?? ''
     if (!anchor) return
     setAddModalAnchorId(anchor)
     setAddModalForDate(dateStr)
@@ -1126,8 +1139,12 @@ function WeeklyView({
                   const current = isToday(date)
                   const entries = day.entries
                     .filter((entry) => entry.pair_number === pn)
-                    .sort((a, b) => a.start_time.localeCompare(b.start_time))
-                  const anchorId = day.entries.find((e) => !isCustomEvent(e))?.id ?? ''
+                    .sort(
+                      (a, b) =>
+                        parseTimeFlexible(a.start_time).getTime() -
+                        parseTimeFlexible(b.start_time).getTime(),
+                    )
+                  const anchorId = day.entries.find(canAnchorEvent)?.id ?? ''
 
                   return (
                     <td
@@ -1160,7 +1177,7 @@ function WeeklyView({
             <tr className="border-t border-surface-100 dark:border-surface-800">
               <td className="p-2" />
               {weekData.map((day) => {
-                const anchorExists = day.entries.some((e) => !isCustomEvent(e))
+                const anchorExists = day.entries.some(canAnchorEvent)
                 return (
                   <td key={`add-${day.schedule_date}`} className="p-1">
                     {anchorExists && (

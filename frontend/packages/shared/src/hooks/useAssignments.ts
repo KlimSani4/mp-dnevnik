@@ -93,7 +93,7 @@ export function useTasks(params: TaskSearchParams) {
   })
 }
 
-export function useUpdateTask({ optimistic = true }: { optimistic?: boolean } = {}) {
+export function useUpdateTask() {
   const api = useApi()
   const queryClient = useQueryClient()
 
@@ -102,7 +102,6 @@ export function useUpdateTask({ optimistic = true }: { optimistic?: boolean } = 
       api.tasks.update(assignmentId, data),
     onMutate: async ({ assignmentId, data }) => {
       await queryClient.cancelQueries({ queryKey: ['tasks'] })
-      if (!optimistic) return undefined
       const snapshots = queryClient.getQueriesData<Task[]>({ queryKey: ['tasks'] })
       for (const [key, prev] of snapshots) {
         if (!prev) continue
@@ -123,10 +122,12 @@ export function useUpdateTask({ optimistic = true }: { optimistic?: boolean } = 
         queryClient.setQueryData(key, data)
       }
     },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      void queryClient.invalidateQueries({ queryKey: ['assignments'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['assignments'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ])
     },
   })
 }

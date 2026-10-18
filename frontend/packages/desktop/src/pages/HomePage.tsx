@@ -19,6 +19,7 @@ interface ScheduleEntry {
   room: string | null
   teacher: string | null
   lesson_type: 'очно' | 'онлайн' | 'вебинар'
+  is_session?: boolean
   subject: { id: string; name: string; short_name?: string | null }
   link?: string
 }
@@ -53,18 +54,6 @@ function getGreeting(): string {
   if (hour >= 12 && hour < 18) return 'Добрый день'
   if (hour >= 18 && hour < 23) return 'Добрый вечер'
   return 'Доброй ночи'
-}
-
-function getTaskUpdateErrorMessage(error: unknown): string {
-  const status =
-    typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number'
-      ? error.status
-      : undefined
-  const detail = error instanceof Error ? error.message : undefined
-
-  if (status) return `Не удалось обновить задачу (HTTP ${status}).`
-  if (detail) return `Не удалось обновить задачу: ${detail}`
-  return 'Не удалось обновить задачу. Попробуйте ещё раз.'
 }
 
 function getPairCountText(n: number): string {
@@ -176,6 +165,11 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
             <span className="font-medium text-surface-900 dark:text-surface-50 truncate">
               {entry.subject.name}
             </span>
+            {entry.is_session && (
+              <span className="shrink-0 rounded bg-warning-100 px-1.5 py-0.5 text-[9px] font-semibold text-warning-600 dark:bg-warning-500/20 dark:text-warning-500">
+                СЕССИЯ
+              </span>
+            )}
             {isActive && (
               <span className="shrink-0 w-2 h-2 rounded-full bg-success-500 animate-pulse" />
             )}
@@ -314,8 +308,18 @@ function DeadlineCard({ assignment }: { assignment: Assignment }) {
   )
 }
 
-function TaskItem({ task, onToggle, disabled = false }: { task: Task; onToggle: (id: string) => void; disabled?: boolean }) {
+function TaskItem({ task }: { task: Task }) {
+  const updateTaskMutation = useUpdateTask()
   const isDone = task.state === 'done'
+  const disabled = updateTaskMutation.isPending
+
+  function handleToggle() {
+    const nextState = isDone ? 'todo' : 'done'
+    updateTaskMutation.mutate(
+      { assignmentId: task.assignment.id, data: { state: nextState } },
+      { onError: (error) => console.error('Failed to update task state', error) },
+    )
+  }
 
   return (
     <div
@@ -331,8 +335,8 @@ function TaskItem({ task, onToggle, disabled = false }: { task: Task; onToggle: 
         aria-busy={disabled}
         disabled={disabled}
         aria-label={`${isDone ? 'Снять отметку' : 'Отметить выполненным'}: ${task.assignment.title}`}
-        onClick={() => onToggle(task.id)}
-        className="-ml-2 -mt-2.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        onClick={handleToggle}
+        className="-ml-2 -mt-2.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-wait disabled:opacity-60"
       >
         <span
           className={clsx(
@@ -375,6 +379,40 @@ function TaskItem({ task, onToggle, disabled = false }: { task: Task; onToggle: 
   )
 }
 
+function TaskList({
+  tasks,
+  completedCount,
+  totalCount,
+}: {
+  tasks: Task[]
+  completedCount: number
+  totalCount: number
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
+          Что нужно сделать
+        </h2>
+        <span className="text-xs text-surface-400 dark:text-surface-500">
+          {completedCount}/{totalCount}
+        </span>
+      </div>
+      <Card>
+        {tasks.length === 0 ? (
+          <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
+            Нет активных задач
+          </p>
+        ) : (
+          tasks.map((task) => (
+            <TaskItem key={task.id} task={task} />
+          ))
+        )}
+      </Card>
+    </>
+  )
+}
+
 // ────────────────────────────────────────────────────────
 // Main Component
 // ────────────────────────────────────────────────────────
@@ -385,12 +423,6 @@ export function HomePage() {
   const currentUserQuery = useCurrentUser()
   const todayScheduleQuery = useTodaySchedule(groupCode ?? undefined)
   const tasksQuery = useTasks({ group_id: groupId ?? '' })
-  const updateTaskMutation = useUpdateTask({ optimistic: false })
-  const [taskUpdateError, setTaskUpdateError] = useState<string | null>(null)
-  const [lastTaskToggle, setLastTaskToggle] = useState<{
-    assignmentId: string
-    state: Task['state']
-  } | null>(null)
   const dashboardQuery = useDashboard(
     groupId && groupCode ? { group_id: groupId, group_code: groupCode } : undefined
   )
@@ -425,6 +457,7 @@ export function HomePage() {
       room: entry.room,
       teacher: entry.teacher,
       lesson_type: isWebinar ? 'вебинар' : isOnline ? 'онлайн' : 'очно',
+      is_session: entry.is_session,
       subject: entry.subject,
       link,
     }
@@ -435,15 +468,6 @@ export function HomePage() {
   const pairCount = scheduleEntries.length
 
   const activeTasks: Task[] = tasksQuery.data ?? []
-
-  useEffect(() => {
-    if (!lastTaskToggle) return
-    const confirmedTask = activeTasks.find((task) => task.assignment.id === lastTaskToggle.assignmentId)
-    if (confirmedTask?.state === lastTaskToggle.state) {
-      setTaskUpdateError(null)
-      setLastTaskToggle(null)
-    }
-  }, [activeTasks, lastTaskToggle])
 
   // Assignments for deadlines — derive from active tasks
   const assignments: Assignment[] = activeTasks
@@ -456,19 +480,6 @@ export function HomePage() {
     const interval = setInterval(() => setTick((t) => t + 1), 60_000)
     return () => clearInterval(interval)
   }, [])
-
-  const handleToggleTask = (taskId: string) => {
-    const task = activeTasks.find((item) => item.id === taskId)
-    if (!task) return
-
-    const nextState = task.state === 'done' ? 'todo' : 'done'
-    setTaskUpdateError(null)
-    setLastTaskToggle({ assignmentId: task.assignment.id, state: nextState })
-    updateTaskMutation.mutate(
-      { assignmentId: task.assignment.id, data: { state: nextState } },
-      { onError: (error) => setTaskUpdateError(getTaskUpdateErrorMessage(error)) },
-    )
-  }
 
   // Build schedule list with windows
   const scheduleWithGaps = useMemo(() => {
@@ -631,30 +642,11 @@ export function HomePage() {
 
         {/* RIGHT COLUMN — Task list */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-              Что нужно сделать
-            </h2>
-            <span className="text-xs text-surface-400 dark:text-surface-500">
-              {completedCount}/{totalCount}
-            </span>
-          </div>
-          <Card>
-            {updateTaskMutation.isError && (
-              <p role="alert" className="mb-2 text-sm text-danger-500">
-                {taskUpdateError}
-              </p>
-            )}
-            {activeTasks.length === 0 ? (
-              <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
-                Нет активных задач
-              </p>
-            ) : (
-              activeTasks.map((task) => (
-                <TaskItem key={task.assignment.id} task={task} onToggle={handleToggleTask} disabled={updateTaskMutation.isPending} />
-              ))
-            )}
-          </Card>
+          <TaskList
+            tasks={activeTasks}
+            completedCount={completedCount}
+            totalCount={totalCount}
+          />
         </div>
       </div>
 
@@ -740,30 +732,11 @@ export function HomePage() {
 
         {/* Tasks */}
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-              Что нужно сделать
-            </h2>
-            <span className="text-xs text-surface-400 dark:text-surface-500">
-              {completedCount}/{totalCount}
-            </span>
-          </div>
-          <Card>
-            {updateTaskMutation.isError && (
-              <p role="alert" className="mb-2 text-sm text-danger-500">
-                {taskUpdateError}
-              </p>
-            )}
-            {activeTasks.length === 0 ? (
-              <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
-                Нет активных задач
-              </p>
-            ) : (
-              activeTasks.map((task) => (
-                <TaskItem key={task.assignment.id} task={task} onToggle={handleToggleTask} disabled={updateTaskMutation.isPending} />
-              ))
-            )}
-          </Card>
+          <TaskList
+            tasks={activeTasks}
+            completedCount={completedCount}
+            totalCount={totalCount}
+          />
         </section>
       </div>
     </div>
