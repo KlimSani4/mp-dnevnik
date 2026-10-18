@@ -17,6 +17,26 @@ from src.core.models.schedule import (
 from src.core.repositories.base import BaseRepository
 
 
+def entry_applies_on(entry: ScheduleEntry, day: date) -> bool:
+    """Занятие проходит в этот день: день недели, диапазон дат и чётность недели.
+    Общая проверка для расписания на день и для выгрузки на несколько недель,
+    чтобы обе считали одинаково.
+    """
+    if entry.weekday != day.isoweekday():
+        return False
+    if entry.date_from and day < entry.date_from:
+        return False
+    if entry.date_to and day > entry.date_to:
+        return False
+    if entry.week_parity:
+        is_even_week = day.isocalendar()[1] % 2 == 0
+        if entry.week_parity == "even" and not is_even_week:
+            return False
+        if entry.week_parity == "odd" and is_even_week:
+            return False
+    return True
+
+
 class SubjectRepository(BaseRepository[Subject]):
     """Subject repository."""
 
@@ -96,28 +116,7 @@ class ScheduleEntryRepository(BaseRepository[ScheduleEntry]):
         result = await self.session.execute(stmt)
         entries = list(result.scalars().all())
 
-        # Filter by date range and week parity
-        week_number = target_date.isocalendar()[1]
-        is_even_week = week_number % 2 == 0
-
-        filtered = []
-        for entry in entries:
-            # Check date range
-            if entry.date_from and target_date < entry.date_from:
-                continue
-            if entry.date_to and target_date > entry.date_to:
-                continue
-
-            # Check week parity
-            if entry.week_parity:
-                if entry.week_parity == "even" and not is_even_week:
-                    continue
-                if entry.week_parity == "odd" and is_even_week:
-                    continue
-
-            filtered.append(entry)
-
-        return filtered
+        return [entry for entry in entries if entry_applies_on(entry, target_date)]
 
     async def delete_group_schedule(self, group_id: uuid.UUID) -> int:
         """Delete all schedule entries for a group. Returns count of deleted entries."""
@@ -238,6 +237,67 @@ class ScheduleOverrideRepository(BaseRepository[ScheduleOverride]):
             .where(
                 ScheduleEntry.group_id == group_id,
                 *conditions,
+                or_(*scope_conditions),
+            )
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_overrides_for_entries(
+        self,
+        entry_ids: list[uuid.UUID],
+        *,
+        start: date,
+        end: date,
+        student_id: uuid.UUID | None = None,
+    ) -> list[ScheduleOverride]:
+        """ОДНИИИМ запросом получаем переобпредление для записей за диапазон
+        дат.
+        Используется тот же фильтр, что и в get_entry_overrides (вынесли его отдельно,
+        см. начало файла), но сразу для всех записей:
+        дата попадает в интервал [start, end]
+        или не указана (применяется к любой дате)."""
+        if not entry_ids:
+            return []
+        # формируем узловие для WHERE в бд
+        conditions = [
+            ScheduleOverride.entry_id.in_(entry_ids),
+            ScheduleOverride.date.between(start, end) | ScheduleOverride.date.is_(None),
+        ]
+        # либо личные правки, либо то, что все видят
+        if student_id is not None:
+            conditions.append(
+                (ScheduleOverride.student_id == student_id)
+                | (ScheduleOverride.scope == OverrideScope.GROUP)
+            )
+        result = await self.session.execute(select(ScheduleOverride).where(and_(*conditions)))
+        return list(result.scalars().all())
+
+    async def get_add_overrides_between(
+        self,
+        group_id: uuid.UUID,
+        start: date,
+        end: date,
+        *,
+        author_id: uuid.UUID | None = None,
+    ) -> list[ScheduleOverride]:
+        """Аналогичен предыдущему методу, но под под персональные событя пользователей"""
+        scope_conditions = [ScheduleOverride.scope == OverrideScope.GROUP]
+        if author_id is not None:
+            scope_conditions.append(
+                (ScheduleOverride.scope == OverrideScope.PERSONAL)
+                & (ScheduleOverride.author_id == author_id)
+            )
+
+        from sqlalchemy import or_
+
+        stmt = (
+            select(ScheduleOverride)
+            .join(ScheduleEntry)
+            .where(
+                ScheduleEntry.group_id == group_id,
+                ScheduleOverride.override_type == OverrideType.ADD,
+                ScheduleOverride.date.between(start, end) | ScheduleOverride.date.is_(None),
                 or_(*scope_conditions),
             )
         )

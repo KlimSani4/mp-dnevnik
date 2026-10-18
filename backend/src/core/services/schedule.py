@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections import defaultdict
 from datetime import date, time, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,7 @@ from src.core.repositories.schedule import (
     ScheduleEntryRepository,
     ScheduleOverrideRepository,
     SubjectRepository,
+    entry_applies_on,
 )
 from src.core.schemas.schedule import (
     DayScheduleResponse,
@@ -484,24 +486,69 @@ class ScheduleService:
         *,
         user_id: uuid.UUID | None = None,
     ) -> list[DayScheduleResponse]:
-        """Get schedule for several weeks in a row (Mon-Sat), starting from the Monday of start_date.
-
-        Never calls rasp.dmami.ru: otherwise every empty day would trigger an import.
-        """
         if start_date is None:
             start_date = date.today()
         monday = start_date - timedelta(days=start_date.weekday())
+        last_day = monday + timedelta(weeks=weeks, days=-1)
+
+        group = await self.group_repo.get_by_code(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+
+        student_id: uuid.UUID | None = None
+        if user_id:
+            students = await self.student_repo.get_user_students(user_id)
+            for s in students:
+                if s.group_id == group.id:
+                    student_id = s.id
+                    break
+
+        entries = await self.entry_repo.get_group_schedule(group.id, with_subject=True)
+        overrides = await self.override_repo.get_overrides_for_entries(
+            [e.id for e in entries],
+            start=monday,
+            end=last_day,
+            student_id=student_id,
+        )
+        overrides_by_entry: dict[uuid.UUID, list[ScheduleOverride]] = defaultdict(list)
+        for override in overrides:
+            overrides_by_entry[override.entry_id].append(override)
+        add_overrides = await self.override_repo.get_add_overrides_between(
+            group.id,
+            monday,
+            last_day,
+            author_id=user_id,
+        )
 
         days: list[DayScheduleResponse] = []
         for week in range(weeks):
             for offset in range(6):  # Mon-Sat
                 day = monday + timedelta(weeks=week, days=offset)
+
+                day_entries: list[ScheduleEntryWithSubject] = []
+                for entry in entries:
+                    if not entry_applies_on(entry, day):
+                        continue
+                    is_cancelled = any(
+                        o.override_type in (OverrideType.CANCEL, OverrideType.SKIP)
+                        for o in overrides_by_entry.get(entry.id, [])
+                        if o.date is None or o.date == day
+                    )
+                    if not is_cancelled:
+                        day_entries.append(ScheduleEntryWithSubject.model_validate(entry))
+
+                for override in add_overrides:
+                    if override.date is None or override.date == day:
+                        synthetic = self._synthetic_entry_from_add_override(override)
+                        if synthetic:
+                            day_entries.append(synthetic)
+
+                day_entries.sort(key=lambda e: (e.pair_number, e.start_time))
                 days.append(
-                    await self.get_day_schedule(
-                        group_code,
-                        day,
-                        user_id=user_id,
-                        auto_import=False,
+                    DayScheduleResponse(
+                        schedule_date=day,
+                        weekday=day.isoweekday(),
+                        entries=day_entries,
                     )
                 )
 
