@@ -156,7 +156,11 @@ class ScheduleOverrideRepository(BaseRepository[ScheduleOverride]):
                 (ScheduleOverride.student_id == student_id)
                 | (ScheduleOverride.scope == OverrideScope.GROUP)
             )
-
+        else:
+            # Без студента (аноним или, например, не член группы)
+            # личные переопределения других людей не должны 
+            # применяться, ток групповые применяются.
+            conditions.append(ScheduleOverride.scope == OverrideScope.GROUP)
         stmt = select(ScheduleOverride).where(and_(*conditions))
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
