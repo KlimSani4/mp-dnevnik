@@ -10,8 +10,8 @@ import {
   type Task,
   PRIORITY_LABELS,
   PRIORITY_BADGE_VARIANT,
-  AUTHORS,
 } from '../types/assignments'
+import { useAuthorName } from '../hooks/useAuthorName'
 
 /* ─── Types ─── */
 
@@ -150,12 +150,13 @@ function AssignmentDetailModal({
     onClose()
   }, [onClose])
 
+  const authorName = useAuthorName(task?.assignment.author_id) ?? 'Неизвестный'
+
   if (!task) return null
 
   const { assignment } = task
   const actionState: TaskState = task.state === 'review' || task.state === 'done' ? task.state : 'todo'
   const overdue = isOverdue(assignment.deadline)
-  const authorName = AUTHORS[assignment.author_id] ?? 'Неизвестный'
 
   /* ─── Delete confirm dialog ─── */
   if (showDeleteConfirm) {
