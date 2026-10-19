@@ -3,39 +3,41 @@ import { clsx } from 'clsx'
 import { Card, Button } from '../components/ui'
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@nexora/shared'
 import type { Notification } from '@nexora/shared'
+import { useT, type MessageKey } from '../i18n'
 
 type FilterType = 'all' | Notification['type']
 
-const TYPE_CONFIG: Record<Notification['type'], { icon: React.ReactNode; color: string; label: string }> = {
+const TYPE_CONFIG: Record<Notification['type'], { icon: React.ReactNode; color: string; label: MessageKey }> = {
   schedule_change: {
     icon: <CalendarIcon />,
     color: 'bg-info-100 text-info-600 dark:bg-info-500/20 dark:text-info-400',
-    label: 'Расписание',
+    label: 'notif.type.schedule',
   },
   new_assignment: {
     icon: <ClipboardIcon />,
     color: 'bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400',
-    label: 'Задание',
+    label: 'notif.type.assignment',
   },
   deadline: {
     icon: <ClockIcon />,
     color: 'bg-danger-100 text-danger-600 dark:bg-danger-500/20 dark:text-danger-400',
-    label: 'Дедлайн',
+    label: 'notif.type.deadline',
   },
   vote: {
     icon: <VoteIcon />,
     color: 'bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-400',
-    label: 'Голосование',
+    label: 'notif.type.vote',
   },
   digest: {
     icon: <UsersIcon />,
     color: 'bg-success-100 text-success-600 dark:bg-success-500/20 dark:text-success-400',
-    label: 'Дайджест',
+    label: 'notif.type.digest',
   },
 }
 
 export function NotificationsPage() {
   const [filter, setFilter] = useState<FilterType>('all')
+  const { t, tp, lang } = useT()
 
   const notificationsQuery = useNotifications()
   const markReadMutation = useMarkNotificationRead()
@@ -56,12 +58,12 @@ export function NotificationsPage() {
     markReadMutation.mutate(id)
   }
 
-  const filters: { key: FilterType; label: string }[] = [
-    { key: 'all', label: 'Все' },
-    { key: 'schedule_change', label: 'Расписание' },
-    { key: 'new_assignment', label: 'Задания' },
-    { key: 'deadline', label: 'Дедлайны' },
-    { key: 'vote', label: 'Голосования' },
+  const filters: { key: FilterType; label: MessageKey }[] = [
+    { key: 'all', label: 'notif.filter.all' },
+    { key: 'schedule_change', label: 'notif.filter.schedule' },
+    { key: 'new_assignment', label: 'notif.filter.assignments' },
+    { key: 'deadline', label: 'notif.filter.deadlines' },
+    { key: 'vote', label: 'notif.filter.votes' },
   ]
 
   if (notificationsQuery.isLoading) {
@@ -70,7 +72,7 @@ export function NotificationsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-              Уведомления
+              {t('notif.title')}
             </h1>
           </div>
         </div>
@@ -88,11 +90,11 @@ export function NotificationsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-            Уведомления
+            {t('notif.title')}
           </h1>
           {unreadCount > 0 && (
             <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
-              {unreadCount} непрочитанных
+              {tp('notif.unread', unreadCount)}
             </p>
           )}
         </div>
@@ -103,7 +105,7 @@ export function NotificationsPage() {
             onClick={markAllRead}
             disabled={markAllReadMutation.isPending}
           >
-            Прочитать все
+            {t('notif.markAll')}
           </Button>
         )}
       </div>
@@ -121,7 +123,7 @@ export function NotificationsPage() {
                 : 'bg-surface-100 dark:bg-surface-700 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-600'
             )}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
@@ -155,7 +157,7 @@ export function NotificationsPage() {
                     {notif.body}
                   </p>
                   <span className="text-xs text-surface-400 dark:text-surface-500 mt-1 block">
-                    {new Date(notif.created_at).toLocaleString('ru-RU', {
+                    {new Date(notif.created_at).toLocaleString(lang === 'ru' ? 'ru-RU' : 'en-GB', {
                       day: 'numeric',
                       month: 'short',
                       hour: '2-digit',
@@ -175,7 +177,7 @@ export function NotificationsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
             </div>
-            <p className="text-surface-500 dark:text-surface-400">Уведомлений нет</p>
+            <p className="text-surface-500 dark:text-surface-400">{t('notif.empty')}</p>
           </div>
         )}
       </div>
