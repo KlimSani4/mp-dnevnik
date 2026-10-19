@@ -115,6 +115,8 @@ jobs:
       - run: pnpm --filter @nexora/shared typecheck
       - run: pnpm --filter @nexora/desktop typecheck
       - run: pnpm --filter @nexora/desktop build
+      - name: Нет тестовых данных в production-сборке
+        run: bash scripts/check-prod-bundle.sh
 
   frontend-docker:
     needs: changes
