@@ -430,7 +430,7 @@ class ScheduleService:
             if group_student is None:
                 raise AuthorizationError("Only group members can create personal overrides")
             student_id = group_student.id
- 
+
         override = await self.override_repo.create(
             entry_id=entry_id,
             scope=scope,
@@ -440,7 +440,7 @@ class ScheduleService:
             author_id=author_id,
             student_id=student_id,
         )
- 
+
         await self.session.commit()
         return override
 

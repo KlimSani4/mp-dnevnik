@@ -1,16 +1,20 @@
 """Schedule service unit tests."""
 
 import uuid
-from datetime import date, time, datetime, timezone
+from datetime import UTC, date, datetime, time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.core.models.schedule import OverrideScope, OverrideType, ScheduleEntry, ScheduleOverride, Subject
 from src.core.models.group import Group, Student, StudentRole
+from src.core.models.schedule import (
+    OverrideScope,
+    OverrideType,
+    ScheduleEntry,
+    Subject,
+)
 from src.core.services.schedule import ScheduleService
 from src.shared.exceptions import AuthorizationError, NotFoundError
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -27,8 +31,8 @@ def _make_group(code: str = "231-329") -> Group:
     g.name = code
     g.owner_id = _uuid()
     g.settings = {}
-    g.created_at = datetime.now(tz=timezone.utc)
-    g.updated_at = datetime.now(tz=timezone.utc)
+    g.created_at = datetime.now(tz=UTC)
+    g.updated_at = datetime.now(tz=UTC)
     return g
 
 
@@ -61,8 +65,8 @@ def _make_entry(group: Group, subject: Subject, weekday: int = 1) -> ScheduleEnt
     e.week_parity = None
     e.external_link = None
     e.raw_data = {}
-    e.created_at = datetime.now(tz=timezone.utc)
-    e.updated_at = datetime.now(tz=timezone.utc)
+    e.created_at = datetime.now(tz=UTC)
+    e.updated_at = datetime.now(tz=UTC)
     return e
 
 
@@ -73,8 +77,8 @@ def _make_student(user_id: uuid.UUID, group_id: uuid.UUID, role: StudentRole = S
     s.group_id = group_id
     s.role = role
     s.verified = True
-    s.created_at = datetime.now(tz=timezone.utc)
-    s.updated_at = datetime.now(tz=timezone.utc)
+    s.created_at = datetime.now(tz=UTC)
+    s.updated_at = datetime.now(tz=UTC)
     return s
 
 
@@ -330,11 +334,12 @@ class TestCreateOverride:
         subject = _make_subject(group.id)
         entry = _make_entry(group, subject)
         user_id = _uuid()
+        student = _make_student(user_id, group.id)
 
         override = MagicMock()
         svc.entry_repo.get = AsyncMock(return_value=entry)
         svc.override_repo.create = AsyncMock(return_value=override)
-        svc.student_repo.get_user_students = AsyncMock(return_value=[])
+        svc.student_repo.get_user_students = AsyncMock(return_value=[student])
 
         result = await svc.create_override(
             entry.id,
@@ -345,6 +350,109 @@ class TestCreateOverride:
 
         assert result is override
         svc.override_repo.create.assert_awaited_once()
+        # личное переопределение привязано к студенту (а не к пользователю)
+        assert svc.override_repo.create.await_args.kwargs["student_id"] == student.id
+
+    @pytest.mark.asyncio
+    async def test_personal_override_uses_student_of_entry_group(self) -> None:
+        """Пользователь в двух группах: берётся студент той группы, к которой относится занятие."""
+        session = MagicMock()
+        session.commit = AsyncMock()
+        svc = _make_service(session)
+
+        group = _make_group()
+        entry = _make_entry(group, _make_subject(group.id))
+        user_id = _uuid()
+        other_group_student = _make_student(user_id, _uuid())
+        entry_group_student = _make_student(user_id, group.id)
+
+        svc.entry_repo.get = AsyncMock(return_value=entry)
+        svc.override_repo.create = AsyncMock(return_value=MagicMock())
+        svc.student_repo.get_user_students = AsyncMock(
+            return_value=[other_group_student, entry_group_student]
+        )
+
+        await svc.create_override(
+            entry.id,
+            scope=OverrideScope.PERSONAL,
+            override_type=OverrideType.SKIP,
+            author_id=user_id,
+        )
+
+        assert svc.override_repo.create.await_args.kwargs["student_id"] == entry_group_student.id
+
+    @pytest.mark.asyncio
+    async def test_personal_override_requires_group_membership(self) -> None:
+        session = MagicMock()
+        session.commit = AsyncMock()
+        svc = _make_service(session)
+
+        group = _make_group()
+        entry = _make_entry(group, _make_subject(group.id))
+
+        svc.entry_repo.get = AsyncMock(return_value=entry)
+        svc.override_repo.create = AsyncMock()
+        svc.student_repo.get_user_students = AsyncMock(return_value=[])
+
+        with pytest.raises(AuthorizationError):
+            await svc.create_override(
+                entry.id,
+                scope=OverrideScope.PERSONAL,
+                override_type=OverrideType.SKIP,
+                author_id=_uuid(),
+            )
+
+        svc.override_repo.create.assert_not_awaited()
+        session.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_group_add_override_has_no_student(self) -> None:
+        """Группой делятся любым ADD-событием: студент не хранится, и не падаем без членства."""
+        session = MagicMock()
+        session.commit = AsyncMock()
+        svc = _make_service(session)
+
+        group = _make_group()
+        entry = _make_entry(group, _make_subject(group.id))
+
+        override = MagicMock()
+        svc.entry_repo.get = AsyncMock(return_value=entry)
+        svc.override_repo.create = AsyncMock(return_value=override)
+        svc.student_repo.get_user_students = AsyncMock(return_value=[])
+
+        result = await svc.create_override(
+            entry.id,
+            scope=OverrideScope.GROUP,
+            override_type=OverrideType.ADD,
+            author_id=_uuid(),
+        )
+
+        assert result is override
+        assert svc.override_repo.create.await_args.kwargs["student_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_group_cancel_by_starosta_has_no_student(self) -> None:
+        session = MagicMock()
+        session.commit = AsyncMock()
+        svc = _make_service(session)
+
+        group = _make_group()
+        entry = _make_entry(group, _make_subject(group.id))
+        user_id = _uuid()
+        starosta = _make_student(user_id, group.id, role=StudentRole.STAROSTA)
+
+        svc.entry_repo.get = AsyncMock(return_value=entry)
+        svc.override_repo.create = AsyncMock(return_value=MagicMock())
+        svc.student_repo.get_user_students = AsyncMock(return_value=[starosta])
+
+        await svc.create_override(
+            entry.id,
+            scope=OverrideScope.GROUP,
+            override_type=OverrideType.CANCEL,
+            author_id=user_id,
+        )
+
+        assert svc.override_repo.create.await_args.kwargs["student_id"] is None
 
     @pytest.mark.asyncio
     async def test_group_override_requires_starosta(self) -> None:
