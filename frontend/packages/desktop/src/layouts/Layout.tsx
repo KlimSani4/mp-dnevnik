@@ -2,25 +2,26 @@ import { useState, useEffect } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { useCurrentUser, useGroupContext } from '@nexora/shared'
+import { useT, type MessageKey } from '../i18n'
 
 const mainNav = [
-  { to: '/', label: 'Главная', icon: HomeIcon },
-  { to: '/schedule', label: 'Расписание', icon: CalendarIcon },
-  { to: '/assignments', label: 'Задания', icon: ClipboardIcon },
-  { to: '/subjects', label: 'Предметы', icon: BookIcon },
+  { to: '/', label: 'nav.home' as MessageKey, icon: HomeIcon },
+  { to: '/schedule', label: 'nav.schedule' as MessageKey, icon: CalendarIcon },
+  { to: '/assignments', label: 'nav.assignments' as MessageKey, icon: ClipboardIcon },
+  { to: '/subjects', label: 'nav.subjects' as MessageKey, icon: BookIcon },
 ]
 
 const secondaryNav = [
-  { to: '/settings', label: 'Настройки', icon: SettingsIcon },
-  { to: '/notifications', label: 'Уведомления', icon: BellIcon },
+  { to: '/settings', label: 'nav.settings' as MessageKey, icon: SettingsIcon },
+  { to: '/notifications', label: 'nav.notifications' as MessageKey, icon: BellIcon },
 ]
 
 const tabBarItems = [
-  { to: '/', label: 'Сегодня', icon: HomeIcon },
-  { to: '/schedule', label: 'Расписание', icon: CalendarIcon },
-  { to: '/assignments', label: 'Задания', icon: ClipboardIcon },
-  { to: '/subjects', label: 'Предметы', icon: BookIcon },
-  { to: '/settings', label: 'Ещё', icon: MoreIcon },
+  { to: '/', label: 'nav.today' as MessageKey, icon: HomeIcon },
+  { to: '/schedule', label: 'nav.schedule' as MessageKey, icon: CalendarIcon },
+  { to: '/assignments', label: 'nav.assignments' as MessageKey, icon: ClipboardIcon },
+  { to: '/subjects', label: 'nav.subjects' as MessageKey, icon: BookIcon },
+  { to: '/settings', label: 'nav.more' as MessageKey, icon: MoreIcon },
 ]
 
 export function Layout() {
@@ -28,7 +29,8 @@ export function Layout() {
   const currentUserQuery = useCurrentUser()
   const { groupCode } = useGroupContext()
   const user = currentUserQuery.data
-  const displayName = user?.display_name || 'Пользователь'
+  const { t } = useT()
+  const displayName = user?.display_name || t('layout.userFallback')
   const initial = displayName.trim()[0]?.toUpperCase() || '?'
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -57,16 +59,16 @@ export function Layout() {
           <div
             className="w-11 h-11 flex items-center justify-center cursor-pointer flex-shrink-0"
             onClick={() => setCollapsed(!collapsed)}
-            title={collapsed ? 'Развернуть' : 'Свернуть'}
+            title={collapsed ? t('layout.expand') : t('layout.collapse')}
           >
             
-            <img src="/logo_nexora.png" alt="Логотип" className="w-full h-full object-contain" />
+            <img src="/logo_nexora.png" alt={t('layout.logoAlt')} className="w-full h-full object-contain" />
 
           </div>
           {!collapsed && (
             <div className="leading-tight min-w-0 translate-y-1">
-              <div className="text-xs font-semibold text-surface-900 dark:text-surface-50 truncate">Московский</div>
-              <div className="text-xs font-semibold text-surface-900 dark:text-surface-50 truncate">Политех</div>
+              <div className="text-xs font-semibold text-surface-900 dark:text-surface-50 truncate">{t('layout.uniLine1')}</div>
+              <div className="text-xs font-semibold text-surface-900 dark:text-surface-50 truncate">{t('layout.uniLine2')}</div>
             </div>
           )}
         </div>
@@ -78,7 +80,7 @@ export function Layout() {
               key={to}
               to={to}
               end={to === '/'}
-              title={collapsed ? label : undefined}
+              title={collapsed ? t(label) : undefined}
               className={({ isActive }) =>
                 clsx(
                   'flex items-center rounded-lg text-sm font-medium transition-colors',
@@ -90,7 +92,7 @@ export function Layout() {
               }
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && label}
+              {!collapsed && t(label)}
             </NavLink>
           ))}
 
@@ -102,7 +104,7 @@ export function Layout() {
             <NavLink
               key={to}
               to={to}
-              title={collapsed ? label : undefined}
+              title={collapsed ? t(label) : undefined}
               className={({ isActive }) =>
                 clsx(
                   'flex items-center rounded-lg text-sm font-medium transition-colors',
@@ -114,7 +116,7 @@ export function Layout() {
               }
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && label}
+              {!collapsed && t(label)}
             </NavLink>
           ))}
         </nav>
@@ -125,7 +127,7 @@ export function Layout() {
             <button
               onClick={() => setDarkMode(!darkMode)}
               className="w-full flex items-center justify-center p-2 rounded-lg text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors"
-              title={darkMode ? 'Светлая тема' : 'Тёмная тема'}
+              title={darkMode ? t('layout.lightTheme') : t('layout.darkTheme')}
             >
               {darkMode ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
             </button>
@@ -141,7 +143,7 @@ export function Layout() {
                 )}
               >
                 <SunIcon className="w-3.5 h-3.5" />
-                Светлая
+                {t('layout.light')}
               </button>
               <button
                 onClick={() => setDarkMode(true)}
@@ -153,7 +155,7 @@ export function Layout() {
                 )}
               >
                 <MoonIcon className="w-3.5 h-3.5" />
-                Тёмная
+                {t('layout.dark')}
               </button>
             </div>
           )}
@@ -171,7 +173,7 @@ export function Layout() {
             {!collapsed && (
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">{displayName}</div>
-                <div className="text-xs text-surface-500 dark:text-surface-400 truncate">{groupCode ?? 'Без группы'}</div>
+                <div className="text-xs text-surface-500 dark:text-surface-400 truncate">{groupCode ?? t('layout.noGroup')}</div>
               </div>
             )}
           </div>
@@ -203,7 +205,7 @@ export function Layout() {
               }
             >
               <Icon className="w-5 h-5" />
-              <span className="text-2xs font-medium">{label}</span>
+              <span className="text-2xs font-medium">{t(label)}</span>
             </NavLink>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { format, differenceInDays, addDays, isAfter, isBefore, startOfDay } from 'date-fns'
-import { ru } from 'date-fns/locale'
+import { dateLocale, translatePlural, type MessageKey } from '../i18n'
 
 /* ─── Types ─── */
 
@@ -35,17 +35,18 @@ export interface Task {
 
 /* ─── Constants ─── */
 
-export const COLUMNS: { key: TaskState; label: string }[] = [
-  { key: 'todo', label: 'Нужно сделать' },
-  { key: 'review', label: 'На проверке' },
-  { key: 'done', label: 'Зачтено' },
+// label — ключ перевода: в компонентах выводить через t(label)
+export const COLUMNS: { key: TaskState; label: MessageKey }[] = [
+  { key: 'todo', label: 'assign.col.todo' },
+  { key: 'review', label: 'assign.col.review' },
+  { key: 'done', label: 'assign.col.done' },
 ]
 
-export const PRIORITY_LABELS: Record<Priority, string> = {
-  low: 'Низкий',
-  normal: 'Обычный',
-  high: 'Высокий',
-  urgent: 'Срочный',
+export const PRIORITY_LABELS: Record<Priority, MessageKey> = {
+  low: 'assign.priority.low',
+  normal: 'assign.priority.normal',
+  high: 'assign.priority.high',
+  urgent: 'assign.priority.urgent',
 }
 
 export const PRIORITY_BADGE_VARIANT: Record<Priority, 'default' | 'normal' | 'high' | 'urgent'> = {
@@ -55,11 +56,11 @@ export const PRIORITY_BADGE_VARIANT: Record<Priority, 'default' | 'normal' | 'hi
   urgent: 'urgent',
 }
 
-export const DEADLINE_FILTER_OPTIONS = [
-  { value: '', label: 'Все сроки' },
-  { value: 'burning', label: 'Горит на этой неделе' },
-  { value: 'this-month', label: 'В этом месяце' },
-  { value: 'hide-overdue', label: 'Без просроченных' },
+export const DEADLINE_FILTER_OPTIONS: { value: string; label: MessageKey }[] = [
+  { value: '', label: 'assign.filter.allDeadlines' },
+  { value: 'burning', label: 'assign.filter.burning' },
+  { value: 'this-month', label: 'assign.filter.thisMonth' },
+  { value: 'hide-overdue', label: 'assign.filter.hideOverdue' },
 ]
 
 export const COLUMN_COLORS: Record<string, string> = {
@@ -98,16 +99,14 @@ export function isOverdue(deadline: string): boolean {
 }
 
 export function formatDeadline(deadline: string): string {
-  return format(new Date(deadline), 'd MMMM yyyy', { locale: ru })
+  return format(new Date(deadline), 'd MMMM yyyy', { locale: dateLocale() })
 }
 
 export function daysLeft(deadline: string): number {
   return differenceInDays(startOfDay(new Date(deadline)), today())
 }
 
+/** «день / дня / дней» или «day / days» для числа n на текущем языке. */
 export function getDayWord(n: number): string {
-  const abs = Math.abs(n)
-  if (abs % 10 === 1 && abs % 100 !== 11) return 'день'
-  if ([2, 3, 4].includes(abs % 10) && ![12, 13, 14].includes(abs % 100)) return 'дня'
-  return 'дней'
+  return translatePlural('plural.dayWord', n)
 }
