@@ -29,71 +29,135 @@ async def _is_duplicate(user_id: str, notif_type: str, identifier: str) -> bool:
 
 
 async def send_upcoming_class_notifications() -> None:
-    """Send notifications to students about classes starting in 15 minutes."""
+    """Напоминание о паре за 10–15 минут (#26): аудитория или ссылка на вебинар.
+
+    Учитывает личные и групповые переопределения (скрытые и отменённые пары не напоминаем,
+    сменённую аудиторию и ссылку берём из переопределения), свои занятия (ADD),
+    выключатель в настройках уведомлений и выбранное время — 10 или 15 минут.
+    """
+    from sqlalchemy import select
+
+    from src.core.models.notification import NotificationPreference, NotificationType
+    from src.core.models.schedule import OverrideType
+    from src.core.models.user import User
     from src.core.repositories.group import GroupRepository, StudentRepository
+    from src.core.repositories.schedule import (
+        ScheduleEntryRepository,
+        ScheduleOverrideRepository,
+    )
     from src.core.repositories.user import IdentityRepository
-    from src.core.services.schedule import ScheduleService
+    from src.core.services import class_reminder as cr
     from src.gateways.telegram.bot import get_bot
     from src.gateways.telegram.deps import get_session
 
-    now = datetime.now(tz=timezone(timedelta(hours=3)))  # Moscow time
-    target_time = now + timedelta(minutes=15)
-    target_hhmm = target_time.strftime("%H:%M")
+    now = datetime.now(tz=MOSCOW_TZ)
+    today = now.date()
+
+    def soon(start: object) -> bool:
+        # Предфильтр: пара начинается в ближайшие MAX_MINUTES минут
+        return any(cr.is_due(start, now, m) for m in cr.MINUTES_CHOICES)  # type: ignore[arg-type]
 
     async with get_session() as session:
         group_repo = GroupRepository(session)
         student_repo = StudentRepository(session)
         identity_repo = IdentityRepository(session)
-        schedule_service = ScheduleService(session)
+        entry_repo = ScheduleEntryRepository(session)
+        override_repo = ScheduleOverrideRepository(session)
 
         groups = await group_repo.get_all_groups()
-
-        bot = await get_bot()
+        bot = None
 
         for group in groups:
             try:
-                today_moscow = datetime.now(tz=timezone(timedelta(hours=3))).date()
-                day_schedule = await schedule_service.get_day_schedule(group.code, today_moscow)
-                for entry in day_schedule.entries:
-                    if abs_diff_minutes(entry.start_time, target_hhmm) <= 1:
-                        lesson_id = str(getattr(entry, "id", entry.start_time))
-                        today_str = today_moscow.isoformat()
-                        dedup_id = f"{lesson_id}:{today_str}"
-                        students = await student_repo.get_group_students(group.id)
-                        for student in students:
-                            identity = await identity_repo.get_user_telegram_identity(
-                                student.user_id
+                entries = [
+                    e
+                    for e in await entry_repo.get_day_schedule(group.id, today)
+                    if soon(e.start_time)
+                ]
+                overrides = await override_repo.get_reminder_overrides(
+                    group.id, [e.id for e in entries], today
+                )
+                adds = [
+                    (o, lesson)
+                    for o in overrides
+                    if o.override_type == OverrideType.ADD
+                    and (lesson := cr.lesson_from_add(o)) is not None
+                    and soon(lesson.start)
+                ]
+                if not entries and not adds:
+                    continue
+
+                students = await student_repo.get_group_students(group.id)
+                if not students:
+                    continue
+                user_ids = [s.user_id for s in students]
+                users = {
+                    u.id: u
+                    for u in (
+                        await session.execute(select(User).where(User.id.in_(user_ids)))
+                    ).scalars()
+                }
+                disabled = set(
+                    (
+                        await session.execute(
+                            select(NotificationPreference.user_id).where(
+                                NotificationPreference.user_id.in_(user_ids),
+                                NotificationPreference.type == NotificationType.CLASS_REMINDER,
+                                NotificationPreference.enabled.is_(False),
                             )
-                            if identity and identity.external_id:
-                                if await _is_duplicate(
-                                    str(student.user_id), "class_reminder", dedup_id
-                                ):
-                                    continue
-                                subject_name = entry.subject.name if entry.subject else "Пара"
-                                location = entry.location or "—"
-                                text = (
-                                    f"🔔 <b>Через 15 минут начинается пара</b>\n\n"
-                                    f"📚 {subject_name}\n"
-                                    f"🕐 {entry.start_time}\n"
-                                    f"📍 {location}"
-                                )
-                                try:
-                                    await bot.send_message(
-                                        chat_id=int(identity.external_id),
-                                        text=text,
-                                        parse_mode="HTML",
-                                    )
-                                except Exception as e:
-                                    logger.warning(
-                                        "Failed to send notification",
-                                        extra={
-                                            "user": identity.external_id,
-                                            "error": str(e),
-                                        },
-                                    )
+                        )
+                    ).scalars()
+                )
+
+                for student in students:
+                    if student.user_id in disabled:
+                        continue
+                    user = users.get(student.user_id)
+                    minutes = cr.reminder_minutes(user.settings if user else None)
+
+                    lessons = [
+                        lesson
+                        for e in entries
+                        if cr.is_due(e.start_time, now, minutes)
+                        and (
+                            lesson := cr.lesson_from_entry(
+                                e, overrides, student_id=student.id, user_id=student.user_id
+                            )
+                        )
+                        is not None
+                    ]
+                    lessons += [
+                        lesson
+                        for o, lesson in adds
+                        if cr.is_due(lesson.start, now, minutes)
+                        and cr.visible_to(o, student_id=student.id, user_id=student.user_id)
+                    ]
+                    if not lessons:
+                        continue
+
+                    identity = await identity_repo.get_user_telegram_identity(student.user_id)
+                    if not identity or not identity.external_id:
+                        continue
+                    for lesson in lessons:
+                        dedup_id = f"{lesson.key}:{today.isoformat()}"
+                        if await _is_duplicate(str(student.user_id), "class_reminder", dedup_id):
+                            continue
+                        bot = bot or await get_bot()
+                        try:
+                            await bot.send_message(
+                                chat_id=int(identity.external_id),
+                                text=cr.format_reminder(lesson, minutes),
+                                parse_mode="HTML",
+                                disable_web_page_preview=True,
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to send class reminder",
+                                extra={"user": identity.external_id, "error": str(e)},
+                            )
             except Exception as e:
                 logger.warning(
-                    "Failed to process group schedule",
+                    "Failed to process class reminders for group",
                     extra={"group": group.code, "error": str(e)},
                 )
 
@@ -339,16 +403,6 @@ async def sync_all_schedules() -> None:
                     "Failed to sync schedule for group",
                     extra={"group": group.code, "error": str(e)},
                 )
-
-
-def abs_diff_minutes(time_str: object, target_hhmm: str) -> int:
-    """Calculate absolute difference in minutes between two HH:MM strings."""
-    try:
-        h1, m1 = map(int, str(time_str)[:5].split(":"))
-        h2, m2 = map(int, target_hhmm.split(":"))
-        return abs((h1 * 60 + m1) - (h2 * 60 + m2))
-    except Exception:
-        return 999
 
 
 def start_scheduler() -> None:

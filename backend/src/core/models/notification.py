@@ -23,6 +23,7 @@ class NotificationType(enum.StrEnum):
     DEADLINE = "deadline"
     VOTE = "vote"
     DIGEST = "digest"
+    CLASS_REMINDER = "class_reminder"  # за 10–15 минут до пары
 
 
 class Notification(Base, UUIDMixin):
