@@ -26,6 +26,7 @@ export type NotificationPreferenceType =
   | 'deadline'
   | 'vote'
   | 'digest'
+  | 'class_reminder'
 
 export interface NotificationPreference {
   type: NotificationPreferenceType

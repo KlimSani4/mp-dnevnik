@@ -247,6 +247,34 @@ class ScheduleOverrideRepository(BaseRepository[ScheduleOverride]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_reminder_overrides(
+        self,
+        group_id: uuid.UUID,
+        entry_ids: list[uuid.UUID],
+        target_date: date,
+    ) -> list[ScheduleOverride]:
+        """Все переопределения группы на дату для напоминаний о парах.
+
+        Без фильтра по студенту: переопределения записей ``entry_ids`` и все ADD-события
+        группы (и групповые, и личные). Кому что видно, решает вызывающий код.
+        """
+        from sqlalchemy import or_
+
+        targets = [ScheduleOverride.override_type == OverrideType.ADD]
+        if entry_ids:
+            targets.append(ScheduleOverride.entry_id.in_(entry_ids))
+        stmt = (
+            select(ScheduleOverride)
+            .join(ScheduleEntry)
+            .where(
+                ScheduleEntry.group_id == group_id,
+                (ScheduleOverride.date == target_date) | (ScheduleOverride.date.is_(None)),
+                or_(*targets),
+            )
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_overrides_for_entries(
         self,
         entry_ids: list[uuid.UUID],

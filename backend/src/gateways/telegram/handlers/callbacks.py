@@ -6,7 +6,7 @@ import re
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.core.services.group import GroupService
 from src.gateways.telegram.deps import get_session
@@ -71,18 +71,114 @@ async def process_group_input(message: Message, state: FSMContext) -> None:
     )
 
 
+async def _reminder_state(tg_user_id: int) -> tuple[bool, int] | None:
+    """Текущие настройки напоминания о паре: (включено, за сколько минут)."""
+    from src.core.models.notification import NotificationType
+    from src.core.repositories.notification import NotificationPreferenceRepository
+    from src.core.repositories.user import UserRepository
+    from src.core.services import class_reminder as cr
+
+    async with get_session() as session:
+        user = await UserRepository(session).get_by_identity("telegram", str(tg_user_id))
+        if not user:
+            return None
+        pref = await NotificationPreferenceRepository(session).get_preference(
+            user.id, NotificationType.CLASS_REMINDER
+        )
+        return (pref.enabled if pref else True), cr.reminder_minutes(user.settings)
+
+
+async def _update_reminder(
+    tg_user_id: int, *, enabled: bool | None = None, minutes: int | None = None
+) -> bool:
+    """Сохранить настройки напоминания. False — пользователь не найден."""
+    from src.core.models.notification import NotificationType
+    from src.core.repositories.notification import NotificationPreferenceRepository
+    from src.core.repositories.user import UserRepository
+    from src.core.services import class_reminder as cr
+
+    async with get_session() as session:
+        user = await UserRepository(session).get_by_identity("telegram", str(tg_user_id))
+        if not user:
+            return False
+        if enabled is not None:
+            await NotificationPreferenceRepository(session).upsert_preference(
+                user.id, NotificationType.CLASS_REMINDER, enabled
+            )
+        if minutes in cr.MINUTES_CHOICES:
+            # Новый dict, чтобы SQLAlchemy заметил изменение JSONB
+            user.settings = {**(user.settings or {}), cr.SETTINGS_KEY: minutes}
+        await session.commit()
+        return True
+
+
+def _notifications_view(enabled: bool, minutes: int) -> tuple[str, InlineKeyboardMarkup]:
+    """Текст и кнопки экрана «Уведомления»."""
+    from src.core.services import class_reminder as cr
+
+    status = f"включено, за {minutes} минут" if enabled else "выключено"
+    text = (
+        "🔔 <b>Уведомления</b>\n\n"
+        f"<b>Напоминание о паре:</b> {status}\n"
+        "Бот пришлёт аудиторию или ссылку на вебинар перед началом пары.\n\n"
+        "Остальные уведомления настраиваются в приложении → Настройки → Уведомления."
+    )
+    rows = [
+        [
+            InlineKeyboardButton(
+                text="🔕 Выключить напоминание" if enabled else "🔔 Включить напоминание",
+                callback_data=f"reminder:enabled:{int(not enabled)}",
+            )
+        ]
+    ]
+    if enabled:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{'✅ ' if m == minutes else ''}За {m} минут",
+                    callback_data=f"reminder:minutes:{m}",
+                )
+                for m in cr.MINUTES_CHOICES
+            ]
+        )
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 @router.callback_query(F.data == "settings:notifications")
 async def callback_settings_notifications(callback: CallbackQuery) -> None:
-    """Handle notifications settings callback."""
+    """Экран настроек уведомлений: напоминание о паре."""
     await callback.answer()
-    await callback.message.answer(  # type: ignore[union-attr]
-        "🔔 <b>Уведомления</b>\n\n"
-        "Управление уведомлениями доступно в Mini App.\n\n"
-        "Типы уведомлений:\n"
-        "• Расписание на день (утром)\n"
-        "• Напоминания о дедлайнах\n"
-        "• Изменения в расписании"
-    )
+    state = await _reminder_state(callback.from_user.id)
+    if state is None:
+        await callback.message.answer(  # type: ignore[union-attr]
+            "Сначала войдите в Nexora через /start, затем настройте уведомления."
+        )
+        return
+    text, keyboard = _notifications_view(*state)
+    await callback.message.answer(text, reply_markup=keyboard)  # type: ignore[union-attr]
+
+
+@router.callback_query(F.data.startswith("reminder:"))
+async def callback_reminder_settings(callback: CallbackQuery) -> None:
+    """Переключатель напоминания и выбор 10 / 15 минут."""
+    _, field, raw = (callback.data or "").split(":", 2)
+    kwargs: dict[str, bool | int] = {}
+    if field == "enabled" and raw in ("0", "1"):
+        kwargs["enabled"] = raw == "1"
+    elif field == "minutes" and raw.isdigit():
+        kwargs["minutes"] = int(raw)
+    else:
+        await callback.answer()
+        return
+
+    if not await _update_reminder(callback.from_user.id, **kwargs):  # type: ignore[arg-type]
+        await callback.answer("Сначала войдите через /start", show_alert=True)
+        return
+    state = await _reminder_state(callback.from_user.id)
+    await callback.answer("Сохранено")
+    if state and callback.message:
+        text, keyboard = _notifications_view(*state)
+        await callback.message.edit_text(text, reply_markup=keyboard)  # type: ignore[union-attr]
 
 
 @router.callback_query(F.data == "settings:webapp")
