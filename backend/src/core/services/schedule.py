@@ -406,8 +406,8 @@ class ScheduleService:
         scope: OverrideScope,
         override_type: OverrideType,
         value: str | None = None,
-        target_date: date | None = None, #если не указа - применяется ко всем датам этой пары
-        author_id: uuid.UUID
+        target_date: date | None = None,  # если не указа - применяется ко всем датам этой пары
+        author_id: uuid.UUID,
     ) -> ScheduleOverride:
         """Create schedule override.
         Личное переопределение (PERSONAL) привязывается к студенту автора в группе занятия
