@@ -1,6 +1,5 @@
 import clsx from 'clsx'
 import { format, formatDistanceToNow, isPast, startOfDay } from 'date-fns'
-import { ru } from 'date-fns/locale'
 import { useState, useCallback } from 'react'
 import { Modal, Button, Badge, Avatar, Icon, Input, Select } from './ui'
 import { useUpdateAssignment, useDeleteAssignment } from '@nexora/shared'
@@ -12,6 +11,7 @@ import {
   PRIORITY_BADGE_VARIANT,
 } from '../types/assignments'
 import { useAuthorName } from '../hooks/useAuthorName'
+import { dateLocale, translate, useT, type MessageKey } from '../i18n'
 
 /* ─── Types ─── */
 
@@ -25,50 +25,43 @@ interface AssignmentDetailModalProps {
 
 /* ─── Constants ─── */
 
-const STATE_LABELS: Record<TaskState, string> = {
-  todo: 'Нужно сделать',
-  review: 'На проверке',
-  done: 'Зачтено',
+const STATE_LABELS: Record<TaskState, MessageKey> = {
+  todo: 'assign.col.todo',
+  review: 'assign.col.review',
+  done: 'assign.col.done',
 }
 
-const PRIORITY_OPTIONS = [
-  { value: 'low', label: 'Низкий' },
-  { value: 'normal', label: 'Обычный' },
-  { value: 'high', label: 'Высокий' },
-  { value: 'urgent', label: 'Срочный' },
+const PRIORITY_OPTIONS: { value: Priority; label: MessageKey }[] = [
+  { value: 'low', label: 'assign.priority.low' },
+  { value: 'normal', label: 'assign.priority.normal' },
+  { value: 'high', label: 'assign.priority.high' },
+  { value: 'urgent', label: 'assign.priority.urgent' },
 ]
 
 /* ─── Helpers ─── */
 
 function formatDeadline(deadline: string): string {
-  return format(new Date(deadline), 'd MMMM yyyy, HH:mm', { locale: ru })
+  return format(new Date(deadline), 'd MMMM yyyy, HH:mm', { locale: dateLocale() })
 }
 
 function formatDeadlineShort(deadline: string): string {
-  return format(new Date(deadline), 'd MMM yyyy', { locale: ru })
+  return format(new Date(deadline), 'd MMM yyyy', { locale: dateLocale() })
 }
 
 function formatCreatedAt(date: string): string {
-  return format(new Date(date), 'd MMMM yyyy', { locale: ru })
+  return format(new Date(date), 'd MMMM yyyy', { locale: dateLocale() })
 }
 
 function getRelativeDeadline(deadline: string): string {
   const dl = startOfDay(new Date(deadline))
   if (isPast(dl)) {
-    return `Просрочено ${formatDistanceToNow(dl, { locale: ru, addSuffix: true })}`
+    return translate('assign.overdueAgo', { d: formatDistanceToNow(dl, { locale: dateLocale(), addSuffix: true }) })
   }
-  return `Осталось ${formatDistanceToNow(dl, { locale: ru })}`
+  return translate('assign.timeLeft', { d: formatDistanceToNow(dl, { locale: dateLocale() }) })
 }
 
 function isOverdue(deadline: string): boolean {
   return isPast(startOfDay(new Date(deadline)))
-}
-
-function pluralize(n: number, forms: [string, string, string]): string {
-  const abs = Math.abs(n)
-  if (abs % 10 === 1 && abs % 100 !== 11) return forms[0]
-  if ([2, 3, 4].includes(abs % 10) && ![12, 13, 14].includes(abs % 100)) return forms[1]
-  return forms[2]
 }
 
 /** Format ISO datetime → date string for <input type="date"> */
@@ -85,6 +78,7 @@ function AssignmentDetailModal({
   onVote,
   userVote = null,
 }: AssignmentDetailModalProps) {
+  const { t, tp } = useT()
   const updateAssignment = useUpdateAssignment()
   const deleteAssignment = useDeleteAssignment()
 
@@ -150,7 +144,7 @@ function AssignmentDetailModal({
     onClose()
   }, [onClose])
 
-  const authorName = useAuthorName(task?.assignment.author_id) ?? 'Неизвестный'
+  const authorName = useAuthorName(task?.assignment.author_id) ?? t('assign.unknownAuthor')
 
   if (!task) return null
 
@@ -167,10 +161,10 @@ function AssignmentDetailModal({
             <Icon name="trash-2" size={22} className="text-danger-500" />
           </div>
           <h3 className="text-base font-semibold text-surface-900 dark:text-surface-50">
-            Удалить задание?
+            {t('assign.deleteTitle')}
           </h3>
           <p className="text-sm text-surface-500 dark:text-surface-400">
-            Это действие нельзя отменить
+            {t('assign.deleteHint')}
           </p>
         </div>
         <div className="flex items-center justify-end gap-3 px-6 pb-5">
@@ -179,7 +173,7 @@ function AssignmentDetailModal({
             size="sm"
             onClick={() => setShowDeleteConfirm(false)}
           >
-            Отмена
+            {t('common.cancel')}
           </Button>
           <Button
             variant="danger"
@@ -187,7 +181,7 @@ function AssignmentDetailModal({
             icon={<Icon name="trash-2" size={16} />}
             onClick={handleDelete}
           >
-            {deleteAssignment.isPending ? 'Удаление...' : 'Удалить'}
+            {deleteAssignment.isPending ? t('common.deleting') : t('common.delete')}
           </Button>
         </div>
       </Modal>
@@ -208,7 +202,7 @@ function AssignmentDetailModal({
             {assignment.is_verified && (
               <Badge variant="verified" size="sm">
                 <Icon name="check" size={10} className="mr-0.5" />
-                Подтверждено
+                {t('assign.verified')}
               </Badge>
             )}
           </div>
@@ -234,23 +228,23 @@ function AssignmentDetailModal({
                   <span>{formatDeadlineShort(assignment.deadline)}</span>
                 </div>
                 <Badge variant={PRIORITY_BADGE_VARIANT[assignment.priority]}>
-                  {PRIORITY_LABELS[assignment.priority]}
+                  {t(PRIORITY_LABELS[assignment.priority])}
                 </Badge>
                 <Badge variant={actionState === 'done' ? 'success' : 'default'}>
-                  {STATE_LABELS[actionState]}
+                  {t(STATE_LABELS[actionState])}
                 </Badge>
               </div>
             </>
           )}
 
           {editMode && (
-            <p className="text-sm text-surface-500 dark:text-surface-400">Редактирование задания</p>
+            <p className="text-sm text-surface-500 dark:text-surface-400">{t('assign.editing')}</p>
           )}
         </div>
         <button
           type="button"
           onClick={handleClose}
-          aria-label="Закрыть"
+          aria-label={t('common.close')}
           className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-surface-200 bg-surface-50 text-surface-600 transition hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-700 dark:text-surface-300 dark:hover:bg-surface-600"
         >
           <Icon name="x" size={18} />
@@ -263,41 +257,41 @@ function AssignmentDetailModal({
           /* ─── Edit form ─── */
           <div className="space-y-4">
             <Input
-              label="Название"
+              label={t('assign.title')}
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="Название задания"
+              placeholder={t('assign.titleShortPlaceholder')}
             />
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="edit-description"
                 className="text-sm font-medium text-surface-700 dark:text-surface-300"
               >
-                Описание
+                {t('assign.description')}
               </label>
               <textarea
                 id="edit-description"
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="Что нужно сделать..."
+                placeholder={t('assign.descriptionPlaceholder')}
                 rows={4}
                 className="input resize-none"
               />
             </div>
             <Input
-              label="Дедлайн"
+              label={t('assign.deadline')}
               type="date"
               value={editDeadline}
               onChange={(e) => setEditDeadline(e.target.value)}
             />
             <Select
-              label="Приоритет"
-              options={PRIORITY_OPTIONS}
+              label={t('assign.priority')}
+              options={PRIORITY_OPTIONS.map((o) => ({ ...o, label: t(o.label) }))}
               value={editPriority}
               onChange={setEditPriority}
             />
             <Input
-              label="Ссылка на задание"
+              label={t('assign.link')}
               type="url"
               value={editLink}
               onChange={(e) => setEditLink(e.target.value)}
@@ -315,13 +309,13 @@ function AssignmentDetailModal({
                     {assignment.votes_up}
                   </span>
                   {' '}
-                  {pluralize(assignment.votes_up, ['подтвердил', 'подтвердили', 'подтвердили'])}
+                  {tp('assign.votesUp', assignment.votes_up)}
                   {' / '}
                   <span className="font-semibold text-danger-600 dark:text-danger-400">
                     {assignment.votes_down}
                   </span>
                   {' '}
-                  {pluralize(assignment.votes_down, ['оспаривает', 'оспаривают', 'оспаривают'])}
+                  {tp('assign.votesDown', assignment.votes_down)}
                 </span>
               </div>
 
@@ -334,7 +328,7 @@ function AssignmentDetailModal({
                       ? 'bg-success-100 text-success-700 dark:bg-success-500/20 dark:text-success-400 ring-1 ring-success-300 dark:ring-success-500/30'
                       : 'text-surface-500 hover:text-success-600 hover:bg-success-50 dark:hover:bg-success-500/10 dark:hover:text-success-400',
                   )}
-                  aria-label="Подтвердить"
+                  aria-label={t('assign.confirm')}
                 >
                   <Icon name="thumbs-up" size={16} />
                 </button>
@@ -346,7 +340,7 @@ function AssignmentDetailModal({
                       ? 'bg-danger-100 text-danger-700 dark:bg-danger-500/20 dark:text-danger-400 ring-1 ring-danger-300 dark:ring-danger-500/30'
                       : 'text-surface-500 hover:text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-500/10 dark:hover:text-danger-400',
                   )}
-                  aria-label="Оспорить"
+                  aria-label={t('assign.dispute')}
                 >
                   <Icon name="thumbs-down" size={16} />
                 </button>
@@ -372,7 +366,7 @@ function AssignmentDetailModal({
                     : 'text-surface-700 dark:text-surface-300',
                 )}
               >
-                {overdue ? 'Просрочено' : 'Дедлайн'}:{' '}
+                {overdue ? t('assign.overdue') : t('assign.deadline')}:{' '}
                 {formatDeadline(assignment.deadline)}
               </span>
               <span className="text-xs text-surface-400 dark:text-surface-500">
@@ -383,7 +377,7 @@ function AssignmentDetailModal({
             {/* Description */}
             <div className="rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
               <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-50 mb-2">
-                Описание
+                {t('assign.description')}
               </h3>
               <p className="text-sm text-surface-600 dark:text-surface-400 leading-relaxed whitespace-pre-wrap">
                 {assignment.description}
@@ -424,7 +418,7 @@ function AssignmentDetailModal({
                   {authorName}
                 </p>
                 <p className="text-xs text-surface-400 dark:text-surface-500">
-                  Создано {formatCreatedAt(assignment.created_at)}
+                  {t('assign.createdAt', { date: formatCreatedAt(assignment.created_at) })}
                 </p>
               </div>
             </div>
@@ -443,7 +437,7 @@ function AssignmentDetailModal({
               icon={<Icon name="pencil" size={14} />}
               onClick={enterEditMode}
             >
-              Редактировать
+              {t('common.edit')}
             </Button>
             <Button
               variant="ghost"
@@ -452,7 +446,7 @@ function AssignmentDetailModal({
               onClick={() => setShowDeleteConfirm(true)}
               className="!text-danger-500 hover:!bg-danger-50 dark:hover:!bg-danger-500/10"
             >
-              Удалить
+              {t('common.delete')}
             </Button>
           </div>
         )}
@@ -462,14 +456,14 @@ function AssignmentDetailModal({
           {editMode ? (
             <>
               <Button variant="secondary" size="sm" onClick={cancelEdit}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button
                 variant="primary"
                 size="sm"
                 onClick={handleSave}
               >
-                {updateAssignment.isPending ? 'Сохранение...' : 'Сохранить'}
+                {updateAssignment.isPending ? t('common.saving') : t('common.save')}
               </Button>
             </>
           ) : (
@@ -481,7 +475,7 @@ function AssignmentDetailModal({
                     size="sm"
                     onClick={handleClose}
                   >
-                    Отмена
+                    {t('common.cancel')}
                   </Button>
                   <Button
                     variant="primary"
@@ -489,7 +483,7 @@ function AssignmentDetailModal({
                     icon={<Icon name="chevron-right" size={16} />}
                     onClick={() => onStateChange(task.id, 'review')}
                   >
-                    Сдал
+                    {t('assign.submitted')}
                   </Button>
                 </>
               )}
@@ -502,7 +496,7 @@ function AssignmentDetailModal({
                     icon={<Icon name="x" size={16} />}
                     onClick={() => onStateChange(task.id, 'todo')}
                   >
-                    Не сдал
+                    {t('assign.notSubmitted')}
                   </Button>
                   <Button
                     variant="success"
@@ -510,7 +504,7 @@ function AssignmentDetailModal({
                     icon={<Icon name="check" size={16} />}
                     onClick={() => onStateChange(task.id, 'done')}
                   >
-                    Зачтено
+                    {t('assign.col.done')}
                   </Button>
                 </>
               )}
@@ -523,14 +517,14 @@ function AssignmentDetailModal({
                     icon={<Icon name="chevron-left" size={16} />}
                     onClick={() => onStateChange(task.id, 'todo')}
                   >
-                    Вернуть в работу
+                    {t('assign.backToWork')}
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={handleClose}
                   >
-                    Закрыть
+                    {t('common.close')}
                   </Button>
                 </>
               )}

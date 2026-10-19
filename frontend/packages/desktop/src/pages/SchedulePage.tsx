@@ -7,7 +7,7 @@ import {
   differenceInMinutes,
   parse,
 } from 'date-fns'
-import { ru } from 'date-fns/locale'
+import { dateLocale, translate, useT, type MessageKey } from '../i18n'
 import {
   useWeekSchedule,
   useDaySchedule,
@@ -72,7 +72,7 @@ const PAIR_TIMES: Record<number, { start: string; end: string }> = {
   7: { start: '19:30', end: '21:00' },
 }
 
-const WEEKDAY_NAMES_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+const WEEKDAY_NAMES_SHORT: MessageKey[] = ['wd.mon', 'wd.tue', 'wd.wed', 'wd.thu', 'wd.fri', 'wd.sat']
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -111,39 +111,46 @@ function getClassType(entry: ScheduleEntry): ClassType {
 
 const classTypeConfig: Record<
   ClassType,
-  { icon: string; label: string; bg: string; text: string; iconFill?: boolean }
+  { icon: string; label: MessageKey; bg: string; text: string; iconFill?: boolean }
 > = {
   offline: {
     icon: 'map-pin',
-    label: 'Очно',
+    label: 'home.lesson.offline',
     bg: 'bg-surface-100 dark:bg-surface-700',
     text: 'text-surface-500 dark:text-surface-400',
   },
   online: {
     icon: 'play',
-    label: 'Онлайн',
+    label: 'home.lesson.online',
     bg: 'bg-green-100 dark:bg-green-900/30',
     text: 'text-green-600 dark:text-green-400',
   },
   webinar: {
     icon: 'video',
-    label: 'Вебинар',
+    label: 'home.lesson.webinar',
     bg: 'bg-blue-100 dark:bg-blue-900/30',
     text: 'text-blue-600 dark:text-blue-400',
   },
   custom: {
     icon: 'plus-circle',
-    label: 'Своё',
+    label: 'schedule.custom',
     bg: 'bg-violet-100 dark:bg-violet-900/30',
     text: 'text-violet-600 dark:text-violet-400',
   },
 }
 
-const lessonTypeLabels: Record<string, string> = {
-  лекция: 'Лекция',
-  практика: 'Практика',
-  лаб: 'Лаб. работа',
-  custom: 'Своё занятие',
+// Ключи — значения lesson_type из расписания, значения — ключи перевода
+const lessonTypeLabels: Record<string, MessageKey> = {
+  лекция: 'schedule.type.lecture',
+  практика: 'schedule.type.practice',
+  лаб: 'schedule.type.lab',
+  custom: 'schedule.type.custom',
+}
+
+function lessonTypeLabel(type: string | null | undefined): string {
+  if (!type) return translate('schedule.type.none')
+  const key = lessonTypeLabels[type]
+  return key ? translate(key) : type
 }
 
 function parseTimeFlexible(t: string): Date {
@@ -166,13 +173,14 @@ function formatGap(entry1: ScheduleEntry, entry2: ScheduleEntry): string | null 
   const hours = Math.floor(mins / 60)
   const remainMins = mins % 60
 
-  if (hours > 0 && remainMins > 0) return `Окно ${hours}ч ${remainMins}мин`
-  if (hours > 0) return `Окно ${hours}ч`
-  return `Окно ${remainMins}мин`
+  if (hours > 0 && remainMins > 0) return translate('home.gap', { d: translate('time.hMin', { h: hours, m: remainMins }) })
+  if (hours > 0) return translate('home.gap', { d: translate('time.h', { h: hours }) })
+  return translate('home.gap', { d: translate('time.min', { m: remainMins }) })
 }
 
 function ExportCalendarButton({ groupCode }: { groupCode: string }) {
   const api = useApi()
+  const { t, tp } = useT()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedWeeks, setSelectedWeeks] = useState(18)
   const [isExporting, setIsExporting] = useState(false)
@@ -207,15 +215,15 @@ function ExportCalendarButton({ groupCode }: { groupCode: string }) {
           : undefined
 
       if (status === 404) {
-        setErrorMessage('В расписании группы пока нет занятий для экспорта')
+        setErrorMessage(t('schedule.export.empty'))
       } else if (status === 422) {
-        setErrorMessage('Не удалось выгрузить расписание: проверьте параметры и попробуйте снова')
+        setErrorMessage(t('schedule.export.badRequest'))
       } else if (status === 429) {
-        setErrorMessage('Слишком много запросов. Попробуйте скачать расписание позже')
+        setErrorMessage(t('schedule.export.rateLimit'))
       } else if (status === 401) {
-        setErrorMessage('Сессия истекла. Войдите в приложение снова')
+        setErrorMessage(t('schedule.export.expired'))
       } else {
-        setErrorMessage('Не удалось скачать расписание. Попробуйте позже')
+        setErrorMessage(t('schedule.export.failed'))
       }
     } finally {
       setIsExporting(false)
@@ -238,7 +246,7 @@ function ExportCalendarButton({ groupCode }: { groupCode: string }) {
             setDialogOpen(true)
           }}
         >
-          Экспорт в календарь
+          {t('schedule.export')}
         </Button>
       </div>
 
@@ -251,12 +259,12 @@ function ExportCalendarButton({ groupCode }: { groupCode: string }) {
         <div className="-mx-6 -my-4">
           <div className="mx-2 mt-2 flex items-center justify-between rounded-2xl bg-white px-4 pt-5 pb-4 dark:bg-surface-800">
             <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50">
-              Экспорт расписания
+              {t('schedule.exportTitle')}
             </h2>
             <button
               type="button"
               onClick={closeDialog}
-              aria-label="Закрыть"
+              aria-label={t('common.close')}
               className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-surface-200 bg-surface-50 text-surface-600 transition hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-700 dark:text-surface-300 dark:hover:bg-surface-600"
             >
               <Icon name="x" size={18} />
@@ -267,10 +275,10 @@ function ExportCalendarButton({ groupCode }: { groupCode: string }) {
             <section className="space-y-4 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
               <div>
                 <p className="text-sm font-medium text-surface-800 dark:text-surface-100">
-                  На сколько недель выгрузить расписание?
+                  {t('schedule.exportWeeks')}
                 </p>
                 <p className="mt-1 text-xs text-surface-500 dark:text-surface-400">
-                  Это разовый файл. Изменения в расписании автоматически не синхронизируются.
+                  {t('schedule.exportHint')}
                 </p>
               </div>
 
@@ -289,7 +297,7 @@ function ExportCalendarButton({ groupCode }: { groupCode: string }) {
                     }`}
                   >
                     <span className="block text-lg font-semibold">{weeks}</span>
-                    <span className="block text-xs">{weeks === 4 ? 'недели' : 'недель'}</span>
+                    <span className="block text-xs">{tp('plural.weekWord', weeks)}</span>
                   </button>
                 ))}
               </div>
@@ -303,10 +311,10 @@ function ExportCalendarButton({ groupCode }: { groupCode: string }) {
 
             <div className="mb-2 ml-auto flex w-fit max-w-full items-center justify-end gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-surface-800">
               <Button variant="secondary" onClick={closeDialog} disabled={isExporting}>
-                Отмена
+                {t('common.cancel')}
               </Button>
               <Button variant="primary" onClick={handleExport} disabled={isExporting}>
-                {isExporting ? 'Подготовка файла...' : 'Скачать .ics'}
+                {isExporting ? t('schedule.export.preparing') : t('schedule.export.download')}
               </Button>
             </div>
           </div>
@@ -345,6 +353,7 @@ interface AddEventModalProps {
 
 function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
   const createOverride = useCreateScheduleOverride()
+  const { t } = useT()
 
   const [subject, setSubject] = useState('')
   const [startTime, setStartTime] = useState('09:00')
@@ -392,7 +401,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
       <div className="w-full max-w-md mx-4 bg-white dark:bg-surface-900 rounded-2xl shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100 dark:border-surface-800">
           <h2 className="text-base font-semibold text-surface-900 dark:text-surface-50">
-            Добавить занятие
+            {t('schedule.addEvent')}
           </h2>
           <button
             onClick={onClose}
@@ -405,13 +414,13 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <div>
             <label className="block text-xs font-medium text-surface-500 dark:text-surface-400 mb-1">
-              Название *
+              {t('schedule.titleRequired')}
             </label>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Например: Дополнительное занятие"
+              placeholder={t('schedule.titlePlaceholder')}
               required
               className="w-full px-3 py-2 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg text-surface-900 dark:text-surface-50 placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
             />
@@ -420,7 +429,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-surface-500 dark:text-surface-400 mb-1">
-                Начало
+                {t('schedule.start')}
               </label>
               <select
                 value={startTime}
@@ -432,7 +441,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
                     {t.start}
                   </option>
                 ))}
-                <option value="custom">Другое</option>
+                <option value="custom">{t('schedule.other')}</option>
               </select>
               {startTime === 'custom' && (
                 <input
@@ -444,7 +453,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
             </div>
             <div>
               <label className="block text-xs font-medium text-surface-500 dark:text-surface-400 mb-1">
-                Конец
+                {t('schedule.end')}
               </label>
               <select
                 value={endTime}
@@ -456,7 +465,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
                     {t.end}
                   </option>
                 ))}
-                <option value="custom">Другое</option>
+                <option value="custom">{t('schedule.other')}</option>
               </select>
               {endTime === 'custom' && (
                 <input
@@ -470,43 +479,43 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
 
           <div>
             <label className="block text-xs font-medium text-surface-500 dark:text-surface-400 mb-1">
-              Место / ссылка
+              {t('schedule.place')}
             </label>
             <input
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="Аудитория или URL"
+              placeholder={t('schedule.placePlaceholder')}
               className="w-full px-3 py-2 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg text-surface-900 dark:text-surface-50 placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-surface-500 dark:text-surface-400 mb-1">
-              Преподаватель
+              {t('schedule.teacher')}
             </label>
             <input
               type="text"
               value={teacher}
               onChange={(e) => setTeacher(e.target.value)}
-              placeholder="Фамилия И.О."
+              placeholder={t('schedule.teacherPlaceholder')}
               className="w-full px-3 py-2 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg text-surface-900 dark:text-surface-50 placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-surface-500 dark:text-surface-400 mb-1">
-              Тип занятия
+              {t('schedule.lessonType')}
             </label>
             <select
               value={lessonType}
               onChange={(e) => setLessonType(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg text-surface-900 dark:text-surface-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40"
             >
-              <option value="">— не указан —</option>
-              <option value="лекция">Лекция</option>
-              <option value="практика">Практика</option>
-              <option value="лаб">Лаб. работа</option>
+              <option value="">{t('schedule.type.unset')}</option>
+              <option value="лекция">{t('schedule.type.lecture')}</option>
+              <option value="практика">{t('schedule.type.practice')}</option>
+              <option value="лаб">{t('schedule.type.lab')}</option>
             </select>
           </div>
 
@@ -521,7 +530,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
                   : 'text-surface-500 dark:text-surface-400'
               }`}
             >
-              Только для меня
+              {t('assign.onlyMe')}
             </button>
             <button
               type="button"
@@ -532,7 +541,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
                   : 'text-surface-500 dark:text-surface-400'
               }`}
             >
-              Для группы
+              {t('schedule.forGroup')}
             </button>
           </div>
 
@@ -544,7 +553,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
               className="flex-1"
               onClick={onClose}
             >
-              Отмена
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"
@@ -553,7 +562,7 @@ function AddEventModal({ date, onClose, anchorEntryId }: AddEventModalProps) {
               className="flex-1"
               disabled={createOverride.isPending || !subject.trim()}
             >
-              {createOverride.isPending ? 'Добавление...' : 'Добавить'}
+              {createOverride.isPending ? t('schedule.adding') : t('common.add')}
             </Button>
           </div>
         </form>
@@ -597,6 +606,7 @@ function DailyClassCard({
   targetDate: string
   anchorEntryId: string
 }) {
+  const { t } = useT()
   const skipOverride = useCreateScheduleOverride()
   const createOverride = useCreateScheduleOverride()
 
@@ -648,11 +658,11 @@ function DailyClassCard({
         <button
           onClick={handleSkip}
           disabled={skipOverride.isPending}
-          title="Скрыть занятие"
+          title={t('schedule.hideLesson')}
           className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
         >
           <Icon name="x" size={12} />
-          Скрыть
+          {t('schedule.hide')}
         </button>
       )}
 
@@ -665,17 +675,17 @@ function DailyClassCard({
             </span>
             {entry.is_session && (
               <span className="shrink-0 rounded bg-warning-100 px-1.5 py-0.5 text-[10px] font-semibold text-warning-600 dark:bg-warning-500/20 dark:text-warning-500">
-                СЕССИЯ
+                {t('home.session')}
               </span>
             )}
             {cancelled && (
               <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                ОТМЕНЕНА
+                {t('schedule.cancelled')}
               </span>
             )}
             {custom && (
               <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                МОЁ
+                {t('schedule.mine')}
               </span>
             )}
           </div>
@@ -686,7 +696,7 @@ function DailyClassCard({
               {formatTimeDisplay(entry.start_time)} – {formatTimeDisplay(entry.end_time)}
             </span>
             <Badge size="sm" variant="default">
-              {entry.lesson_type ? (lessonTypeLabels[entry.lesson_type] ?? entry.lesson_type) : 'Занятие'}
+              {lessonTypeLabel(entry.lesson_type)}
             </Badge>
           </div>
 
@@ -700,7 +710,7 @@ function DailyClassCard({
                   rel="noopener noreferrer"
                   className="text-primary-500 hover:underline truncate"
                 >
-                  {entry.room === 'Вебинар' ? 'Ссылка на вебинар' : 'Ссылка на занятие'}
+                  {entry.room === 'Вебинар' ? t('home.webinarLink') : t('schedule.lessonLink')}
                 </a>
               ) : (
                 <span className="text-surface-600 dark:text-surface-300 truncate">
@@ -725,7 +735,7 @@ function DailyClassCard({
                 icon={<Icon name="play" size={14} />}
                 onClick={() => entry.location && window.open(entry.location, '_blank')}
               >
-                ПОДКЛЮЧИТЬСЯ
+                {t('home.join')}
               </Button>
             )}
             {custom && (
@@ -736,7 +746,7 @@ function DailyClassCard({
                 disabled={createOverride.isPending}
                 onClick={handleShare}
               >
-                Поделиться с группой
+                {t('schedule.share')}
               </Button>
             )}
           </div>
@@ -775,6 +785,7 @@ function WeeklyClassCell({
   targetDate: string
   anchorEntryId: string
 }) {
+  const { t } = useT()
   const [hovered, setHovered] = useState(false)
   const skipOverride = useCreateScheduleOverride()
 
@@ -806,7 +817,7 @@ function WeeklyClassCell({
         <button
           onClick={handleSkip}
           disabled={skipOverride.isPending}
-          title="Скрыть"
+          title={t('schedule.hide')}
           className="absolute top-1 right-1 z-10 w-5 h-5 flex items-center justify-center rounded bg-surface-200/80 dark:bg-surface-600/80 text-surface-500 dark:text-surface-400 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/40 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
         >
           <Icon name="x" size={10} />
@@ -824,23 +835,23 @@ function WeeklyClassCell({
         </span>
         {entry.is_session && (
           <span className="shrink-0 rounded bg-warning-100 px-1 py-0.5 text-[9px] font-semibold text-warning-600 dark:bg-warning-500/20 dark:text-warning-500">
-            СЕССИЯ
+            {t('home.session')}
           </span>
         )}
         {cancelled && (
           <span className="shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
-            ОТМ
+            {t('schedule.cancelledShort')}
           </span>
         )}
         {custom && (
           <span className="shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-            МОЁ
+            {t('schedule.mine')}
           </span>
         )}
       </div>
 
       <div className="text-surface-500 dark:text-surface-400 truncate">
-        {entry.lesson_type ? (lessonTypeLabels[entry.lesson_type] ?? entry.lesson_type) : 'Занятие'}
+        {lessonTypeLabel(entry.lesson_type)}
       </div>
       {entry.is_session && (
         <div className="text-[10px] text-primary-600 dark:text-primary-400">
@@ -850,7 +861,7 @@ function WeeklyClassCell({
 
       <div className="mt-auto pt-1">
         {isOnline ? (
-          <span className="text-primary-500 truncate block">{config.label}</span>
+          <span className="text-primary-500 truncate block">{t(config.label)}</span>
         ) : (
           <span className="text-surface-500 dark:text-surface-400 truncate block">
             {entry.room}
@@ -881,11 +892,12 @@ function DailyView({
   onToday: () => void
   daySchedule?: DaySchedule
 }) {
+  const { t } = useT()
   const targetDate = addDays(new Date(), dayOffset)
   const targetDateStr = format(targetDate, 'yyyy-MM-dd')
   const [showAddModal, setShowAddModal] = useState(false)
 
-  const dateLabel = format(targetDate, 'd MMMM, EEEE', { locale: ru })
+  const dateLabel = format(targetDate, 'd MMMM, EEEE', { locale: dateLocale() })
   const entries = daySchedule?.entries ?? []
   const sorted = [...entries].sort(
     (a, b) =>
@@ -905,7 +917,7 @@ function DailyView({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-            Расписание
+            {t('nav.schedule')}
           </h1>
           <p className="text-sm text-surface-500 dark:text-surface-400 mt-1 capitalize">
             {dateLabel}
@@ -913,7 +925,7 @@ function DailyView({
         </div>
         {dayOffset !== 0 && (
           <Button variant="ghost" size="sm" onClick={onToday}>
-            Сегодня
+            {t('nav.today')}
           </Button>
         )}
       </div>
@@ -922,7 +934,7 @@ function DailyView({
       <div className="flex items-center gap-2 mb-5">
         <Button variant="ghost" size="sm" iconOnly icon={<Icon name="chevron-left" size={18} />} onClick={onPrev} />
         <span className="text-sm font-medium text-surface-700 dark:text-surface-200 min-w-[120px] text-center capitalize">
-          {format(targetDate, 'EEEE', { locale: ru })}
+          {format(targetDate, 'EEEE', { locale: dateLocale() })}
         </span>
         <Button variant="ghost" size="sm" iconOnly icon={<Icon name="chevron-right" size={18} />} onClick={onNext} />
       </div>
@@ -934,10 +946,10 @@ function DailyView({
             <Icon name="calendar" size={40} className="mx-auto" />
           </div>
           <p className="text-surface-500 dark:text-surface-400 font-medium">
-            Нет занятий
+            {t('schedule.noLessons')}
           </p>
           <p className="text-sm text-surface-400 dark:text-surface-500 mt-1">
-            {isToday(targetDate) ? 'Сегодня выходной!' : 'В этот день занятий нет'}
+            {isToday(targetDate) ? t('schedule.dayOff') : t('schedule.noLessonsDay')}
           </p>
         </Card>
       ) : (
@@ -967,7 +979,7 @@ function DailyView({
             icon={<Icon name="plus" size={16} />}
             onClick={() => setShowAddModal(true)}
           >
-            Добавить занятие
+            {t('schedule.addEvent')}
           </Button>
         </div>
       )}
@@ -1014,15 +1026,16 @@ function WeeklyView({
   onToday: () => void
   weekData: DaySchedule[]
 }) {
+  const { t } = useT()
   const today = new Date()
   const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 })
   const targetWeekStart = addDays(currentWeekStart, weekOffset * 7)
   const targetWeekEnd = addDays(targetWeekStart, 5)
 
-  const weekLabel = `${format(targetWeekStart, 'd', { locale: ru })}–${format(
+  const weekLabel = `${format(targetWeekStart, 'd', { locale: dateLocale() })}–${format(
     targetWeekEnd,
     'd MMMM',
-    { locale: ru },
+    { locale: dateLocale() },
   )}`
 
   const weekParity = getWeekParity(weekOffset)
@@ -1045,12 +1058,12 @@ function WeeklyView({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-          Расписание
+          {t('nav.schedule')}
         </h1>
         <div className="flex items-center gap-2">
           {weekOffset !== 0 && (
             <Button variant="ghost" size="sm" onClick={onToday}>
-              Сегодня
+              {t('nav.today')}
             </Button>
           )}
           <Button
@@ -1075,7 +1088,7 @@ function WeeklyView({
             variant={weekParity === 'Числитель' ? 'success' : 'default'}
             className="ml-1 shrink-0"
           >
-            {weekParity}
+            {weekParity === 'Числитель' ? t('schedule.numerator') : t('schedule.denominator')}
           </Badge>
         </div>
       </div>
@@ -1086,7 +1099,7 @@ function WeeklyView({
           <thead>
             <tr>
               <th className="w-[80px] p-2 text-xs font-medium text-surface-400 dark:text-surface-500 text-left">
-                Время
+                {t('schedule.time')}
               </th>
               {weekData.map((day, idx) => {
                 const date = parse(day.schedule_date, 'yyyy-MM-dd', new Date())
@@ -1107,7 +1120,7 @@ function WeeklyView({
                           : 'text-surface-400 dark:text-surface-500'
                       }`}
                     >
-                      {WEEKDAY_NAMES_SHORT[idx]}
+                      {t(WEEKDAY_NAMES_SHORT[idx])}
                     </div>
                     <div
                       className={`text-sm font-semibold mt-0.5 ${
@@ -1183,11 +1196,11 @@ function WeeklyView({
                     {anchorExists && (
                       <button
                         onClick={() => openAddModal(day.schedule_date, day.entries)}
-                        title="Добавить занятие"
+                        title={t('schedule.addEvent')}
                         className="w-full py-1 rounded-lg text-xs text-surface-400 dark:text-surface-600 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors flex items-center justify-center gap-1"
                       >
                         <Icon name="plus" size={12} />
-                        <span>Добавить</span>
+                        <span>{t('common.add')}</span>
                       </button>
                     )}
                   </td>
@@ -1214,6 +1227,7 @@ function WeeklyView({
 // ---------------------------------------------------------------------------
 
 export function SchedulePage() {
+  const { t } = useT()
   const isMobile = useIsMobile()
 
   const [viewMode, setViewMode] = useState<'daily' | 'weekly'>(
@@ -1253,7 +1267,7 @@ export function SchedulePage() {
             onClick={() => setViewMode('weekly')}
             icon={<Icon name="calendar" size={16} />}
           >
-            Неделя
+            {t('schedule.week')}
           </Button>
           <Button
             variant={viewMode === 'daily' ? 'secondary' : 'ghost'}
@@ -1261,7 +1275,7 @@ export function SchedulePage() {
             onClick={() => setViewMode('daily')}
             icon={<Icon name="clock" size={16} />}
           >
-            День
+            {t('schedule.day')}
           </Button>
         </div>
       )}
@@ -1269,17 +1283,17 @@ export function SchedulePage() {
       {!groupCode ? (
         <div className="flex flex-col items-center justify-center py-20">
           <p className="text-surface-500 dark:text-surface-400 font-medium">
-            Расписание не загружено
+            {t('schedule.notLoaded')}
           </p>
           <p className="text-sm text-surface-400 dark:text-surface-500 mt-1">
-            Выберите группу в настройках, чтобы увидеть расписание
+            {t('schedule.chooseGroup')}
           </p>
         </div>
       ) : isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
           <p className="mt-4 text-sm text-surface-500 dark:text-surface-400">
-            Загрузка расписания...
+            {t('schedule.loading')}
           </p>
         </div>
       ) : viewMode === 'daily' ? (

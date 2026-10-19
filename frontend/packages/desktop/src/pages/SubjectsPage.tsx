@@ -11,6 +11,7 @@ import {
   useTasks,
 } from '@nexora/shared'
 import type { Subject } from '@nexora/shared'
+import { useT } from '../i18n'
 
 interface AssignmentGroup {
   type: string
@@ -59,6 +60,7 @@ interface RequirementsEditorProps {
 
 function RequirementsEditor({ subjectId, groupCode, currentTotal, onClose }: RequirementsEditorProps) {
   const updateRequirements = useUpdateSubjectRequirements()
+  const { t } = useT()
   const [total, setTotal] = useState(String(currentTotal ?? ''))
 
   const handleSave = useCallback(() => {
@@ -78,13 +80,13 @@ function RequirementsEditor({ subjectId, groupCode, currentTotal, onClose }: Req
       className="mt-2 p-3 rounded-lg border border-primary-200 dark:border-primary-500/30 bg-primary-50/50 dark:bg-primary-500/5 space-y-2"
       onClick={(e) => e.preventDefault()}
     >
-      <p className="text-xs font-medium text-surface-600 dark:text-surface-400">Требуемое число заданий</p>
+      <p className="text-xs font-medium text-surface-600 dark:text-surface-400">{t('subjects.requiredCount')}</p>
       <div className="flex items-center gap-2">
         <Input
           type="number"
           value={total}
           onChange={(e) => setTotal(e.target.value)}
-          placeholder="например: 8"
+          placeholder={t('subjects.requiredPlaceholder')}
           className="!py-1 !text-sm w-28"
         />
         <Button
@@ -92,10 +94,10 @@ function RequirementsEditor({ subjectId, groupCode, currentTotal, onClose }: Req
           size="sm"
           onClick={handleSave}
         >
-          {updateRequirements.isPending ? '...' : 'Сохранить'}
+          {updateRequirements.isPending ? '...' : t('common.save')}
         </Button>
         <Button variant="ghost" size="sm" onClick={onClose}>
-          Отмена
+          {t('common.cancel')}
         </Button>
       </div>
     </div>
@@ -106,6 +108,7 @@ function RequirementsEditor({ subjectId, groupCode, currentTotal, onClose }: Req
 
 export function SubjectsPage() {
   const { groupId, groupCode } = useGroupContext()
+  const { t, tp } = useT()
   const subjectsQuery = useGroupSubjects(groupCode ?? undefined)
   const tasksQuery = useTasks({ group_id: groupId ?? '' })
   const myGroupsQuery = useMyGroups()
@@ -141,14 +144,14 @@ export function SubjectsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-              Мои предметы
+              {t('subjects.title')}
             </h1>
           </div>
         </div>
         <div className="text-center py-20">
-          <p className="text-surface-500 dark:text-surface-400 font-medium">Группа не выбрана</p>
+          <p className="text-surface-500 dark:text-surface-400 font-medium">{t('subjects.noGroup')}</p>
           <p className="text-sm text-surface-400 dark:text-surface-500 mt-1">
-            Укажите группу в настройках, чтобы увидеть предметы
+            {t('subjects.noGroupHint')}
           </p>
         </div>
       </div>
@@ -161,7 +164,7 @@ export function SubjectsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-              Мои предметы
+              {t('subjects.title')}
             </h1>
           </div>
         </div>
@@ -179,21 +182,21 @@ export function SubjectsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-            Мои предметы
+            {t('subjects.title')}
           </h1>
           <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
             {subjects.length > 0
-              ? `Группа ${groupCode} — ${subjects.length} предметов`
-              : `Группа ${groupCode}`}
+              ? tp('subjects.groupCount', subjects.length, { group: groupCode ?? '' })
+              : t('subjects.group', { group: groupCode ?? '' })}
           </p>
         </div>
       </div>
 
       {subjects.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-surface-500 dark:text-surface-400 font-medium">Предметы не найдены</p>
+          <p className="text-surface-500 dark:text-surface-400 font-medium">{t('subjects.empty')}</p>
           <p className="text-sm text-surface-400 dark:text-surface-500 mt-1">
-            Список предметов для вашей группы пока пуст
+            {t('subjects.emptyHint')}
           </p>
         </div>
       ) : (
@@ -205,7 +208,7 @@ export function SubjectsPage() {
             const done = taskStats.done
             const progress = reqTotal > 0 ? Math.round((done / reqTotal) * 100) : 0
             const admitted = isAdmitted(progress)
-            const assignmentsLabel = reqTotal > 0 ? `${done}/${reqTotal} заданий` : (taskStats.total > 0 ? `${done}/${taskStats.total} заданий` : '')
+            const assignmentsLabel = reqTotal > 0 ? t('subjects.progress', { done, total: reqTotal }) : (taskStats.total > 0 ? t('subjects.progress', { done, total: taskStats.total }) : '')
             const isEditing = editingSubjectId === subject.id
 
             return (
@@ -227,7 +230,7 @@ export function SubjectsPage() {
                           </h3>
                           {subject.is_custom && (
                             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-700 text-surface-500 dark:text-surface-400 shrink-0">
-                              личный
+                              {t('subjects.personal')}
                             </span>
                           )}
                         </div>
@@ -252,13 +255,13 @@ export function SubjectsPage() {
                                 ? 'text-primary-500 bg-primary-50 dark:bg-primary-500/10'
                                 : 'text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 opacity-0 group-hover:opacity-100',
                             )}
-                            title="Установить требования"
+                            title={t('subjects.setRequirements')}
                           >
                             <Icon name="settings" size={14} />
                           </button>
                         )}
                         <Badge variant={admitted ? 'success' : 'urgent'}>
-                          {admitted ? 'ДОПУСК' : 'НЕДОПУСК'}
+                          {admitted ? t('subjects.admitted') : t('subjects.notAdmitted')}
                         </Badge>
                         <Icon
                           name="chevron-right"
@@ -320,7 +323,7 @@ export function SubjectsPage() {
                     {/* Show set requirements if no assignments but total is set */}
                     {!subject.assignments?.length && requirements.total != null && !isEditing && (
                       <p className="mt-2 text-xs text-surface-400 dark:text-surface-500">
-                        Требуется: {requirements.total} заданий
+                        {tp('subjects.required', requirements.total)}
                       </p>
                     )}
                   </Card>

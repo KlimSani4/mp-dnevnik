@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { format, formatDistanceToNow, differenceInMinutes, isBefore } from 'date-fns'
-import { ru } from 'date-fns/locale'
+import { dateLocale, translate, translatePlural, useT, type MessageKey } from '../i18n'
 import clsx from 'clsx'
 import { Card, Badge, ProgressBar, Button, Icon, Avatar } from '../components/ui'
 import { useCurrentUser, useTodaySchedule, useTasks, useUpdateTask, useGroupContext, useDashboard } from '@nexora/shared'
@@ -50,20 +50,15 @@ interface Task {
 
 function getGreeting(): string {
   const hour = new Date().getHours()
-  if (hour >= 5 && hour < 12) return 'Доброе утро'
-  if (hour >= 12 && hour < 18) return 'Добрый день'
-  if (hour >= 18 && hour < 23) return 'Добрый вечер'
-  return 'Доброй ночи'
+  if (hour >= 5 && hour < 12) return translate('home.greeting.morning')
+  if (hour >= 12 && hour < 18) return translate('home.greeting.day')
+  if (hour >= 18 && hour < 23) return translate('home.greeting.evening')
+  return translate('home.greeting.night')
 }
 
 function getPairCountText(n: number): string {
-  if (n === 0) return 'Завтра пар нет, выспись'
-  const lastDigit = n % 10
-  const lastTwo = n % 100
-  if (lastTwo >= 11 && lastTwo <= 14) return `Сегодня ${n} пар`
-  if (lastDigit === 1) return `Сегодня ${n} пара`
-  if (lastDigit >= 2 && lastDigit <= 4) return `Сегодня ${n} пары`
-  return `Сегодня ${n} пар`
+  if (n === 0) return translate('onb.noLessons')
+  return translatePlural('home.pairsToday', n)
 }
 
 function parseTime(timeStr: string): Date {
@@ -83,45 +78,45 @@ function formatTime(timeStr: string): string {
 function formatWindowDuration(minutes: number): string {
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  if (h === 0) return `${m} мин`
-  if (m === 0) return `${h}ч`
-  return `${h}ч ${m}мин`
+  if (h === 0) return translate('time.min', { m })
+  if (m === 0) return translate('time.h', { h })
+  return translate('time.hMin', { h, m })
 }
 
 type LessonIconType = 'очно' | 'онлайн' | 'вебинар'
 
 const lessonTypeConfig: Record<
   LessonIconType,
-  { icon: string; iconBg: string; label: string }
+  { icon: string; iconBg: string; label: MessageKey }
 > = {
   'очно': {
     icon: 'map-pin',
     iconBg: 'bg-surface-100 text-surface-500 dark:bg-surface-700 dark:text-surface-400',
-    label: 'Очно',
+    label: 'home.lesson.offline',
   },
   'онлайн': {
     icon: 'play',
     iconBg: 'bg-success-50 text-success-600 dark:bg-success-900/30 dark:text-success-400',
-    label: 'Онлайн',
+    label: 'home.lesson.online',
   },
   'вебинар': {
     icon: 'video',
     iconBg: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-    label: 'Вебинар',
+    label: 'home.lesson.webinar',
   },
 }
 
-const priorityToBadge: Record<Assignment['priority'], { variant: 'urgent' | 'high' | 'normal' | 'success'; label: string }> = {
-  urgent: { variant: 'urgent', label: 'Срочно' },
-  high: { variant: 'high', label: 'Высокий' },
-  normal: { variant: 'normal', label: 'Обычный' },
-  low: { variant: 'success', label: 'Низкий' },
+const priorityToBadge: Record<Assignment['priority'], { variant: 'urgent' | 'high' | 'normal' | 'success'; label: MessageKey }> = {
+  urgent: { variant: 'urgent', label: 'home.priority.urgent' },
+  high: { variant: 'high', label: 'assign.priority.high' },
+  normal: { variant: 'normal', label: 'assign.priority.normal' },
+  low: { variant: 'success', label: 'assign.priority.low' },
 }
 
-const taskStateLabels: Record<Task['state'], string> = {
-  todo: 'Сделать',
-  review: 'На проверке',
-  done: 'Готово',
+const taskStateLabels: Record<Task['state'], MessageKey> = {
+  todo: 'home.state.todo',
+  review: 'assign.col.review',
+  done: 'home.state.done',
 }
 
 const taskStateColors: Record<Task['state'], string> = {
@@ -135,6 +130,7 @@ const taskStateColors: Record<Task['state'], string> = {
 // ────────────────────────────────────────────────────────
 
 function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
+  const { t } = useT()
   const config = lessonTypeConfig[entry.lesson_type]
   const isOnline = entry.lesson_type === 'онлайн' || entry.lesson_type === 'вебинар'
   const now = new Date()
@@ -167,7 +163,7 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
             </span>
             {entry.is_session && (
               <span className="shrink-0 rounded bg-warning-100 px-1.5 py-0.5 text-[9px] font-semibold text-warning-600 dark:bg-warning-500/20 dark:text-warning-500">
-                СЕССИЯ
+                {t('home.session')}
               </span>
             )}
             {isActive && (
@@ -186,13 +182,13 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
                   rel="noopener noreferrer"
                   className="hover:underline"
                 >
-                  {entry.lesson_type === 'вебинар' ? 'Ссылка на вебинар' : 'Ссылка на лекцию'}
+                  {entry.lesson_type === 'вебинар' ? t('home.webinarLink') : t('home.lectureLink')}
                 </a>
               ) : (
-                config.label
+                t(config.label)
               )
             ) : (
-              [entry.room, entry.location].filter(Boolean).join(', ') || 'Аудитория не указана'
+              [entry.room, entry.location].filter(Boolean).join(', ') || t('home.noRoom')
             )}
           </div>
           {entry.teacher && (
@@ -212,8 +208,8 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
                 className="w-full"
               >
                 {isActive
-                  ? 'ПОДКЛЮЧИТЬСЯ'
-                  : `ПОДКЛЮЧИТЬСЯ (${minutesUntilStart} мин)`}
+                  ? t('home.join')
+                  : t('home.joinIn', { m: minutesUntilStart })}
               </Button>
             </div>
           )}
@@ -224,11 +220,12 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
 }
 
 function WindowGap({ minutes }: { minutes: number }) {
+  const { t } = useT()
   return (
     <div className="flex items-center gap-2 py-1 px-2">
       <div className="flex-1 border-t border-dashed border-surface-300 dark:border-surface-600" />
       <span className="text-xs text-surface-400 dark:text-surface-500 whitespace-nowrap">
-        Окно {formatWindowDuration(minutes)}
+        {t('home.gap', { d: formatWindowDuration(minutes) })}
       </span>
       <div className="flex-1 border-t border-dashed border-surface-300 dark:border-surface-600" />
     </div>
@@ -236,6 +233,7 @@ function WindowGap({ minutes }: { minutes: number }) {
 }
 
 function DeadlineCard({ assignment }: { assignment: Assignment }) {
+  const { t } = useT()
   const deadline = new Date(assignment.deadline)
   const now = new Date()
   const isOverdue = isBefore(deadline, now)
@@ -245,11 +243,11 @@ function DeadlineCard({ assignment }: { assignment: Assignment }) {
 
   let timeLabel: string
   if (isOverdue) {
-    timeLabel = 'Просрочено'
+    timeLabel = t('assign.overdue')
   } else if (hoursLeft < 24) {
-    timeLabel = `${hoursLeft}ч`
+    timeLabel = t('time.h', { h: hoursLeft })
   } else {
-    timeLabel = formatDistanceToNow(deadline, { locale: ru, addSuffix: false })
+    timeLabel = formatDistanceToNow(deadline, { locale: dateLocale(), addSuffix: false })
   }
 
   return (
@@ -259,12 +257,12 @@ function DeadlineCard({ assignment }: { assignment: Assignment }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Badge variant={badge.variant} size="sm">
-                {badge.label}
+                {t(badge.label)}
               </Badge>
               {assignment.is_verified && (
                 <Badge variant="verified" size="sm">
                   <Icon name="check" size={10} className="mr-0.5" />
-                  Проверено
+                  {t('home.verified')}
                 </Badge>
               )}
             </div>
@@ -299,7 +297,7 @@ function DeadlineCard({ assignment }: { assignment: Assignment }) {
               )}
             </div>
             <div className="text-xs text-surface-400 dark:text-surface-500 mt-0.5">
-              {format(deadline, 'd MMM', { locale: ru })}
+              {format(deadline, 'd MMM', { locale: dateLocale() })}
             </div>
           </div>
         </div>
@@ -309,6 +307,7 @@ function DeadlineCard({ assignment }: { assignment: Assignment }) {
 }
 
 function TaskItem({ task }: { task: Task }) {
+  const { t } = useT()
   const updateTaskMutation = useUpdateTask()
   const isDone = task.state === 'done'
   const disabled = updateTaskMutation.isPending
@@ -334,7 +333,7 @@ function TaskItem({ task }: { task: Task }) {
         aria-checked={isDone}
         aria-busy={disabled}
         disabled={disabled}
-        aria-label={`${isDone ? 'Снять отметку' : 'Отметить выполненным'}: ${task.assignment.title}`}
+        aria-label={`${isDone ? t('home.uncheck') : t('home.check')}: ${task.assignment.title}`}
         onClick={handleToggle}
         className="-ml-2 -mt-2.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-wait disabled:opacity-60"
       >
@@ -371,7 +370,7 @@ function TaskItem({ task }: { task: Task }) {
             )}
           />
           <span className="shrink-0 text-2xs text-surface-400 dark:text-surface-500">
-            {taskStateLabels[task.state]}
+            {t(taskStateLabels[task.state])}
           </span>
         </div>
       </div>
@@ -388,11 +387,12 @@ function TaskList({
   completedCount: number
   totalCount: number
 }) {
+  const { t } = useT()
   return (
     <>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-          Что нужно сделать
+          {t('home.todo')}
         </h2>
         <span className="text-xs text-surface-400 dark:text-surface-500">
           {completedCount}/{totalCount}
@@ -401,7 +401,7 @@ function TaskList({
       <Card>
         {tasks.length === 0 ? (
           <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
-            Нет активных задач
+            {t('home.noTasks')}
           </p>
         ) : (
           tasks.map((task) => (
@@ -418,6 +418,7 @@ function TaskList({
 // ────────────────────────────────────────────────────────
 
 export function HomePage() {
+  const { t } = useT()
   // ── API hooks ──
   const { groupId, groupCode } = useGroupContext()
   const currentUserQuery = useCurrentUser()
@@ -431,7 +432,7 @@ export function HomePage() {
 
   // ── Data sources ──
   const greeting = getGreeting()
-  const userName = currentUserQuery.data?.display_name?.split(' ')[0] ?? 'Студент'
+  const userName = currentUserQuery.data?.display_name?.split(' ')[0] ?? t('common.student')
 
   // Map API schedule entries to local ScheduleEntry format
   const apiScheduleToLocal = (entry: any): ScheduleEntry => {
@@ -515,7 +516,7 @@ export function HomePage() {
   const totalCount = dashProgress ? dashProgress.total : activeTasks.length
   const completionPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
-  const todayFormatted = format(new Date(), "d MMMM, EEEE", { locale: ru })
+  const todayFormatted = format(new Date(), "d MMMM, EEEE", { locale: dateLocale() })
 
   if (isApiLoading) {
     return (
@@ -560,20 +561,20 @@ export function HomePage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-              Расписание на сегодня
+              {t('home.scheduleToday')}
             </h2>
             <Link
               to="/schedule"
               className="text-xs text-primary-500 hover:text-primary-600 font-medium flex items-center gap-1"
             >
-              Все
+              {t('home.all')}
               <Icon name="chevron-right" size={14} />
             </Link>
           </div>
 
           {scheduleWithGaps.length === 0 ? (
             <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
-              Сегодня пар нет
+              {t('onb.noLessons')}
             </p>
           ) : (
             scheduleWithGaps.map((item, idx) =>
@@ -592,7 +593,7 @@ export function HomePage() {
           <Card>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-50">
-                Выполненных работ
+                {t('home.completed')}
               </h3>
               <Link
                 to="/assignments"
@@ -608,7 +609,7 @@ export function HomePage() {
             </div>
             <ProgressBar value={completionPercent} color="success" />
             <div className="text-xs text-surface-400 dark:text-surface-500 mt-2">
-              {completedCount} из {totalCount} заданий выполнено
+              {t('home.doneOf', { done: completedCount, total: totalCount })}
             </div>
           </Card>
 
@@ -616,20 +617,20 @@ export function HomePage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-                Горящие дедлайны
+                {t('home.burning')}
               </h3>
               <Link
                 to="/assignments"
                 className="text-xs text-primary-500 hover:text-primary-600 font-medium flex items-center gap-1"
               >
-                Все
+                {t('home.all')}
                 <Icon name="chevron-right" size={14} />
               </Link>
             </div>
             <div className="space-y-3">
               {burningDeadlines.length === 0 ? (
                 <p className="text-sm text-surface-400 dark:text-surface-500 py-2 text-center">
-                  Нет горящих дедлайнов
+                  {t('home.noBurning')}
                 </p>
               ) : (
                 burningDeadlines.map((a) => (
@@ -656,20 +657,20 @@ export function HomePage() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-              Расписание
+              {t('nav.schedule')}
             </h2>
             <Link
               to="/schedule"
               className="text-xs text-primary-500 hover:text-primary-600 font-medium flex items-center gap-1"
             >
-              Все
+              {t('home.all')}
               <Icon name="chevron-right" size={14} />
             </Link>
           </div>
           <div className="space-y-3">
             {scheduleWithGaps.length === 0 ? (
               <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
-                Сегодня пар нет
+                {t('onb.noLessons')}
               </p>
             ) : (
               scheduleWithGaps.map((item, idx) =>
@@ -687,20 +688,20 @@ export function HomePage() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-surface-900 dark:text-surface-50 uppercase tracking-wide">
-              Горящие дедлайны
+              {t('home.burning')}
             </h2>
             <Link
               to="/assignments"
               className="text-xs text-primary-500 hover:text-primary-600 font-medium flex items-center gap-1"
             >
-              Все
+              {t('home.all')}
               <Icon name="chevron-right" size={14} />
             </Link>
           </div>
           <div className="space-y-3">
             {burningDeadlines.length === 0 ? (
               <p className="text-sm text-surface-400 dark:text-surface-500 py-4 text-center">
-                Нет горящих дедлайнов
+                {t('home.noBurning')}
               </p>
             ) : (
               burningDeadlines.map((a) => (
@@ -715,7 +716,7 @@ export function HomePage() {
           <Card>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-50">
-                Выполненных работ
+                {t('home.completed')}
               </h3>
             </div>
             <div className="flex items-baseline gap-3 mb-3">
@@ -725,7 +726,7 @@ export function HomePage() {
             </div>
             <ProgressBar value={completionPercent} color="success" />
             <div className="text-xs text-surface-400 dark:text-surface-500 mt-2">
-              {completedCount} из {totalCount} заданий
+              {t('home.doneOfShort', { done: completedCount, total: totalCount })}
             </div>
           </Card>
         </section>

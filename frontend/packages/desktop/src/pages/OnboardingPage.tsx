@@ -4,6 +4,7 @@ import { clsx } from 'clsx'
 import { Button, Card, Input } from '../components/ui'
 import { useSearchGroups, useJoinGroup, useAuthStore, useDevLogin, useTelegramBotAuth, useTelegramBotPoll, useTodaySchedule } from '@nexora/shared'
 import type { GroupMembership } from '@nexora/shared'
+import { useT } from '../i18n'
 
 type Step = 'welcome' | 'group' | 'preview' | 'done'
 
@@ -17,6 +18,7 @@ const PAIR_TIMES = [
 
 export function OnboardingPage() {
   const navigate = useNavigate()
+  const { t } = useT()
   const [step, setStep] = useState<Step>('welcome')
   const [groupCode, setGroupCode] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('')
@@ -68,7 +70,7 @@ export function OnboardingPage() {
       setAwaitingBot(true)
       window.open(botUrl, '_blank', 'noopener,noreferrer')
     } catch {
-      setLoginError('Не удалось начать авторизацию. Попробуйте ещё раз.')
+      setLoginError(t('onb.authError'))
     }
   }
 
@@ -152,13 +154,13 @@ export function OnboardingPage() {
               </svg>
             </div>
             <h1 className="text-3xl font-bold text-surface-900 dark:text-surface-50 mb-3">
-              Добро пожаловать в Nexora
+              {t('onb.welcome')}
             </h1>
             <p className="text-surface-500 dark:text-surface-400 mb-2 text-lg">
-              Единое место правды о расписании и заданиях
+              {t('onb.tagline')}
             </p>
             <p className="text-surface-400 dark:text-surface-500 text-sm mb-8">
-              Для начала войди через Telegram
+              {t('onb.loginHint')}
             </p>
 
             {!awaitingBot ? (
@@ -175,10 +177,10 @@ export function OnboardingPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
-                    Открываем бот...
+                    {t('onb.openingBot')}
                   </span>
                 ) : (
-                  'Войти через Telegram'
+                  t('onb.loginTelegram')
                 )}
               </Button>
             ) : (
@@ -188,14 +190,14 @@ export function OnboardingPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  <span className="text-sm font-medium">Ожидаем авторизацию в боте...</span>
+                  <span className="text-sm font-medium">{t('onb.waitingBot')}</span>
                 </div>
 
                 <div className="bg-surface-100 dark:bg-surface-800 rounded-xl p-4 text-left space-y-2 text-sm text-surface-600 dark:text-surface-300">
-                  <p className="font-medium text-surface-900 dark:text-surface-50 mb-1">Что делать:</p>
-                  <p>1. Нажмите кнопку выше чтобы открыть бота</p>
-                  <p>2. Нажмите <span className="font-medium">Старт</span> в боте</p>
-                  <p>3. Вернитесь на эту страницу</p>
+                  <p className="font-medium text-surface-900 dark:text-surface-50 mb-1">{t('onb.steps')}</p>
+                  <p>{t('onb.step1')}</p>
+                  <p>{t('onb.step2a')} <span className="font-medium">{t('onb.step2b')}</span> {t('onb.step2c')}</p>
+                  <p>{t('onb.step3')}</p>
                 </div>
 
                 <button
@@ -205,7 +207,7 @@ export function OnboardingPage() {
                   }}
                   className="text-sm text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 underline"
                 >
-                  Отмена
+                  {t('common.cancel')}
                 </button>
               </div>
             )}
@@ -218,6 +220,7 @@ export function OnboardingPage() {
                 onClick={handleDevLogin}
                 disabled={devLoginMutation.isPending}
               >
+                {/* dev-only: без перевода, в production-сборку не попадает */}
                 {devLoginMutation.isPending ? 'Входим...' : 'Войти как разработчик'}
               </Button>
             )}
@@ -238,21 +241,21 @@ export function OnboardingPage() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
-              Назад
+              {t('common.back')}
             </button>
 
             <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-50 mb-2">
-              Введи номер своей группы
+              {t('onb.groupTitle')}
             </h2>
             <p className="text-surface-500 dark:text-surface-400 mb-6">
-              Мы найдём твоё расписание автоматически
+              {t('onb.groupHint')}
             </p>
 
             <div className="relative">
               <Input
                 value={groupCode}
                 onChange={(e) => handleGroupInput(e.target.value)}
-                placeholder="Например, 241-237"
+                placeholder={t('onb.groupPlaceholder')}
                 className="text-lg"
               />
 
@@ -284,10 +287,10 @@ export function OnboardingPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Загружаем...
+                  {t('common.loading')}
                 </span>
               ) : (
-                'Продолжить'
+                t('common.continue')
               )}
             </Button>
           </div>
@@ -303,29 +306,29 @@ export function OnboardingPage() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
-              Назад
+              {t('common.back')}
             </button>
 
             {/* Join status banner */}
             {joinResult?.role === 'starosta' ? (
               <div className="mb-5 rounded-xl bg-warning-50 dark:bg-warning-500/10 border border-warning-200 dark:border-warning-500/30 px-4 py-3">
                 <p className="text-sm font-medium text-warning-700 dark:text-warning-400">
-                  Ты первый в группе! Ты стал старостой.
+                  {t('onb.firstInGroup')}
                 </p>
               </div>
             ) : joinResult && !joinResult.verified ? (
               <div className="mb-5 rounded-xl bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 px-4 py-3">
                 <p className="text-sm font-medium text-surface-700 dark:text-surface-300">
-                  Запрос на вступление отправлен. Ожидай подтверждения старосты.
+                  {t('onb.requestSent')}
                 </p>
               </div>
             ) : null}
 
             <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-50 mb-1">
-              Вот твоё расписание
+              {t('onb.previewTitle')}
             </h2>
             <p className="text-surface-500 dark:text-surface-400 text-sm mb-5">
-              Группа <span className="font-semibold text-surface-900 dark:text-surface-50">{effectiveGroupCode}</span> · сегодня
+              {t('onb.previewGroup')} <span className="font-semibold text-surface-900 dark:text-surface-50">{effectiveGroupCode}</span> · {t('onb.previewToday')}
             </p>
 
             {scheduleQuery.isLoading && (
@@ -334,13 +337,13 @@ export function OnboardingPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                <span className="text-sm">Загружаем расписание...</span>
+                <span className="text-sm">{t('onb.loadingSchedule')}</span>
               </div>
             )}
 
             {scheduleQuery.isError && (
               <div className="rounded-xl bg-surface-100 dark:bg-surface-800 px-4 py-3 text-sm text-surface-500 dark:text-surface-400 mb-4">
-                Не удалось загрузить расписание. Продолжай — оно появится позже.
+                {t('onb.previewError')}
               </div>
             )}
 
@@ -348,7 +351,7 @@ export function OnboardingPage() {
               <div className="space-y-2 mb-5">
                 {scheduleQuery.data.entries.length === 0 ? (
                   <div className="rounded-xl bg-surface-100 dark:bg-surface-800 px-4 py-4 text-sm text-surface-500 dark:text-surface-400 text-center">
-                    Пар сегодня нет
+                    {t('onb.noLessons')}
                   </div>
                 ) : (
                   scheduleQuery.data.entries.map((entry) => (
@@ -382,7 +385,7 @@ export function OnboardingPage() {
                 onChange={(e) => setPreviewConfirmed(e.target.checked)}
                 className="w-4 h-4 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
               />
-              <span className="text-sm text-surface-700 dark:text-surface-300">Всё верно, продолжить</span>
+              <span className="text-sm text-surface-700 dark:text-surface-300">{t('onb.confirm')}</span>
             </label>
 
             <Button
@@ -392,7 +395,7 @@ export function OnboardingPage() {
               onClick={goNext}
               disabled={!previewConfirmed && !scheduleQuery.isError}
             >
-              Продолжить
+              {t('common.continue')}
             </Button>
           </div>
         )}
@@ -406,19 +409,19 @@ export function OnboardingPage() {
               </svg>
             </div>
             <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-50 mb-3">
-              Готово!
+              {t('onb.doneTitle')}
             </h2>
             {joinResult?.role === 'starosta' ? (
               <p className="text-surface-500 dark:text-surface-400 mb-2">
-                Ты в группе <span className="font-semibold text-surface-900 dark:text-surface-50">{effectiveGroupCode}</span> как <span className="font-semibold text-warning-600 dark:text-warning-400">Староста</span>
+                {t('onb.inGroup')} <span className="font-semibold text-surface-900 dark:text-surface-50">{effectiveGroupCode}</span> {t('onb.as')} <span className="font-semibold text-warning-600 dark:text-warning-400">{t('roles.starosta')}</span>
               </p>
             ) : (
               <p className="text-surface-500 dark:text-surface-400 mb-2">
-                Ты в группе <span className="font-semibold text-surface-900 dark:text-surface-50">{effectiveGroupCode}</span>
+                {t('onb.inGroup')} <span className="font-semibold text-surface-900 dark:text-surface-50">{effectiveGroupCode}</span>
               </p>
             )}
             <p className="text-surface-400 dark:text-surface-500 text-sm mb-8">
-              Расписание загрузится автоматически
+              {t('onb.doneHint')}
             </p>
 
             <Button
@@ -427,7 +430,7 @@ export function OnboardingPage() {
               className="w-full max-w-xs mx-auto"
               onClick={finish}
             >
-              Перейти к дашборду
+              {t('onb.toDashboard')}
             </Button>
           </div>
         )}

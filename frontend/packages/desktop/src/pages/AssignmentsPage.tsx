@@ -27,6 +27,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Button, Badge, Icon, Modal, Select, SearchInput, Input } from '../components/ui'
 import { AssignmentDetailModal } from '../components/AssignmentDetailModal'
 import { useAuthorName } from '../hooks/useAuthorName'
+import { useT } from '../i18n'
 import {
   type Priority,
   type TaskState,
@@ -57,6 +58,7 @@ interface BoardCardProps {
 }
 
 function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCardProps) {
+  const { t } = useT()
   const { assignment } = task
   const burning = isBurning(assignment.deadline)
   const overdue = isOverdue(assignment.deadline)
@@ -134,7 +136,7 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
         {isDone ? (
           <div className="flex items-center gap-1 text-[10px] font-medium mb-1.5 text-success-500 dark:text-success-400">
             <Icon name="check" size={10} />
-            <span>Сдано</span>
+            <span>{t('assign.done')}</span>
           </div>
         ) : (
           <div
@@ -149,11 +151,11 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
           >
             <Icon name={overdue ? 'alert-triangle' : 'clock'} size={10} />
             {overdue ? (
-              <span className="font-bold">Просрочено {Math.abs(days)} {getDayWord(days)}</span>
+              <span className="font-bold">{t('assign.overdueBy', { n: Math.abs(days), word: getDayWord(days) })}</span>
             ) : days <= 0 ? (
-              <span>Сегодня</span>
+              <span>{t('nav.today')}</span>
             ) : burning ? (
-              <span>{days} {getDayWord(days)} — горит</span>
+              <span>{t('assign.daysBurning', { n: days, word: getDayWord(days) })}</span>
             ) : (
               <span>{days} {getDayWord(days)}</span>
             )}
@@ -170,7 +172,7 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
             </div>
             {!isDone && (
               <Badge variant={PRIORITY_BADGE_VARIANT[assignment.priority]} size="sm">
-                {PRIORITY_LABELS[assignment.priority]}
+                {t(PRIORITY_LABELS[assignment.priority])}
               </Badge>
             )}
           </div>
@@ -262,6 +264,7 @@ interface BoardColumnProps {
 }
 
 function BoardColumn({ state, label, tasks, userVotes, onVote, onTaskClick }: BoardColumnProps) {
+  const { t } = useT()
   const taskIds = useMemo(() => tasks.map((t) => t.id), [tasks])
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: state })
 
@@ -293,7 +296,7 @@ function BoardColumn({ state, label, tasks, userVotes, onVote, onTaskClick }: Bo
           {tasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-surface-400 dark:text-surface-500">
               <Icon name="clipboard" size={28} className="mb-1.5 opacity-50" />
-              <p className="text-xs">Нет заданий</p>
+              <p className="text-xs">{t('assign.empty')}</p>
             </div>
           ) : (
             tasks.map((task) => (
@@ -324,6 +327,7 @@ interface MobileCardProps {
 }
 
 function MobileCard({ task, columnState, onMove, userVote, onVote, onClick }: MobileCardProps) {
+  const { t } = useT()
   return (
     <div>
       <BoardCard task={task} userVote={userVote} onVote={onVote} onClick={onClick} />
@@ -335,7 +339,7 @@ function MobileCard({ task, columnState, onMove, userVote, onVote, onClick }: Mo
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-500/10 transition-colors"
             >
               <Icon name="chevron-right" size={14} />
-              Сдал
+              {t('assign.submitted')}
             </button>
           )}
           {columnState === 'review' && (
@@ -345,14 +349,14 @@ function MobileCard({ task, columnState, onMove, userVote, onVote, onClick }: Mo
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors border-r border-surface-200 dark:border-surface-700"
               >
                 <Icon name="chevron-left" size={14} />
-                Вернуть
+                {t('assign.return')}
               </button>
               <button
                 onClick={() => onMove(task.id, 'done')}
                 className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-success-600 hover:bg-success-50 dark:hover:bg-success-500/10 transition-colors"
               >
                 <Icon name="check" size={14} />
-                Зачтено
+                {t('assign.col.done')}
               </button>
             </>
           )}
@@ -383,6 +387,7 @@ interface CreateAssignmentModalProps {
 }
 
 function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }: CreateAssignmentModalProps) {
+  const { t } = useT()
   const createCustomSubject = useCreateCustomSubject()
 
   const [subjectId, setSubjectId] = useState('')
@@ -422,9 +427,9 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
 
   const validate = useCallback((): boolean => {
     const newErrors: Record<string, string> = {}
-    if (!subjectId) newErrors.subjectId = 'Выберите предмет'
-    if (!title.trim()) newErrors.title = 'Введите название'
-    if (!deadline) newErrors.deadline = 'Укажите дедлайн'
+    if (!subjectId) newErrors.subjectId = t('assign.chooseSubject')
+    if (!title.trim()) newErrors.title = t('assign.enterTitle')
+    if (!deadline) newErrors.deadline = t('assign.enterDeadline')
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }, [subjectId, title, deadline])
@@ -466,10 +471,10 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
   const allSubjects = subjects
   const subjectOptions = allSubjects.map((s) => ({ value: s.id, label: s.name }))
   const priorityOptions = [
-    { value: 'low', label: 'Низкий' },
-    { value: 'normal', label: 'Обычный' },
-    { value: 'high', label: 'Высокий' },
-    { value: 'urgent', label: 'Срочный' },
+    { value: 'low', label: t('assign.priority.low') },
+    { value: 'normal', label: t('assign.priority.normal') },
+    { value: 'high', label: t('assign.priority.high') },
+    { value: 'urgent', label: t('assign.priority.urgent') },
   ]
 
   return (
@@ -483,12 +488,12 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
       <div className="-mx-6 -my-4">
         <div className="mx-2 mt-2 flex items-center justify-between rounded-2xl bg-white px-4 pt-5 pb-4 dark:bg-surface-800">
           <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50">
-            Создать задание
+            {t('assign.create')}
           </h2>
           <button
             type="button"
             onClick={handleClose}
-            aria-label="Закрыть"
+            aria-label={t('common.close')}
             className="ml-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-surface-200 bg-surface-50 text-surface-600 transition hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-700 dark:text-surface-300 dark:hover:bg-surface-600"
           >
             <Icon name="x" size={18} />
@@ -500,11 +505,11 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
               <section className="space-y-4 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
             <div className="space-y-2">
               <Select
-                label="Предмет"
+                label={t('assign.subject')}
                 options={subjectOptions}
                 value={subjectId}
                 onChange={setSubjectId}
-                placeholder="Выберите предмет"
+                placeholder={t('assign.chooseSubject')}
                 error={errors.subjectId}
               />
               {/* Custom subject inline creation */}
@@ -515,7 +520,7 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
                   className="flex items-center gap-1 text-xs text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
                 >
                   <Icon name="plus" size={12} />
-                  Добавить предмет
+                  {t('assign.addSubject')}
                 </button>
               ) : (
                 <div className="flex items-center gap-2">
@@ -527,7 +532,7 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
                       if (e.key === 'Enter') { e.preventDefault(); handleCreateCustomSubject() }
                       if (e.key === 'Escape') { setShowCustomSubjectInput(false); setCustomSubjectName('') }
                     }}
-                    placeholder="Название предмета"
+                    placeholder={t('assign.subjectName')}
                     className="input flex-1 text-sm py-1.5"
                     autoFocus
                   />
@@ -537,7 +542,7 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
                     size="sm"
                     onClick={handleCreateCustomSubject}
                   >
-                    {createCustomSubject.isPending ? '...' : 'Добавить'}
+                    {createCustomSubject.isPending ? '...' : t('common.add')}
                   </Button>
                   <Button
                     type="button"
@@ -552,10 +557,10 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
           </div>
 
             <Input
-              label="Название"
+              label={t('assign.title')}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Например: ПЗ №5 — Графы"
+              placeholder={t('assign.titlePlaceholder')}
               error={errors.title}
             />
             </section>
@@ -565,13 +570,13 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
                 htmlFor="create-description"
                 className="text-sm font-medium text-surface-700 dark:text-surface-300"
               >
-                Описание
+                {t('assign.description')}
               </label>
               <textarea
                 id="create-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Что нужно сделать..."
+                placeholder={t('assign.descriptionPlaceholder')}
                 rows={8}
                 className={clsx(
                   'input resize-none',
@@ -587,34 +592,34 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
             <div className="space-y-3">
               <section className="grid grid-cols-1 gap-3 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
             <Input
-              label="Ссылка на задание"
+              label={t('assign.link')}
               type="url"
               value={link}
               onChange={(e) => setLink(e.target.value)}
               placeholder="https://docs.google.com/..."
             />
             <Input
-              label="Контакт преподавателя"
+              label={t('assign.teacherContact')}
               value={teacherContact}
               onChange={(e) => setTeacherContact(e.target.value)}
-              placeholder="Иванов И.И., ivanov@mospolytech.ru"
+              placeholder={t('assign.teacherPlaceholder')}
             />
             <Input
-              label="Ссылка для сдачи"
+              label={t('assign.submissionLink')}
               type="url"
               value={submissionLink}
               onChange={(e) => setSubmissionLink(e.target.value)}
               placeholder="https://..."
             />
             <Input
-              label="Дедлайн"
+              label={t('assign.deadline')}
               type="date"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
               error={errors.deadline}
             />
             <Select
-              label="Приоритет"
+              label={t('assign.priority')}
               options={priorityOptions}
               value={priority}
               onChange={setPriority}
@@ -639,12 +644,12 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
             </div>
             <div>
               <span className="text-sm font-medium text-surface-700 dark:text-surface-300">
-                {isPersonal ? 'Только для меня' : 'Для всей группы'}
+                {isPersonal ? t('assign.onlyMe') : t('assign.wholeGroup')}
               </span>
               <p className="text-xs text-surface-400 dark:text-surface-500 mt-0.5">
                 {isPersonal
-                  ? 'Задание видно только вам'
-                  : 'Задание видно всем участникам группы'}
+                  ? t('assign.onlyMeHint')
+                  : t('assign.wholeGroupHint')}
               </p>
             </div>
               </label>
@@ -653,10 +658,10 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
 
           <div className="mb-2 ml-auto mr-2 flex w-fit max-w-full items-center justify-end gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-surface-800">
             <Button variant="secondary" type="button" onClick={handleClose}>
-              Отмена
+              {t('common.cancel')}
             </Button>
             <Button variant="primary" type="submit">
-              Создать
+              {t('common.create')}
             </Button>
           </div>
         </form>
@@ -668,6 +673,7 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
 /* ─── Main Component ─── */
 
 export function AssignmentsPage() {
+  const { t } = useT()
   // ─── API hooks ───
   const { groupId, groupCode } = useGroupContext()
   const tasksQuery = useTasks({ group_id: groupId ?? '' })
@@ -879,7 +885,7 @@ export function AssignmentsPage() {
 
   const apiSubjects = groupSubjectsQuery.data ?? []
   const subjectOptions = [
-    { value: '', label: 'Все предметы' },
+    { value: '', label: t('assign.allSubjects') },
     ...apiSubjects.map((s) => ({ value: s.id, label: s.name })),
   ]
 
@@ -888,14 +894,14 @@ export function AssignmentsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-surface-900 dark:text-surface-50">
-          Задания
+          {t('nav.assignments')}
         </h1>
         <Button
           variant="primary"
           icon={<Icon name="plus" size={16} />}
           onClick={() => setCreateModalOpen(true)}
         >
-          Создать
+          {t('common.create')}
         </Button>
       </div>
 
@@ -905,7 +911,7 @@ export function AssignmentsPage() {
           <SearchInput
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск..."
+            placeholder={t('common.search')}
           />
         </div>
         <div className="w-36">
@@ -917,7 +923,7 @@ export function AssignmentsPage() {
         </div>
         <div className="w-44">
           <Select
-            options={DEADLINE_FILTER_OPTIONS}
+            options={DEADLINE_FILTER_OPTIONS.map((o) => ({ ...o, label: t(o.label) }))}
             value={deadlineFilter}
             onChange={setDeadlineFilter}
           />
@@ -947,13 +953,13 @@ export function AssignmentsPage() {
         <div className="rounded-lg border border-danger-200 dark:border-danger-800/50 bg-danger-50/50 dark:bg-danger-950/20 p-6 text-center">
           <Icon name="alert-triangle" size={32} className="mx-auto text-danger-400 dark:text-danger-500 mb-2" />
           <p className="text-sm font-medium text-danger-700 dark:text-danger-300 mb-1">
-            Не удалось загрузить задания
+            {t('assign.loadError')}
           </p>
           <p className="text-xs text-danger-500 dark:text-danger-400 mb-3">
-            {tasksQuery.error instanceof Error ? tasksQuery.error.message : 'Произошла ошибка'}
+            {tasksQuery.error instanceof Error ? tasksQuery.error.message : t('common.error')}
           </p>
           <Button variant="secondary" onClick={() => tasksQuery.refetch()}>
-            Попробовать снова
+            {t('common.retry')}
           </Button>
         </div>
       )}
@@ -976,7 +982,7 @@ export function AssignmentsPage() {
                       : 'text-surface-500 dark:text-surface-400',
                   )}
                 >
-                  {col.label}
+                  {t(col.label)}
                   {count > 0 && (
                     <span className="ml-1.5 text-xs text-surface-400 dark:text-surface-500">
                       {count}
@@ -992,7 +998,7 @@ export function AssignmentsPage() {
             {tasksByColumn[activeColumn].length === 0 ? (
               <div className="rounded-xl border-2 border-dashed border-surface-200 dark:border-surface-700 p-8 text-center">
                 <Icon name="clipboard" size={32} className="mx-auto text-surface-300 dark:text-surface-600 mb-2" />
-                <p className="text-sm text-surface-400 dark:text-surface-500">Нет заданий</p>
+                <p className="text-sm text-surface-400 dark:text-surface-500">{t('assign.empty')}</p>
               </div>
             ) : (
               tasksByColumn[activeColumn].map((task) => (
@@ -1023,7 +1029,7 @@ export function AssignmentsPage() {
                   <BoardColumn
                     key={col.key}
                     state={col.key}
-                    label={col.label}
+                    label={t(col.label)}
                     tasks={tasksByColumn[col.key]}
                     userVotes={userVotes}
                     onVote={toggleVote}

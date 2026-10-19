@@ -15,23 +15,26 @@ import {
   useChangeStudentRole,
 } from '@nexora/shared'
 import type { NotificationPreferenceType, GroupRole } from '@nexora/shared'
+import { LANGUAGES, useLangStore, useT, type MessageKey } from '../i18n'
 
 interface NotificationSettingMeta {
   type: NotificationPreferenceType
-  label: string
-  description: string
+  label: MessageKey
+  description: MessageKey
 }
 
 const NOTIFICATION_META: NotificationSettingMeta[] = [
-  { type: 'class_reminder', label: 'Напоминание о паре', description: 'Аудитория или ссылка на вебинар перед началом' },
-  { type: 'schedule_change', label: 'Изменения расписания', description: 'Отмена пар, смена аудиторий' },
-  { type: 'new_assignment', label: 'Новые задания', description: 'Когда кто-то создаёт задание' },
-  { type: 'deadline', label: 'Дедлайны', description: 'Напоминание за день до срока' },
-  { type: 'vote', label: 'Голосования', description: 'Новые задания требуют подтверждения' },
-  { type: 'digest', label: 'Вечерний дайджест', description: 'Сводка на завтра в 21:00' },
+  { type: 'class_reminder', label: 'settings.notif.classReminder', description: 'settings.notif.classReminderHint' },
+  { type: 'schedule_change', label: 'settings.notif.scheduleChange', description: 'settings.notif.scheduleChangeHint' },
+  { type: 'new_assignment', label: 'settings.notif.newAssignment', description: 'settings.notif.newAssignmentHint' },
+  { type: 'deadline', label: 'settings.notif.deadline', description: 'settings.notif.deadlineHint' },
+  { type: 'vote', label: 'settings.notif.vote', description: 'settings.notif.voteHint' },
+  { type: 'digest', label: 'settings.notif.digest', description: 'settings.notif.digestHint' },
 ]
 
 export function SettingsPage() {
+  const { t, lang } = useT()
+  const setLang = useLangStore((s) => s.setLang)
   const currentUserQuery = useCurrentUser()
   const logoutMutation = useLogout()
   const myGroupsQuery = useMyGroups()
@@ -75,15 +78,15 @@ export function SettingsPage() {
     setJoinSuccess(null)
     try {
       await joinGroupMutation.mutateAsync(code)
-      setJoinSuccess(`Вы вступили в группу ${code}. Ожидайте подтверждения от старосты.`)
+      setJoinSuccess(t('settings.joined', { code }))
       setGroupSearch('')
       setDebouncedGroupSearch('')
     } catch (err: unknown) {
       const error = err as { status?: number; message?: string }
       if (error?.status === 409) {
-        setJoinError('Вы уже состоите в этой группе.')
+        setJoinError(t('settings.alreadyMember'))
       } else {
-        setJoinError('Не удалось вступить в группу. Попробуйте позже.')
+        setJoinError(t('settings.joinError'))
       }
     }
   }
@@ -130,7 +133,7 @@ export function SettingsPage() {
     try {
       await api.users.updateMe({ display_name: displayName })
     } catch (err) {
-      setSaveError('Не удалось сохранить')
+      setSaveError(t('settings.saveError'))
     } finally {
       setSavePending(false)
     }
@@ -141,10 +144,10 @@ export function SettingsPage() {
   }
 
   const sections = [
-    { id: 'profile' as const, label: 'Профиль', icon: UserIcon },
-    { id: 'notifications' as const, label: 'Уведомления', icon: BellIcon },
-    { id: 'group' as const, label: 'Группа', icon: UsersIcon },
-    { id: 'about' as const, label: 'О приложении', icon: InfoIcon },
+    { id: 'profile' as const, label: t('settings.profile'), icon: UserIcon },
+    { id: 'notifications' as const, label: t('nav.notifications'), icon: BellIcon },
+    { id: 'group' as const, label: t('settings.group'), icon: UsersIcon },
+    { id: 'about' as const, label: t('settings.about'), icon: InfoIcon },
   ]
 
   const primaryGroup = memberships[0]
@@ -170,7 +173,7 @@ export function SettingsPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50 mb-6">
-        Настройки
+        {t('nav.settings')}
       </h1>
 
       <div className="flex flex-col md:flex-row gap-6">
@@ -201,7 +204,7 @@ export function SettingsPage() {
           {activeSection === 'profile' && (
             <Card padding="lg">
               <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50 mb-6">
-                Профиль
+                {t('settings.profile')}
               </h2>
 
               {currentUserQuery.isLoading ? (
@@ -213,10 +216,10 @@ export function SettingsPage() {
               ) : (
                 <>
                   <div className="flex items-center gap-4 mb-6">
-                    <Avatar name={displayName || 'Студент'} size="lg" />
+                    <Avatar name={displayName || t('common.student')} size="lg" />
                     <div>
                       <div className="font-medium text-surface-900 dark:text-surface-50">
-                        {displayName || 'Студент'}
+                        {displayName || t('common.student')}
                       </div>
                       {primaryGroup && (
                         <div className="text-sm text-surface-500 dark:text-surface-400">
@@ -228,10 +231,33 @@ export function SettingsPage() {
 
                   <div className="space-y-4">
                     <Input
-                      label="Отображаемое имя"
+                      label={t('settings.displayName')}
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                     />
+
+                    <div>
+                      <div className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                        {t('settings.language')}
+                      </div>
+                      <div className="flex gap-2">
+                        {LANGUAGES.map(({ value, label }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setLang(value)}
+                            className={clsx(
+                              'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                              value === lang
+                                ? 'bg-primary-500 text-white'
+                                : 'bg-surface-100 text-surface-700 hover:bg-surface-200 dark:bg-surface-700 dark:text-surface-200 dark:hover:bg-surface-600'
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
                     {saveError && (
                       <p className="text-sm text-danger-500">{saveError}</p>
@@ -243,7 +269,7 @@ export function SettingsPage() {
                         onClick={handleSaveProfile}
                         disabled={savePending}
                       >
-                        {savePending ? 'Сохранение...' : 'Сохранить'}
+                        {savePending ? t('common.saving') : t('common.save')}
                       </Button>
                       <Button
                         variant="ghost"
@@ -251,7 +277,7 @@ export function SettingsPage() {
                         disabled={logoutMutation.isPending}
                         className="text-danger-500 hover:text-danger-600"
                       >
-                        Выйти
+                        {t('settings.logout')}
                       </Button>
                     </div>
                   </div>
@@ -264,10 +290,10 @@ export function SettingsPage() {
           {activeSection === 'notifications' && (
             <Card padding="lg">
               <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50 mb-6">
-                Уведомления
+                {t('nav.notifications')}
               </h2>
               <p className="text-sm text-surface-500 dark:text-surface-400 mb-6">
-                Уведомления приходят в Telegram-бота
+                {t('settings.notif.hint')}
               </p>
 
               <div className="space-y-1">
@@ -278,10 +304,10 @@ export function SettingsPage() {
                   >
                     <div>
                       <div className="text-sm font-medium text-surface-900 dark:text-surface-50">
-                        {n.label}
+                        {t(n.label)}
                       </div>
                       <div className="text-xs text-surface-500 dark:text-surface-400">
-                        {n.description}
+                        {t(n.description)}
                       </div>
                       {n.type === 'class_reminder' && n.enabled && (
                         <div className="flex gap-2 mt-2">
@@ -297,7 +323,7 @@ export function SettingsPage() {
                                   : 'bg-surface-100 text-surface-700 dark:bg-surface-700 dark:text-surface-200'
                               )}
                             >
-                              За {m} мин
+                              {t('settings.notif.minutes', { m })}
                             </button>
                           ))}
                         </div>
@@ -328,13 +354,13 @@ export function SettingsPage() {
           {activeSection === 'group' && (
             <Card padding="lg">
               <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50 mb-6">
-                Группа
+                {t('settings.group')}
               </h2>
 
               {/* Current memberships */}
               <div className="mb-6">
                 <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-3">
-                  Ваши группы
+                  {t('settings.yourGroups')}
                 </p>
                 {myGroupsQuery.isLoading ? (
                   <div className="space-y-2">
@@ -344,7 +370,7 @@ export function SettingsPage() {
                   </div>
                 ) : memberships.length === 0 ? (
                   <p className="text-sm text-surface-500 dark:text-surface-400 py-3">
-                    Вы не состоите ни в одной группе
+                    {t('settings.noGroups')}
                   </p>
                 ) : (
                   <div className="space-y-1">
@@ -367,17 +393,17 @@ export function SettingsPage() {
                         <div className="flex items-center gap-2">
                           {membership.role === 'starosta' && (
                             <span className="text-xs px-2 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded-full font-medium">
-                              Староста
+                              {t('roles.starosta')}
                             </span>
                           )}
                           {membership.role === 'deputy' && (
                             <span className="text-xs px-2 py-0.5 bg-info-100 text-info-600 dark:bg-info-500/20 dark:text-info-400 rounded-full font-medium">
-                              Зам
+                              {t('roles.deputy')}
                             </span>
                           )}
                           {!membership.verified && (
                             <span className="text-xs px-2 py-0.5 bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-400 rounded-full font-medium">
-                              Ожидает
+                              {t('settings.pending')}
                             </span>
                           )}
                         </div>
@@ -390,11 +416,11 @@ export function SettingsPage() {
               {/* Join group */}
               <div className="pt-4 border-t border-surface-200 dark:border-surface-700">
                 <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-3">
-                  {memberships.length > 0 ? 'Вступить в другую группу' : 'Найти и вступить в группу'}
+                  {memberships.length > 0 ? t('settings.joinOther') : t('settings.findGroup')}
                 </p>
 
                 <Input
-                  placeholder="Введите код группы, напр. 221-361"
+                  placeholder={t('settings.groupPlaceholder')}
                   value={groupSearch}
                   onChange={(e) => handleGroupSearchChange(e.target.value)}
                 />
@@ -410,11 +436,11 @@ export function SettingsPage() {
                   <div className="mt-2 border border-surface-200 dark:border-surface-700 rounded-lg overflow-hidden">
                     {searchGroupsQuery.isLoading ? (
                       <div className="px-4 py-3 text-sm text-surface-500 dark:text-surface-400">
-                        Поиск...
+                        {t('settings.searching')}
                       </div>
                     ) : !searchGroupsQuery.data || searchGroupsQuery.data.length === 0 ? (
                       <div className="px-4 py-3 text-sm text-surface-500 dark:text-surface-400">
-                        Группы не найдены
+                        {t('settings.groupsNotFound')}
                       </div>
                     ) : (
                       searchGroupsQuery.data.map((group) => {
@@ -440,7 +466,7 @@ export function SettingsPage() {
                               disabled={alreadyMember || joinGroupMutation.isPending}
                               onClick={() => handleJoinGroup(group.code)}
                             >
-                              {alreadyMember ? 'Вы в группе' : 'Вступить'}
+                              {alreadyMember ? t('settings.inGroup') : t('settings.join')}
                             </Button>
                           </div>
                         )
@@ -454,10 +480,10 @@ export function SettingsPage() {
               {isModerator && (
                 <div className="pt-6 mt-2 border-t border-surface-200 dark:border-surface-700">
                   <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">
-                    Управление участниками
+                    {t('settings.members')}
                   </p>
                   <p className="text-xs text-surface-500 dark:text-surface-400 mb-4">
-                    Подтверждайте новых студентов и изменяйте их роли
+                    {t('settings.membersHint')}
                   </p>
 
                   {groupStudentsQuery.isLoading ? (
@@ -468,7 +494,7 @@ export function SettingsPage() {
                     </div>
                   ) : !groupStudentsQuery.data || groupStudentsQuery.data.length === 0 ? (
                     <p className="text-sm text-surface-500 dark:text-surface-400 py-2">
-                      Участников нет
+                      {t('settings.noMembers')}
                     </p>
                   ) : (
                     <div className="space-y-1">
@@ -482,22 +508,22 @@ export function SettingsPage() {
                             <Avatar name={student.user.display_name || student.user_id} size="sm" />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">
-                                {student.user.display_name || 'Студент'}
+                                {student.user.display_name || t('common.student')}
                               </div>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {student.verified ? (
                                   <span className="text-xs text-success-600 dark:text-success-400 flex items-center gap-1">
                                     <CheckIcon className="w-3 h-3" />
-                                    Подтверждён
+                                    {t('settings.verified')}
                                   </span>
                                 ) : (
                                   <span className="text-xs text-warning-600 dark:text-warning-400">
-                                    Ожидает подтверждения
+                                    {t('settings.awaitingApproval')}
                                   </span>
                                 )}
                                 {student.role !== 'student' && (
                                   <span className="text-xs px-1.5 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded font-medium capitalize">
-                                    {student.role === 'starosta' ? 'Староста' : student.role === 'deputy' ? 'Зам' : student.role === 'moderator' ? 'Модератор' : student.role}
+                                    {student.role === 'starosta' ? t('roles.starosta') : student.role === 'deputy' ? t('roles.deputy') : student.role === 'moderator' ? t('roles.moderator') : student.role}
                                   </span>
                                 )}
                               </div>
@@ -510,7 +536,7 @@ export function SettingsPage() {
                                   disabled={isPending}
                                   onClick={() => handleVerify(student.user_id)}
                                 >
-                                  Подтвердить
+                                  {t('settings.approve')}
                                 </Button>
                               )}
                               {student.role === 'student' && student.verified && (
@@ -520,7 +546,7 @@ export function SettingsPage() {
                                   disabled={isPending}
                                   onClick={() => handleChangeRole(student.user_id, 'moderator')}
                                 >
-                                  Сделать модератором
+                                  {t('settings.makeModerator')}
                                 </Button>
                               )}
                               {student.role === 'moderator' && (
@@ -530,7 +556,7 @@ export function SettingsPage() {
                                   disabled={isPending}
                                   onClick={() => handleChangeRole(student.user_id, 'student')}
                                 >
-                                  Убрать роль
+                                  {t('settings.removeRole')}
                                 </Button>
                               )}
                             </div>
@@ -548,26 +574,26 @@ export function SettingsPage() {
           {activeSection === 'about' && (
             <Card padding="lg">
               <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50 mb-6">
-                О приложении
+                {t('settings.about')}
               </h2>
 
               <div className="space-y-4">
                 <div className="flex justify-between text-sm">
-                  <span className="text-surface-500 dark:text-surface-400">Версия</span>
+                  <span className="text-surface-500 dark:text-surface-400">{t('settings.version')}</span>
                   <span className="text-surface-900 dark:text-surface-50 font-medium">0.1.0-alpha</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-surface-500 dark:text-surface-400">Разработка</span>
+                  <span className="text-surface-500 dark:text-surface-400">{t('settings.developer')}</span>
                   <span className="text-surface-900 dark:text-surface-50 font-medium">Nexora Team</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-surface-500 dark:text-surface-400">Расписание</span>
+                  <span className="text-surface-500 dark:text-surface-400">{t('nav.schedule')}</span>
                   <span className="text-surface-900 dark:text-surface-50 font-medium">rasp.dmami.ru</span>
                 </div>
 
                 <div className="pt-4 border-t border-surface-200 dark:border-surface-700">
                   <p className="text-sm text-surface-500 dark:text-surface-400">
-                    Nexora — единственное место правды о расписании и заданиях для студента Московского Политеха.
+                    {t('settings.aboutText')}
                   </p>
                 </div>
               </div>
