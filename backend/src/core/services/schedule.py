@@ -406,22 +406,30 @@ class ScheduleService:
         scope: OverrideScope,
         override_type: OverrideType,
         value: str | None = None,
-        target_date: date | None = None,
+        target_date: date | None = None,  # если не указа - применяется ко всем датам этой пары
         author_id: uuid.UUID,
-        student_id: uuid.UUID | None = None,
     ) -> ScheduleOverride:
-        """Create schedule override."""
+        """Create schedule override.
+        Личное переопределение (PERSONAL) привязывается к студенту автора в группе занятия
+        (`student_id`): по нему оно отбирается при чтении расписания.
+        Групповое (GROUP) хранится без студента и видно всей группе.
+        """
         entry = await self.entry_repo.get(entry_id)
         if not entry:
             raise NotFoundError("Schedule entry not found")
 
         # Check permissions — only starosta can create group SKIP/CANCEL overrides;
         # any group member can share ADD overrides (custom events) with the group
+        students = await self.student_repo.get_user_students(author_id)
+        group_student = next((s for s in students if s.group_id == entry.group_id), None)
+        student_id: uuid.UUID | None = None
         if scope == OverrideScope.GROUP and override_type not in (OverrideType.ADD,):
-            students = await self.student_repo.get_user_students(author_id)
-            group_student = next((s for s in students if s.group_id == entry.group_id), None)
             if not group_student or group_student.role == "student":
                 raise AuthorizationError("Only starosta can create group overrides")
+        elif scope == OverrideScope.PERSONAL:
+            if group_student is None:
+                raise AuthorizationError("Only group members can create personal overrides")
+            student_id = group_student.id
 
         override = await self.override_repo.create(
             entry_id=entry_id,
