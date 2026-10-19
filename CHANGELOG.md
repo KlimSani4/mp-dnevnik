@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Добавлено
+- Деплой из монорепозитория: workflow Deploy публикует образы `nexora-backend` и `nexora-frontend` в ghcr.io после merge в `main`.
+
 ### Изменено
 - Код бэкенда (`KlimSani4/Nexora`) и фронтенда (`KlimSani4/nexora-frontend`) перенесён в `backend/` и `frontend/` с полной историей.
 - CI разделён по папкам: Backend CI и Frontend CI.

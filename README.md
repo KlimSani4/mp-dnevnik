@@ -84,8 +84,9 @@ pnpm --filter @nexora/desktop dev   # http://localhost:5173
 | CI → backend | изменения в `backend/` | ruff, mypy, bandit, тесты с PostgreSQL и Redis, сборка Docker-образа |
 | CI → frontend | изменения в `frontend/` | typecheck, сборка, сборка Docker-образа |
 | CI passed | всегда | итоговая проверка: зелёная, если всё нужное прошло. Обязательна для merge в `main` |
+| Deploy | merge в `main` с изменениями в `backend/` или `frontend/` | сборка и публикация образа в ghcr.io; Keel обновляет поды, миграции применяются при старте бэкенда |
 
-Деплой пока идёт из старых репозиториев `KlimSani4/Nexora` и `KlimSani4/nexora-frontend`. План переключения — [docs/deploy-migration.md](docs/deploy-migration.md).
+Подробнее о деплое — [docs/deploy-migration.md](docs/deploy-migration.md).
 
 ## Документация
 
@@ -93,7 +94,7 @@ pnpm --filter @nexora/desktop dev   # http://localhost:5173
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Компоненты, стек, API, авторизация |
 | [docs/roadmap.md](docs/roadmap.md) | План развития по фазам |
-| [docs/deploy-migration.md](docs/deploy-migration.md) | Переключение деплоя на этот репозиторий |
+| [docs/deploy-migration.md](docs/deploy-migration.md) | Как устроен деплой и шаги переключения со старых репозиториев |
 | [backend/docs/](backend/docs/) | API, архитектура и схема БД бэкенда |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Как вести ветки, коммиты, issues и PR |
 | [SECURITY.md](SECURITY.md) | Как сообщить об уязвимости |
