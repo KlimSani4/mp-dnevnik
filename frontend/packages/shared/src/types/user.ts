@@ -1,6 +1,8 @@
 export interface UserSettings {
   notifications: boolean
   theme: 'light' | 'dark' | 'auto'
+  /** За сколько минут до пары напоминать в Telegram */
+  class_reminder_minutes?: 10 | 15
 }
 
 export interface User {

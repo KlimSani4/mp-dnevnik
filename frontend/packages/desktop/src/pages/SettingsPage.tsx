@@ -23,6 +23,7 @@ interface NotificationSettingMeta {
 }
 
 const NOTIFICATION_META: NotificationSettingMeta[] = [
+  { type: 'class_reminder', label: 'Напоминание о паре', description: 'Аудитория или ссылка на вебинар перед началом' },
   { type: 'schedule_change', label: 'Изменения расписания', description: 'Отмена пар, смена аудиторий' },
   { type: 'new_assignment', label: 'Новые задания', description: 'Когда кто-то создаёт задание' },
   { type: 'deadline', label: 'Дедлайны', description: 'Напоминание за день до срока' },
@@ -107,6 +108,20 @@ export function SettingsPage() {
       n.type === type ? { type: n.type, enabled: !n.enabled } : { type: n.type, enabled: n.enabled }
     )
     updatePrefsMutation.mutate({ preferences: next })
+  }
+
+  const reminderMinutes = user?.settings?.class_reminder_minutes ?? 15
+  const [reminderPending, setReminderPending] = useState(false)
+
+  const setReminderMinutes = async (minutes: 10 | 15) => {
+    if (!user || minutes === reminderMinutes) return
+    setReminderPending(true)
+    try {
+      await api.users.updateMe({ settings: { ...user.settings, class_reminder_minutes: minutes } })
+      await currentUserQuery.refetch()
+    } finally {
+      setReminderPending(false)
+    }
   }
 
   const handleSaveProfile = async () => {
@@ -268,6 +283,25 @@ export function SettingsPage() {
                       <div className="text-xs text-surface-500 dark:text-surface-400">
                         {n.description}
                       </div>
+                      {n.type === 'class_reminder' && n.enabled && (
+                        <div className="flex gap-2 mt-2">
+                          {([10, 15] as const).map((m) => (
+                            <button
+                              key={m}
+                              disabled={reminderPending}
+                              onClick={() => setReminderMinutes(m)}
+                              className={clsx(
+                                'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                                m === reminderMinutes
+                                  ? 'bg-primary-500 text-white'
+                                  : 'bg-surface-100 text-surface-700 dark:bg-surface-700 dark:text-surface-200'
+                              )}
+                            >
+                              За {m} мин
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <button
                       disabled={updatePrefsMutation.isPending}
