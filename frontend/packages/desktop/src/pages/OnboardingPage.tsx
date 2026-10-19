@@ -210,7 +210,8 @@ export function OnboardingPage() {
               </div>
             )}
 
-            {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && !awaitingBot && (
+            {/* Только в dev-сборке: в production код кнопки вырезается */}
+            {import.meta.env.DEV && !awaitingBot && (
               <Button
                 variant="secondary"
                 className="w-full max-w-xs mx-auto mt-2"

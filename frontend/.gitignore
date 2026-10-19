@@ -3,6 +3,8 @@ node_modules/
 .pnpm-store/
 
 # Build
+# tsc без --noEmit кладёт .js рядом с исходниками
+packages/*/src/**/*.js
 dist/
 build/
 .next/
