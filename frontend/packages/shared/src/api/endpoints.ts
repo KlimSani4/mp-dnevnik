@@ -36,6 +36,17 @@ import type {
   NotificationListParams,
   NotificationPreferencesResponse,
   NotificationPreferencesUpdate,
+  ModerationStats,
+  SupportRequest,
+  SupportStatus,
+  SupportRequestUpdate,
+  MySupportRequest,
+  TeacherApplication,
+  ApplicationStatus,
+  MyTeacherApplication,
+  TeacherApplicationCreate,
+  Moderator,
+  AuditEntry,
 } from '../types'
 
 export function createAuthApi(client: ApiClient) {
@@ -210,6 +221,54 @@ export function createNotificationsApi(client: ApiClient) {
     },
     updatePreferences(data: NotificationPreferencesUpdate) {
       return client.patch<NotificationPreferencesResponse>('/notifications/settings', data)
+    },
+  }
+}
+
+/** Модерация платформы (#99). Доступно только модераторам; выдать роль через API нельзя. */
+export function createModerationApi(client: ApiClient) {
+  return {
+    getStats() {
+      return client.get<ModerationStats>('/moderation/stats')
+    },
+    getSupport(status?: SupportStatus) {
+      return client.get<SupportRequest[]>('/moderation/support', status ? { status } : undefined)
+    },
+    updateSupport(id: string, data: SupportRequestUpdate) {
+      return client.patch<SupportRequest>(`/moderation/support/${id}`, data)
+    },
+    getTeacherApplications(status: ApplicationStatus = 'pending') {
+      return client.get<TeacherApplication[]>('/moderation/teacher-applications', { status })
+    },
+    approveTeacher(id: string) {
+      return client.post<TeacherApplication>(`/moderation/teacher-applications/${id}/approve`)
+    },
+    rejectTeacher(id: string) {
+      return client.post<TeacherApplication>(`/moderation/teacher-applications/${id}/reject`)
+    },
+    getModerators() {
+      return client.get<Moderator[]>('/moderation/moderators')
+    },
+    getAudit() {
+      return client.get<AuditEntry[]>('/moderation/audit')
+    },
+  }
+}
+
+/** Обращения в поддержку и заявка преподавателя от имени пользователя (#99). */
+export function createSupportApi(client: ApiClient) {
+  return {
+    create(message: string) {
+      return client.post<MySupportRequest>('/support', { message })
+    },
+    mine() {
+      return client.get<MySupportRequest[]>('/support/my')
+    },
+    getTeacherApplication() {
+      return client.get<MyTeacherApplication | null>('/users/me/teacher-application')
+    },
+    applyTeacher(data: TeacherApplicationCreate) {
+      return client.post<MyTeacherApplication>('/users/me/teacher-application', data)
     },
   }
 }

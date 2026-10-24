@@ -42,3 +42,16 @@ export {
   useNotificationPreferences,
   useUpdateNotificationPreferences,
 } from './useNotifications'
+export {
+  useModerationStats,
+  useSupportRequests,
+  useUpdateSupportRequest,
+  useTeacherApplications,
+  useReviewTeacherApplication,
+  useModerators,
+  useModerationAudit,
+  useMySupportRequests,
+  useCreateSupportRequest,
+  useMyTeacherApplication,
+  useApplyTeacher,
+} from './useModeration'

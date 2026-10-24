@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { clsx } from 'clsx'
+import { Link } from 'react-router-dom'
 import { Button, Card, Input, Avatar } from '../components/ui'
 import {
   useCurrentUser,
@@ -15,6 +16,7 @@ import {
   useChangeStudentRole,
 } from '@nexora/shared'
 import type { NotificationPreferenceType, GroupRole } from '@nexora/shared'
+import { SupportSection } from '../components/SupportSection'
 import { LANGUAGES, useLangStore, useT, type MessageKey } from '../i18n'
 
 interface NotificationSettingMeta {
@@ -91,7 +93,7 @@ export function SettingsPage() {
     }
   }
 
-  const [activeSection, setActiveSection] = useState<'profile' | 'notifications' | 'group' | 'about'>('profile')
+  const [activeSection, setActiveSection] = useState<'profile' | 'notifications' | 'group' | 'support' | 'about'>('profile')
 
   const prefsQuery = useNotificationPreferences()
   const updatePrefsMutation = useUpdateNotificationPreferences()
@@ -147,13 +149,14 @@ export function SettingsPage() {
     { id: 'profile' as const, label: t('settings.profile'), icon: UserIcon },
     { id: 'notifications' as const, label: t('nav.notifications'), icon: BellIcon },
     { id: 'group' as const, label: t('settings.group'), icon: UsersIcon },
+    { id: 'support' as const, label: t('support.section'), icon: ChatIcon },
     { id: 'about' as const, label: t('settings.about'), icon: InfoIcon },
   ]
 
   const primaryGroup = memberships[0]
   const isModerator =
     !!primaryGroup &&
-    (primaryGroup.role === 'starosta' || primaryGroup.role === 'deputy' || primaryGroup.role === 'moderator')
+    (primaryGroup.role === 'starosta' || primaryGroup.role === 'deputy' || primaryGroup.role === 'assistant')
   const moderatedGroupCode = isModerator ? primaryGroup.group.code : undefined
 
   const groupStudentsQuery = useGroupStudents(moderatedGroupCode)
@@ -175,6 +178,17 @@ export function SettingsPage() {
       <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50 mb-6">
         {t('nav.settings')}
       </h1>
+
+      {/* На телефоне пункта «Модерация» нет в нижнем меню — ссылка здесь (#99) */}
+      {user?.is_moderator && (
+        <Link
+          to="/moderation"
+          className="md:hidden mb-4 flex items-center justify-between rounded-lg bg-primary-50 px-4 py-3 text-sm font-medium text-primary-700 dark:bg-primary-500/10 dark:text-primary-300"
+        >
+          {t('nav.moderation')}
+          <span aria-hidden>→</span>
+        </Link>
+      )}
 
       <div className="flex flex-col md:flex-row gap-6">
         {/* Section navigation */}
@@ -523,7 +537,7 @@ export function SettingsPage() {
                                 )}
                                 {student.role !== 'student' && (
                                   <span className="text-xs px-1.5 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded font-medium capitalize">
-                                    {student.role === 'starosta' ? t('roles.starosta') : student.role === 'deputy' ? t('roles.deputy') : student.role === 'moderator' ? t('roles.moderator') : student.role}
+                                    {student.role === 'starosta' ? t('roles.starosta') : student.role === 'deputy' ? t('roles.deputy') : student.role === 'assistant' ? t('roles.assistant') : student.role}
                                   </span>
                                 )}
                               </div>
@@ -544,12 +558,12 @@ export function SettingsPage() {
                                   variant="ghost"
                                   size="sm"
                                   disabled={isPending}
-                                  onClick={() => handleChangeRole(student.user_id, 'moderator')}
+                                  onClick={() => handleChangeRole(student.user_id, 'assistant')}
                                 >
-                                  {t('settings.makeModerator')}
+                                  {t('settings.makeAssistant')}
                                 </Button>
                               )}
-                              {student.role === 'moderator' && (
+                              {student.role === 'assistant' && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -569,6 +583,8 @@ export function SettingsPage() {
               )}
             </Card>
           )}
+
+          {activeSection === 'support' && <SupportSection />}
 
           {/* About */}
           {activeSection === 'about' && (
@@ -644,6 +660,14 @@ function CheckIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+    </svg>
+  )
+}
+
+function ChatIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.83L3 20l1.4-3.72A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
     </svg>
   )
 }
