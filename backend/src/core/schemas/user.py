@@ -56,6 +56,9 @@ class UserResponse(UserBase):
 
     id: uuid.UUID
     settings: dict[str, Any]
+    # Только для чтения: в UserUpdate этих полей нет и быть не должно (#99)
+    is_moderator: bool = False
+    is_teacher: bool = False
     created_at: datetime
     updated_at: datetime
 
