@@ -46,6 +46,11 @@ const iconPaths: Record<string, string> = {
     'M9 4h.01M9 8h.01M9 12h.01M9 16h.01M9 20h.01M15 4h.01M15 8h.01M15 12h.01M15 16h.01M15 20h.01',
   'alert-triangle':
     'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
+  flame:
+    'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z',
+  'chevrons-up': 'M17 11l-5-5-5 5M17 18l-5-5-5 5',
+  'chevrons-down': 'M7 13l5 5 5-5M7 6l5 5 5-5',
+  minus: 'M5 12h14',
 };
 
 type IconName = keyof typeof iconPaths;

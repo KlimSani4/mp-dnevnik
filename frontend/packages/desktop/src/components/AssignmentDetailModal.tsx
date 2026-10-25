@@ -1,7 +1,8 @@
 import clsx from 'clsx'
 import { format, formatDistanceToNow, isPast, startOfDay } from 'date-fns'
 import { useState, useCallback } from 'react'
-import { Modal, Button, Badge, Avatar, Icon, Input, Select } from './ui'
+import { Modal, Button, Badge, Avatar, DatePicker, Icon, Input } from './ui'
+import { PriorityDropdown } from './PriorityDropdown'
 import { useUpdateAssignment, useDeleteAssignment } from '@nexora/shared'
 import {
   type Priority,
@@ -30,13 +31,6 @@ const STATE_LABELS: Record<TaskState, MessageKey> = {
   review: 'assign.col.review',
   done: 'assign.col.done',
 }
-
-const PRIORITY_OPTIONS: { value: Priority; label: MessageKey }[] = [
-  { value: 'low', label: 'assign.priority.low' },
-  { value: 'normal', label: 'assign.priority.normal' },
-  { value: 'high', label: 'assign.priority.high' },
-  { value: 'urgent', label: 'assign.priority.urgent' },
-]
 
 /* ─── Helpers ─── */
 
@@ -278,18 +272,8 @@ function AssignmentDetailModal({
                 className="input resize-none"
               />
             </div>
-            <Input
-              label={t('assign.deadline')}
-              type="date"
-              value={editDeadline}
-              onChange={(e) => setEditDeadline(e.target.value)}
-            />
-            <Select
-              label={t('assign.priority')}
-              options={PRIORITY_OPTIONS.map((o) => ({ ...o, label: t(o.label) }))}
-              value={editPriority}
-              onChange={setEditPriority}
-            />
+            <DatePicker label={t('assign.deadline')} value={editDeadline} onChange={setEditDeadline} />
+            <PriorityDropdown value={editPriority} onChange={setEditPriority} />
             <Input
               label={t('assign.link')}
               type="url"

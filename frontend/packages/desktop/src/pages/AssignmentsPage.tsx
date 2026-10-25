@@ -24,7 +24,8 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Button, Badge, Icon, Modal, Select, SearchInput, Input } from '../components/ui'
+import { Button, Badge, DatePicker, Dropdown, Icon, Modal, Select, SearchInput, Input } from '../components/ui'
+import { PriorityDropdown } from '../components/PriorityDropdown'
 import { AssignmentDetailModal } from '../components/AssignmentDetailModal'
 import { useAuthorName } from '../hooks/useAuthorName'
 import { useT } from '../i18n'
@@ -470,12 +471,6 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
 
   const allSubjects = subjects
   const subjectOptions = allSubjects.map((s) => ({ value: s.id, label: s.name }))
-  const priorityOptions = [
-    { value: 'low', label: t('assign.priority.low') },
-    { value: 'normal', label: t('assign.priority.normal') },
-    { value: 'high', label: t('assign.priority.high') },
-    { value: 'urgent', label: t('assign.priority.urgent') },
-  ]
 
   return (
     <Modal
@@ -504,12 +499,14 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
             <div className="space-y-3">
               <section className="space-y-4 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
             <div className="space-y-2">
-              <Select
+              <Dropdown
                 label={t('assign.subject')}
                 options={subjectOptions}
                 value={subjectId}
                 onChange={setSubjectId}
                 placeholder={t('assign.chooseSubject')}
+                searchPlaceholder={t('assign.searchSubject')}
+                emptyText={t('assign.noSubjects')}
                 error={errors.subjectId}
               />
               {/* Custom subject inline creation */}
@@ -611,19 +608,14 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
               onChange={(e) => setSubmissionLink(e.target.value)}
               placeholder="https://..."
             />
-            <Input
+            <DatePicker
               label={t('assign.deadline')}
-              type="date"
               value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
+              onChange={setDeadline}
+              min={today()}
               error={errors.deadline}
             />
-            <Select
-              label={t('assign.priority')}
-              options={priorityOptions}
-              value={priority}
-              onChange={setPriority}
-            />
+            <PriorityDropdown value={priority} onChange={setPriority} />
               </section>
 
               {/* Personal toggle */}
