@@ -144,6 +144,26 @@ def validate_telegram_widget_data(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+INTERNAL_SECRET_HEADER = "X-Internal-Secret"
+
+
+def _internal_secret() -> str:
+    """Секрет для вызовов бота во внутренние маршруты (выводится из APP_SECRET_KEY)."""
+    return hmac.new(
+        settings.APP_SECRET_KEY.encode(), b"nexora-internal-api", hashlib.sha256
+    ).hexdigest()
+
+
+def internal_api_headers() -> dict[str, str]:
+    """Заголовки, с которыми бот вызывает /api/v1/internal/*."""
+    return {INTERNAL_SECRET_HEADER: _internal_secret()}
+
+
+def verify_internal_secret(value: str | None) -> bool:
+    """Сравнить присланный секрет с ожидаемым за постоянное время."""
+    return bool(value) and hmac.compare_digest(value or "", _internal_secret())
+
+
 def hash_consent_text(text: str) -> str:
     """Create SHA-256 hash of consent text for audit trail."""
     return hashlib.sha256(text.encode()).hexdigest()

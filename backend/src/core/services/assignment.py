@@ -98,6 +98,27 @@ class AssignmentService:
             raise NotFoundError("Assignment not found")
         return AssignmentWithSubject.model_validate(assignment)
 
+    async def get_assignment_for_user(
+        self,
+        assignment_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> AssignmentWithSubject:
+        """Задание видит только участник группы; личное — только его автор."""
+        assignment = await self.assignment_repo.get_with_subject(assignment_id)
+        if not assignment:
+            raise NotFoundError("Assignment not found")
+        student = await self.student_repo.get_by_user_and_group(user_id, assignment.group_id)
+        if not student:
+            raise NotFoundError("Assignment not found")
+        if assignment.is_personal and assignment.author_id != user_id:
+            raise NotFoundError("Assignment not found")
+        return AssignmentWithSubject.model_validate(assignment)
+
+    async def require_group_member(self, group_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        """403, если пользователь не состоит в группе."""
+        if not await self.student_repo.get_by_user_and_group(user_id, group_id):
+            raise AuthorizationError("Not a member of this group")
+
     async def get_group_assignments(
         self,
         group_id: uuid.UUID,
@@ -203,11 +224,17 @@ class AssignmentService:
         *,
         days: int = 7,
         limit: int = 10,
+        viewer_id: uuid.UUID | None = None,
     ) -> list[AssignmentWithSubject]:
-        """Get upcoming deadlines for notifications."""
+        """Get upcoming deadlines for notifications.
+
+        Если передан viewer_id, личные задания других людей не попадают в выдачу.
+        """
         assignments = await self.assignment_repo.get_upcoming_deadlines(
             group_id, days=days, limit=limit
         )
+        if viewer_id is not None:
+            assignments = [a for a in assignments if not a.is_personal or a.author_id == viewer_id]
         return [AssignmentWithSubject.model_validate(a) for a in assignments]
 
     async def get_user_tasks(

@@ -46,6 +46,25 @@ jobs:
       - run: mypy --strict src/
       - run: bandit -r src/ -ll -q
 
+  backend-audit:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -U pip pip-audit
+      - run: pip install -e .
+      # Исключения разобраны в docs/security-audit.md (п. «Зависимости»):
+      # PYSEC-2026-4298 (python-jose) — алгоритм в decode_token задан явно, подмена ключа невозможна;
+      # PYSEC-2026-1325 (ecdsa) — подпись ECDSA не используется, только HS256.
+      - run: pip-audit --ignore-vuln PYSEC-2026-4298 --ignore-vuln PYSEC-2026-1325
+
   backend-test:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
@@ -115,6 +134,8 @@ jobs:
       - run: pnpm --filter @nexora/shared typecheck
       - run: pnpm --filter @nexora/desktop typecheck
       - run: pnpm --filter @nexora/desktop build
+      - name: Аудит зависимостей (production, high и выше)
+        run: pnpm audit --prod --audit-level high
       - name: Нет тестовых данных в production-сборке
         run: bash scripts/check-prod-bundle.sh
 
@@ -136,7 +157,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [changes, backend-lint, backend-test, backend-docker, frontend, frontend-docker]
+    needs: [changes, backend-lint, backend-audit, backend-test, backend-docker, frontend, frontend-docker]
     runs-on: ubuntu-latest
     steps:
       - name: Проверить результаты

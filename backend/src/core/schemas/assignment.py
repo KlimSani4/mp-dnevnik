@@ -2,11 +2,22 @@
 
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.core.models.assignment import TaskState
 from src.core.schemas.schedule import SubjectResponse
+
+
+def validate_http_url(value: str | None) -> str | None:
+    """Ссылка в задании: только http/https (иначе javascript: и data: попадут в href)."""
+    if value is None or value == "":
+        return None
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("link must be an http(s) URL")
+    return value.strip()
 
 
 class AssignmentBase(BaseModel):
@@ -17,6 +28,11 @@ class AssignmentBase(BaseModel):
     deadline: datetime | None = None
     priority: str = Field("normal", pattern="^(low|normal|high|urgent)$")
     link: str | None = Field(None, max_length=512)
+
+    @field_validator("link")
+    @classmethod
+    def _check_link(cls, v: str | None) -> str | None:
+        return validate_http_url(v)
 
 
 class AssignmentCreate(AssignmentBase):
@@ -34,8 +50,13 @@ class AssignmentUpdate(BaseModel):
     description: str | None = None
     deadline: datetime | None = None
     priority: str | None = Field(None, pattern="^(low|normal|high|urgent)$")
-    link: str | None = None
+    link: str | None = Field(None, max_length=512)
     is_personal: bool | None = None
+
+    @field_validator("link")
+    @classmethod
+    def _check_link(cls, v: str | None) -> str | None:
+        return validate_http_url(v)
 
 
 class AssignmentResponse(AssignmentBase):

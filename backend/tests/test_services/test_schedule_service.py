@@ -407,7 +407,7 @@ class TestCreateOverride:
 
     @pytest.mark.asyncio
     async def test_group_add_override_has_no_student(self) -> None:
-        """Группой делятся любым ADD-событием: студент не хранится, и не падаем без членства."""
+        """Группой делится любой её участник: студент у такой правки не хранится (#98)."""
         session = MagicMock()
         session.commit = AsyncMock()
         svc = _make_service(session)
@@ -418,7 +418,8 @@ class TestCreateOverride:
         override = MagicMock()
         svc.entry_repo.get = AsyncMock(return_value=entry)
         svc.override_repo.create = AsyncMock(return_value=override)
-        svc.student_repo.get_user_students = AsyncMock(return_value=[])
+        member = MagicMock(group_id=group.id, role="student")
+        svc.student_repo.get_user_students = AsyncMock(return_value=[member])
 
         result = await svc.create_override(
             entry.id,

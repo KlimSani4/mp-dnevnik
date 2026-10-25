@@ -10,6 +10,7 @@ from aiogram.types import Message
 
 from src.core.services.auth import AuthService
 from src.gateways.telegram.deps import get_session
+from src.shared.security import internal_api_headers
 
 logger = logging.getLogger(__name__)
 router = Router(name="start")
@@ -46,6 +47,7 @@ async def cmd_start(message: Message) -> None:
                         "first_name": tg_user.first_name,
                         "last_name": tg_user.last_name,
                     },
+                    headers=internal_api_headers(),
                 )
             if resp.status_code == 200:
                 await message.answer(

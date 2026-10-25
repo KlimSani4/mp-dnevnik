@@ -33,6 +33,7 @@ async def list_assignments(
     """Get assignments for a group."""
     priorities = [p.strip() for p in priority.split(",")] if priority else None
     assignment_service = AssignmentService(db)
+    await assignment_service.require_group_member(group_id, user.id)
     return await assignment_service.get_group_assignments(
         group_id,
         subject_id=subject_id,
@@ -60,11 +61,12 @@ async def create_assignment(
 @router.get("/{assignment_id}", response_model=AssignmentWithSubject)
 async def get_assignment(
     assignment_id: uuid.UUID,
+    user: CurrentUser,
     db: DBSession,
 ) -> AssignmentWithSubject:
-    """Get assignment by ID."""
+    """Get assignment by ID (group members only)."""
     assignment_service = AssignmentService(db)
-    return await assignment_service.get_assignment(assignment_id)
+    return await assignment_service.get_assignment_for_user(assignment_id, user.id)
 
 
 @router.patch("/{assignment_id}", response_model=AssignmentWithSubject)

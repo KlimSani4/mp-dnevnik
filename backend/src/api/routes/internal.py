@@ -2,13 +2,23 @@
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from src.api.deps import DBSession, RedisClient
 from src.core.services.auth import AuthService
+from src.shared.security import INTERNAL_SECRET_HEADER, verify_internal_secret
 
-router = APIRouter()
+
+async def require_internal(
+    secret: str | None = Header(None, alias=INTERNAL_SECRET_HEADER),
+) -> None:
+    """Пускает только бота: он знает секрет, выведенный из APP_SECRET_KEY."""
+    if not verify_internal_secret(secret):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+router = APIRouter(dependencies=[Depends(require_internal)])
 
 
 class BotAuthCompleteRequest(BaseModel):

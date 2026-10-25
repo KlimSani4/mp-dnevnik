@@ -423,12 +423,12 @@ class ScheduleService:
         students = await self.student_repo.get_user_students(author_id)
         group_student = next((s for s in students if s.group_id == entry.group_id), None)
         student_id: uuid.UUID | None = None
+        if group_student is None:
+            raise AuthorizationError("Only group members can create overrides")
         if scope == OverrideScope.GROUP and override_type not in (OverrideType.ADD,):
-            if not group_student or group_student.role == "student":
+            if group_student.role == "student":
                 raise AuthorizationError("Only starosta can create group overrides")
         elif scope == OverrideScope.PERSONAL:
-            if group_student is None:
-                raise AuthorizationError("Only group members can create personal overrides")
             student_id = group_student.id
 
         override = await self.override_repo.create(
