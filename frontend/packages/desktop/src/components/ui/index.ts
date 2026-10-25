@@ -27,3 +27,12 @@ export type { SkeletonProps, SkeletonVariant } from './Skeleton';
 
 export { Icon, iconNames } from './Icon';
 export type { IconProps, IconName } from './Icon';
+
+export { Dropdown } from './Dropdown';
+export type { DropdownProps, DropdownOption } from './Dropdown';
+
+export { DatePicker } from './DatePicker';
+export type { DatePickerProps } from './DatePicker';
+
+export { Popover } from './Popover';
+export type { PopoverProps } from './Popover';
