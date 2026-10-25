@@ -3,6 +3,12 @@
 from src.core.models.assignment import Assignment, AssignmentVote, TaskState, TaskStatus
 from src.core.models.base import Base, TimestampMixin, UUIDMixin
 from src.core.models.group import Group, GroupChat, Student, StudentRole
+from src.core.models.moderation import (
+    ApplicationStatus,
+    SupportRequest,
+    SupportStatus,
+    TeacherApplication,
+)
 from src.core.models.notification import Notification, NotificationPreference, NotificationType
 from src.core.models.schedule import (
     OverrideScope,
@@ -25,6 +31,11 @@ __all__ = [
     "AuditLog",
     "ConsentRecord",
     # Group
+    # Moderation
+    "SupportRequest",
+    "SupportStatus",
+    "TeacherApplication",
+    "ApplicationStatus",
     "Group",
     "GroupChat",
     "Student",

@@ -10,6 +10,8 @@ import {
   createTasksApi,
   createDashboardApi,
   createNotificationsApi,
+  createModerationApi,
+  createSupportApi,
 } from '../api/endpoints'
 import { useAuthStore } from '../stores/auth'
 
@@ -41,6 +43,8 @@ export function useApi() {
       tasks: createTasksApi(client),
       dashboard: createDashboardApi(client),
       notifications: createNotificationsApi(client),
+      moderation: createModerationApi(client),
+      support: createSupportApi(client),
     }),
     [client]
   )

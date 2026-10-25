@@ -16,6 +16,11 @@ const secondaryNav = [
   { to: '/notifications', label: 'nav.notifications' as MessageKey, icon: BellIcon },
 ]
 
+// Видно только модераторам платформы (#99)
+const moderatorNav = [
+  { to: '/moderation', label: 'nav.moderation' as MessageKey, icon: ShieldIcon },
+]
+
 const tabBarItems = [
   { to: '/', label: 'nav.today' as MessageKey, icon: HomeIcon },
   { to: '/schedule', label: 'nav.schedule' as MessageKey, icon: CalendarIcon },
@@ -100,7 +105,7 @@ export function Layout() {
           <div className="!my-4 border-t border-surface-200 dark:border-surface-700" />
 
           {/* Secondary Navigation */}
-          {secondaryNav.map(({ to, label, icon: Icon }) => (
+          {[...secondaryNav, ...(user?.is_moderator ? moderatorNav : [])].map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -285,6 +290,14 @@ function MoonIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+    </svg>
+  )
+}
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   )
 }

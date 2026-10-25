@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,11 @@ class User(Base, UUIDMixin, TimestampMixin):
 
     display_name: Mapped[str | None] = mapped_column(String(255))
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    # Модератор платформы. Выдаётся ТОЛЬКО вручную командой на сервере
+    # (python -m src.cli.moderator), ни один эндпоинт API эту роль не меняет (#99).
+    is_moderator: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Преподаватель — выставляется после одобрения заявки модератором.
+    is_teacher: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     # Relationships
     identities: Mapped[list["Identity"]] = relationship(

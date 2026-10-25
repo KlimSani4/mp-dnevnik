@@ -1,4 +1,5 @@
-export type GroupRole = 'starosta' | 'deputy' | 'student' | 'moderator'
+// assistant — помощник старосты (раньше «moderator»), не путать с модератором платформы
+export type GroupRole = 'starosta' | 'deputy' | 'student' | 'assistant'
 
 export interface Group {
   id: string

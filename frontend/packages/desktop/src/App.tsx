@@ -9,6 +9,7 @@ import { SubjectsPage } from './pages/SubjectsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { OnboardingPage } from './pages/OnboardingPage'
+import { ModerationPage } from './pages/ModerationPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +34,7 @@ export function App() {
               <Route path="/subjects" element={<SubjectsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/moderation" element={<ModerationPage />} />
             </Route>
           </Route>
         </Routes>

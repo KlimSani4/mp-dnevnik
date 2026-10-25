@@ -307,6 +307,10 @@ Update task status.
 
 ---
 
+## Moderation
+
+Модерация платформы, обращения в поддержку и заявки преподавателей — см. [docs/moderation.md](../../docs/moderation.md). Все маршруты `/moderation/*` требуют `users.is_moderator`, иначе `403`. Роль модератора через API не выдаётся.
+
 ## Health Checks
 
 ### GET /health

@@ -9,6 +9,9 @@ export interface User {
   id: string
   display_name: string
   settings: UserSettings
+  /** Модератор платформы — выдаётся только вручную на сервере (#99) */
+  is_moderator?: boolean
+  is_teacher?: boolean
   created_at: string
 }
 
