@@ -1,6 +1,6 @@
 """User routes."""
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Response
 from pydantic import BaseModel
@@ -25,7 +25,7 @@ DATA_PROCESSING_CONSENT = """
 class ConsentRequest(BaseModel):
     """Consent grant request."""
 
-    consent_type: str
+    consent_type: Literal["data_processing", "notifications"]
 
 
 class UserDataResponse(BaseModel):
@@ -34,6 +34,11 @@ class UserDataResponse(BaseModel):
     user: dict[str, Any]
     consents: list[dict[str, Any]]
     audit_logs_count: int
+    memberships: list[dict[str, Any]] = []
+    assignments_authored: list[dict[str, Any]] = []
+    task_statuses: list[dict[str, Any]] = []
+    notifications_count: int = 0
+    audit_logs: list[dict[str, Any]] = []
 
 
 @router.get("/me", response_model=UserResponse)

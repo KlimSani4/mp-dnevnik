@@ -2,6 +2,7 @@
 
 import logging
 import re
+from html import escape
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -60,14 +61,14 @@ async def process_group_input(message: Message, state: FSMContext) -> None:
             logger.info(f"Group joined: {group_code}, student: {student.id}")
     except Exception as e:
         logger.exception(f"Failed to join group: {e}")
-        await message.answer(f"❌ Ошибка: {e}")
+        await message.answer("❌ Не удалось сохранить группу. Проверьте код и попробуйте позже.")
         return
 
     # Clear state
     await state.clear()
 
     await message.answer(
-        f"✅ Группа <b>{group_code}</b> сохранена!\n\nТеперь можно посмотреть расписание: /schedule"
+        f"✅ Группа <b>{escape(group_code)}</b> сохранена!\n\nТеперь можно посмотреть расписание: /schedule"
     )
 
 

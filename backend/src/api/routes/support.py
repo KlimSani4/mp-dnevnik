@@ -1,15 +1,21 @@
 """Обращения в поддержку от пользователя (#99)."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from src.api.deps import CurrentUser, DBSession
+from src.api.rate_limit import user_rate_limit
 from src.core.schemas.moderation import MySupportRequestResponse, SupportRequestCreate
 from src.core.services.moderation import SupportService
 
 router = APIRouter()
 
 
-@router.post("", response_model=MySupportRequestResponse, status_code=201)
+@router.post(
+    "",
+    response_model=MySupportRequestResponse,
+    status_code=201,
+    dependencies=[Depends(user_rate_limit("support_create", 5))],
+)
 async def create_support_request(
     data: SupportRequestCreate, user: CurrentUser, db: DBSession
 ) -> MySupportRequestResponse:

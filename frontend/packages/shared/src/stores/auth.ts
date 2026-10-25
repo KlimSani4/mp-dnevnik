@@ -3,8 +3,8 @@ import { persist } from 'zustand/middleware'
 import type { User, AuthTokens } from '../types'
 
 interface AuthState {
+  // Access-токен живёт только в памяти; refresh-токен в HttpOnly cookie, скриптам он недоступен
   accessToken: string | null
-  refreshToken: string | null
   user: User | null
   isAuthenticated: boolean
   selectedGroupId: string | null
@@ -21,7 +21,6 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       accessToken: null,
-      refreshToken: null,
       user: null,
       isAuthenticated: false,
       selectedGroupId: null,
@@ -30,7 +29,6 @@ export const useAuthStore = create<AuthState>()(
       setTokens: (tokens: AuthTokens) =>
         set({
           accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
           isAuthenticated: true,
         }),
 
@@ -42,7 +40,6 @@ export const useAuthStore = create<AuthState>()(
       logout: () =>
         set({
           accessToken: null,
-          refreshToken: null,
           user: null,
           isAuthenticated: false,
           selectedGroupId: null,
@@ -54,8 +51,7 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'nexora-auth',
       partialize: (state) => ({
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
+        // токены в хранилище браузера не пишем; isAuthenticated только подсказка для интерфейса
         isAuthenticated: state.isAuthenticated,
         selectedGroupId: state.selectedGroupId,
         selectedGroupCode: state.selectedGroupCode,

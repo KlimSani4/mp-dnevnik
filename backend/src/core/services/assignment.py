@@ -228,13 +228,11 @@ class AssignmentService:
     ) -> list[AssignmentWithSubject]:
         """Get upcoming deadlines for notifications.
 
-        Если передан viewer_id, личные задания других людей не попадают в выдачу.
+        Личные задания других людей не попадают в выдачу; без viewer_id их нет вовсе.
         """
         assignments = await self.assignment_repo.get_upcoming_deadlines(
-            group_id, days=days, limit=limit
+            group_id, days=days, limit=limit, viewer_id=viewer_id
         )
-        if viewer_id is not None:
-            assignments = [a for a in assignments if not a.is_personal or a.author_id == viewer_id]
         return [AssignmentWithSubject.model_validate(a) for a in assignments]
 
     async def get_user_tasks(

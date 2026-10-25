@@ -5,6 +5,7 @@ import logging
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from html import escape
 from typing import Any
 
 from aiogram import F, Router
@@ -209,8 +210,8 @@ def _format_preview(title: str, subject_name: str | None, deadline: datetime | N
     subj_str = subject_name or "не определён"
     return (
         "📋 <b>Новое задание из пересланного сообщения</b>\n\n"
-        f"📌 Название: <b>{title}</b>\n"
-        f"📚 Предмет: <b>{subj_str}</b>\n"
+        f"📌 Название: <b>{escape(title)}</b>\n"
+        f"📚 Предмет: <b>{escape(subj_str)}</b>\n"
         f"⏰ Дедлайн: <b>{deadline_str}</b>\n\n"
         "Всё верно?"
     )
@@ -345,12 +346,12 @@ async def cb_forward_create(callback: CallbackQuery) -> None:
 
         deadline_str = deadline.strftime("%d.%m.%Y") if deadline else "без дедлайна"
         await callback.message.edit_text(  # type: ignore[union-attr]
-            f"✅ Задание создано!\n\n📌 <b>{data['t']}</b>\n📚 {data['sn']}\n⏰ {deadline_str}",
+            f"✅ Задание создано!\n\n📌 <b>{escape(data['t'])}</b>\n📚 {escape(data['sn'])}\n⏰ {deadline_str}",
             parse_mode="HTML",
         )
     except Exception as e:
         logger.exception("Failed to create assignment from forward: %s", e)
-        await callback.message.answer(f"Ошибка при создании: {e}")  # type: ignore[union-attr]
+        await callback.message.answer("Ошибка при создании задания. Попробуйте позже.")  # type: ignore[union-attr]
 
 
 # ── callback: cancel ──────────────────────────────────────────────────────────
@@ -378,7 +379,7 @@ async def cb_forward_edit(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(ForwardEdit.waiting_for_title)
     await callback.message.answer(  # type: ignore[union-attr]
         f"✏️ <b>Редактирование</b>\n\n"
-        f"Текущее название: <b>{data['t']}</b>\n\n"
+        f"Текущее название: <b>{escape(data['t'])}</b>\n\n"
         "Введи новое название (или отправь «-» чтобы оставить текущее):",
         parse_mode="HTML",
     )

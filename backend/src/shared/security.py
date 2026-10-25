@@ -3,11 +3,12 @@
 import hashlib
 import hmac
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qsl
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 
 from src.config import settings
@@ -41,7 +42,7 @@ def create_refresh_token(data: dict[str, Any]) -> str:
     """Create JWT refresh token."""
     to_encode = data.copy()
     expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({"exp": expire, "type": "refresh", "jti": uuid.uuid4().hex})
     encoded: str = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded
 
@@ -50,11 +51,24 @@ def decode_token(token: str) -> dict[str, Any]:
     """Decode and validate JWT token."""
     try:
         payload: dict[str, Any] = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"require": ["exp"]},
         )
         return payload
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         raise AuthenticationError("Invalid token") from e
+
+
+def _check_auth_date(value: Any, what: str) -> None:
+    """auth_date обязателен, это число и не старше 24 часов."""
+    try:
+        auth_timestamp = int(value)
+    except (TypeError, ValueError) as e:
+        raise AuthenticationError(f"{what}: invalid auth_date") from e
+    if time.time() - auth_timestamp > 86400:
+        raise AuthenticationError(f"{what} expired")
 
 
 def validate_telegram_init_data(init_data: str) -> dict[str, Any]:
@@ -72,12 +86,7 @@ def validate_telegram_init_data(init_data: str) -> dict[str, Any]:
     if not received_hash:
         raise AuthenticationError("Missing hash in init data")
 
-    # Check auth_date is not too old (24 hours)
-    auth_date = parsed.get("auth_date")
-    if auth_date:
-        auth_timestamp = int(auth_date)
-        if time.time() - auth_timestamp > 86400:
-            raise AuthenticationError("Init data expired")
+    _check_auth_date(parsed.get("auth_date"), "Init data")
 
     # Create data-check-string
     sorted_items = sorted(parsed.items())
@@ -116,12 +125,7 @@ def validate_telegram_widget_data(data: dict[str, Any]) -> dict[str, Any]:
     if not check_hash:
         raise AuthenticationError("Missing hash in widget data")
 
-    # Check auth_date is not too old (24 hours)
-    auth_date = data.get("auth_date")
-    if auth_date:
-        auth_timestamp = int(auth_date)
-        if time.time() - auth_timestamp > 86400:
-            raise AuthenticationError("Widget data expired")
+    _check_auth_date(data.get("auth_date"), "Widget data")
 
     # Create data-check-string
     sorted_items = sorted(data.items())

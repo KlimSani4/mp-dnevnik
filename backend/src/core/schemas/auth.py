@@ -29,9 +29,9 @@ class DevLoginRequest(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
-    """Refresh token request."""
+    """Refresh token request (токен можно не передавать: тогда берётся из HttpOnly cookie)."""
 
-    refresh_token: str
+    refresh_token: str | None = None
 
 
 class AuthenticatedUser(BaseModel):

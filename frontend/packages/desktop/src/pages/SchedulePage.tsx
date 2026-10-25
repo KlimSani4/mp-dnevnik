@@ -15,7 +15,8 @@ import {
   useCreateScheduleOverride,
   useDeleteScheduleOverride,
   useApi,
-  ApiClientError,
+  ApiClientError,
+  safeHref,
 } from '@nexora/shared'
 import type { AddEventPayload } from '@nexora/shared'
 import { Card } from '../components/ui/Card'
@@ -703,9 +704,9 @@ function DailyClassCard({
           {(entry.room || entry.location) && (
             <div className="flex items-center gap-2 mt-2 text-sm">
               <Icon name="map-pin" size={14} className={config.text} />
-              {isOnline && entry.location ? (
+              {isOnline && safeHref(entry.location) ? (
                 <a
-                  href={entry.location}
+                  href={safeHref(entry.location)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary-500 hover:underline truncate"
@@ -733,7 +734,10 @@ function DailyClassCard({
                 variant="success"
                 size="sm"
                 icon={<Icon name="play" size={14} />}
-                onClick={() => entry.location && window.open(entry.location, '_blank')}
+                onClick={() => {
+                  const href = safeHref(entry.location)
+                  if (href) window.open(href, '_blank', 'noopener,noreferrer')
+                }}
               >
                 {t('home.join')}
               </Button>

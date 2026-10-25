@@ -2,6 +2,7 @@
 
 import logging
 import re
+from html import escape
 
 import httpx
 from aiogram import Router
@@ -51,7 +52,7 @@ async def cmd_start(message: Message) -> None:
                 )
             if resp.status_code == 200:
                 await message.answer(
-                    f"Привет, {tg_user.first_name}!\n\n"
+                    f"Привет, {escape(tg_user.first_name or '')}!\n\n"
                     "Авторизация прошла успешно. Вернитесь на сайт — страница обновится автоматически.",
                     parse_mode="HTML",
                 )
@@ -83,11 +84,11 @@ async def cmd_start(message: Message) -> None:
             logger.info(f"User registered: {user.id}")
     except Exception as e:
         logger.exception(f"Failed to register user: {e}")
-        await message.answer(f"Ошибка регистрации: {e}")
+        await message.answer("Не удалось завершить регистрацию. Попробуйте позже.")
         return
 
     welcome_text = (
-        f"Привет, {tg_user.first_name}!\n\n"
+        f"Привет, {escape(tg_user.first_name or '')}!\n\n"
         "Я бот платформы <b>Nexora</b> для студентов Московского Политеха.\n\n"
         "Что я умею:\n"
         "• /schedule — расписание на сегодня\n"

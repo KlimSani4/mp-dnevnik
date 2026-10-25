@@ -4,8 +4,12 @@ import logging
 import uuid
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.models.assignment import Assignment, TaskStatus
+from src.core.models.group import Student
+from src.core.models.notification import Notification
 from src.core.repositories.user import (
     AuditLogRepository,
     ConsentRepository,
@@ -112,10 +116,81 @@ class UserService:
         consents = await self.consent_repo.get_active_consents(user_id)
         audit_logs = await self.audit_repo.get_user_logs(user_id, limit=1000)
 
+        students = (
+            (await self.session.execute(select(Student).where(Student.user_id == user_id)))
+            .scalars()
+            .all()
+        )
+        student_ids = [s.id for s in students]
+        authored = (
+            (await self.session.execute(select(Assignment).where(Assignment.author_id == user_id)))
+            .scalars()
+            .all()
+        )
+        statuses = (
+            (
+                await self.session.execute(
+                    select(TaskStatus).where(TaskStatus.student_id.in_(student_ids))
+                )
+            )
+            .scalars()
+            .all()
+            if student_ids
+            else []
+        )
+        notifications_count = (
+            await self.session.execute(
+                select(func.count())
+                .select_from(Notification)
+                .where(Notification.user_id == user_id)
+            )
+        ).scalar_one()
+
         return {
             "user": UserWithIdentities.model_validate(user).model_dump(),
             "consents": [ConsentResponse.model_validate(c).model_dump() for c in consents],
             "audit_logs_count": len(audit_logs),
+            "memberships": [
+                {
+                    "group_id": str(s.group_id),
+                    "role": str(s.role),
+                    "verified": s.verified,
+                    "joined_at": s.created_at,
+                }
+                for s in students
+            ],
+            "assignments_authored": [
+                {
+                    "id": str(a.id),
+                    "group_id": str(a.group_id),
+                    "title": a.title,
+                    "description": a.description,
+                    "deadline": a.deadline,
+                    "link": a.link,
+                    "is_personal": a.is_personal,
+                    "created_at": a.created_at,
+                }
+                for a in authored
+            ],
+            "task_statuses": [
+                {
+                    "assignment_id": str(t.assignment_id),
+                    "state": str(t.state),
+                    "updated_at": t.updated_at,
+                }
+                for t in statuses
+            ],
+            "notifications_count": notifications_count,
+            "audit_logs": [
+                {
+                    "action": log.action,
+                    "resource": log.resource,
+                    "ip_address": log.ip_address,
+                    "user_agent": log.user_agent,
+                    "created_at": log.created_at,
+                }
+                for log in audit_logs
+            ],
         }
 
     async def get_user_consents(self, user_id: uuid.UUID) -> list[ConsentResponse]:

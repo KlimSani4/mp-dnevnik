@@ -4,7 +4,7 @@ import json
 from functools import lru_cache
 from typing import Any
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     )
 
     # Application
-    APP_ENV: str = "development"
+    # Безопасное значение по умолчанию: dev-вход и /docs включаются только явным APP_ENV=development
+    APP_ENV: str = "production"
     APP_DEBUG: bool = False
     APP_SECRET_KEY: str
 
@@ -34,6 +35,13 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
+    # Сколько прокси перед приложением дописывают адрес в X-Forwarded-For (включая nginx).
+    # Адрес клиента берётся справа: левые элементы заголовка контролирует клиент.
+    TRUSTED_PROXY_COUNT: int = 1
+
+    # Срок хранения IP и User-Agent в журналах (ФЗ-152), дней
+    AUDIT_RETENTION_DAYS: int = 365
 
     # Telegram
     TELEGRAM_BOT_TOKEN: str = ""
@@ -62,6 +70,19 @@ class Settings(BaseSettings):
         if isinstance(v, list):
             return [str(x) for x in v]
         return []
+
+    @model_validator(mode="after")
+    def _reject_weak_secrets(self) -> "Settings":
+        """В production не запускаемся с примерными или короткими секретами."""
+        if self.APP_ENV != "production":
+            return self
+        for name in ("APP_SECRET_KEY", "JWT_SECRET_KEY"):
+            value = getattr(self, name)
+            if len(value) < 32 or value.lower().startswith(("change-me", "вставьте")):
+                raise ValueError(f"{name}: в production нужен случайный секрет от 32 символов")
+        if self.APP_SECRET_KEY == self.JWT_SECRET_KEY:
+            raise ValueError("APP_SECRET_KEY и JWT_SECRET_KEY должны различаться")
+        return self
 
     @property
     def is_production(self) -> bool:

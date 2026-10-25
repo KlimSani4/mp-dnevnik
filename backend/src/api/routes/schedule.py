@@ -3,9 +3,10 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 
 from src.api.deps import CurrentUser, CurrentUserOptional, DBSession, RedisClient
+from src.api.rate_limit import user_rate_limit
 from src.core.ics import build_ics, count_events
 from src.core.schemas.schedule import (
     DayScheduleResponse,
@@ -67,7 +68,12 @@ async def get_group_full_schedule(
     return await schedule_service.get_group_schedule(code)
 
 
-@router.post("/override", response_model=OverrideResponse, status_code=201)
+@router.post(
+    "/override",
+    response_model=OverrideResponse,
+    status_code=201,
+    dependencies=[Depends(user_rate_limit("override_create", 30))],
+)
 async def create_override(
     data: OverrideCreate,
     user: CurrentUser,
@@ -109,7 +115,7 @@ async def delete_override(
     return Response(status_code=204)
 
 
-@router.get("/export")
+@router.get("/export", dependencies=[Depends(user_rate_limit("schedule_export", 6))])
 async def export_ical(
     user: CurrentUser,
     db: DBSession,

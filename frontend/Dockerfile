@@ -29,17 +29,16 @@ ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
 RUN pnpm --filter @nexora/desktop build
 
 # ---- Stage 2: Nginx для раздачи статики ----
-FROM nginx:alpine AS runtime
-
-# Удаляем дефолтный конфиг nginx
-RUN rm /etc/nginx/conf.d/default.conf
+# Образ без root: nginx слушает 8080 и работает от пользователя nginx (uid 101)
+FROM nginxinc/nginx-unprivileged:alpine AS runtime
 
 # Копируем собственный конфиг
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
 
 # Копируем собранные файлы из стадии сборки
 COPY --from=builder /app/packages/desktop/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

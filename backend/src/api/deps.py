@@ -16,6 +16,7 @@ from src.core.repositories.group import StudentRepository
 from src.core.repositories.user import UserRepository
 from src.shared.database import get_db
 from src.shared.exceptions import AuthenticationError, AuthorizationError
+from src.shared.net import get_client_ip
 from src.shared.redis import get_redis
 from src.shared.security import decode_token
 
@@ -29,16 +30,6 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 async def get_redis_client() -> _Redis:
     """Get Redis client."""
     return await get_redis()
-
-
-def get_client_ip(request: Request) -> str | None:
-    """Extract client IP from request."""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return None
 
 
 def get_user_agent(

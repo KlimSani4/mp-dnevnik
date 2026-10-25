@@ -3,7 +3,7 @@ import { format, formatDistanceToNow, isPast, startOfDay } from 'date-fns'
 import { useState, useCallback } from 'react'
 import { Modal, Button, Badge, Avatar, DatePicker, Icon, Input } from './ui'
 import { PriorityDropdown } from './PriorityDropdown'
-import { useUpdateAssignment, useDeleteAssignment } from '@nexora/shared'
+import { useUpdateAssignment, useDeleteAssignment, safeHref } from '@nexora/shared'
 import {
   type Priority,
   type TaskState,
@@ -369,9 +369,9 @@ function AssignmentDetailModal({
             </div>
 
             {/* External Link */}
-            {assignment.link && (
+            {safeHref(assignment.link) && (
               <a
-                href={assignment.link}
+                href={safeHref(assignment.link)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={clsx(

@@ -26,7 +26,6 @@ export function useApi() {
       new ApiClient({
         baseUrl: API_BASE_URL,
         getToken: getAccessToken,
-        getRefreshToken: () => useAuthStore.getState().refreshToken,
         onUnauthorized: logout,
         onTokensRefreshed: (tokens) => useAuthStore.getState().setTokens(tokens),
       }),

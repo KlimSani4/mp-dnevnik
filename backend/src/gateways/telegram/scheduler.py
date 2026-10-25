@@ -2,6 +2,7 @@
 
 import logging
 from datetime import UTC, datetime, timedelta, timezone
+from html import escape
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -200,7 +201,7 @@ async def send_evening_digest() -> None:
                     schedule_part = (
                         f"📅 Завтра {len(day_schedule.entries)} пар"
                         f" с {first_time}\n"
-                        f"Первая — {first_subject} в {first_room}"
+                        f"Первая — {escape(first_subject)} в {escape(first_room)}"
                     )
                 else:
                     schedule_part = "Завтра пар нет. Выспись 😴"
@@ -210,7 +211,9 @@ async def send_evening_digest() -> None:
                     for a in deadlines:
                         subject_name = a.subject.name if a.subject else "Предмет"
                         dl_str = a.deadline.strftime("%d.%m") if a.deadline else "?"
-                        deadline_lines.append(f"• {subject_name} — {a.title} (до {dl_str})")
+                        deadline_lines.append(
+                            f"• {escape(subject_name)} — {escape(a.title)} (до {dl_str})"
+                        )
                     deadlines_part = "⏰ Горящие дедлайны:\n" + "\n".join(deadline_lines)
                     text = f"🌙 Дайджест на завтра\n\n{schedule_part}\n\n{deadlines_part}"
                 else:
@@ -276,7 +279,7 @@ async def send_morning_schedule() -> None:
                         f"☀️ Доброе утро!\n\n"
                         f"Сегодня {len(day_schedule.entries)} пар"
                         f" с {first_time}\n"
-                        f"Первая — {first_subject} в {first_room}"
+                        f"Первая — {escape(first_subject)} в {escape(first_room)}"
                     )
                 else:
                     text = "☀️ Доброе утро!\n\nСегодня пар нет"
@@ -347,10 +350,10 @@ async def send_deadline_reminders() -> None:
                     subject_name = a.subject.name if a.subject else "Предмет"
 
                     if abs(hours_left - 24) <= 0.5:
-                        msg = f"⏰ Завтра дедлайн: {a.title} ({subject_name})"
+                        msg = f"⏰ Завтра дедлайн: {escape(a.title)} ({escape(subject_name)})"
                         reminders.append((a, msg, "deadline_24h"))
                     elif abs(hours_left - 3) <= 0.5:
-                        msg = f"🔥 Через 3 часа дедлайн: {a.title} ({subject_name})"
+                        msg = f"🔥 Через 3 часа дедлайн: {escape(a.title)} ({escape(subject_name)})"
                         reminders.append((a, msg, "deadline_3h"))
 
                 if not reminders:
@@ -378,6 +381,18 @@ async def send_deadline_reminders() -> None:
                     "Failed to process deadline reminders for group",
                     extra={"group": group.code, "error": str(e)},
                 )
+
+
+async def purge_network_metadata() -> None:
+    """Раз в сутки удалять IP и User-Agent старше срока хранения (ФЗ-152)."""
+    from src.core.retention import purge_old_network_metadata
+    from src.gateways.telegram.deps import get_session
+
+    try:
+        async with get_session() as session:
+            await purge_old_network_metadata(session)
+    except Exception:  # noqa: BLE001 — задача фоновая, сбой не должен ронять планировщик
+        logger.exception("Failed to purge network metadata")
 
 
 async def sync_all_schedules() -> None:
@@ -434,6 +449,13 @@ def start_scheduler() -> None:
         id="deadline_reminders",
         replace_existing=True,
         misfire_grace_time=300,
+    )
+    scheduler.add_job(
+        purge_network_metadata,
+        CronTrigger(hour=3, minute=30, timezone="Europe/Moscow"),
+        id="purge_network_metadata",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
     scheduler.add_job(
         sync_all_schedules,

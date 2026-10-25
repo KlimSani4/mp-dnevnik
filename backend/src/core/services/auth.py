@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -29,12 +30,15 @@ from src.shared.security import (
 
 logger = logging.getLogger(__name__)
 
+REFRESH_TTL_SECONDS = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86400
+
 
 class AuthService:
     """Authentication and authorization service."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, redis: "Redis[str] | None" = None) -> None:
         self.session = session
+        self.redis = redis
         self.user_repo = UserRepository(session)
         self.identity_repo = IdentityRepository(session)
         self.consent_repo = ConsentRepository(session)
@@ -86,7 +90,7 @@ class AuthService:
         user, is_new = await self._get_or_create_user(identity)
 
         # Create tokens
-        tokens = self._create_tokens(user)
+        tokens = await self.issue_tokens(user)
 
         # Audit log
         await self.audit_repo.log(
@@ -113,7 +117,7 @@ class AuthService:
             first_name="Dev",
             last_name="User",
         )
-        tokens = self._create_tokens(user)
+        tokens = await self.issue_tokens(user)
 
         await self.audit_repo.log(
             action="dev_login",
@@ -180,6 +184,25 @@ class AuthService:
         logger.info("New user created", extra={"user_id": str(user.id)})
         return user, True
 
+    async def issue_tokens(self, user: User) -> TokenResponse:
+        """Создать пару токенов и запомнить refresh-токен (jti) в Redis для ротации и отзыва."""
+        tokens = self._create_tokens(user)
+        if self.redis is not None:
+            jti = decode_token(tokens.refresh_token)["jti"]
+            await self.redis.set(f"refresh:{jti}", str(user.id), ex=REFRESH_TTL_SECONDS)
+            await self.redis.sadd(f"user_refresh:{user.id}", jti)
+            await self.redis.expire(f"user_refresh:{user.id}", REFRESH_TTL_SECONDS)
+        return tokens
+
+    async def revoke_all_tokens(self, user_id: uuid.UUID) -> None:
+        """Отозвать все refresh-токены пользователя (выход, подозрение на кражу)."""
+        if self.redis is None:
+            return
+        set_key = f"user_refresh:{user_id}"
+        jtis = await self.redis.smembers(set_key)
+        keys = [f"refresh:{j}" for j in jtis] + [set_key]
+        await self.redis.delete(*keys)
+
     def _create_tokens(self, user: User) -> TokenResponse:
         """Create access and refresh tokens for user."""
         payload = {"sub": str(user.id)}
@@ -211,11 +234,24 @@ class AuthService:
         if not user_id:
             raise AuthenticationError("Invalid token payload")
 
+        jti = payload.get("jti")
+        if self.redis is None or not jti:
+            raise AuthenticationError("Invalid token payload")
+
+        stored = await self.redis.get(f"refresh:{jti}")
+        if stored != str(user_id):
+            # Токен подписан нами, но уже использован или отозван: считаем его украденным
+            await self.revoke_all_tokens(uuid.UUID(user_id))
+            raise AuthenticationError("Refresh token revoked")
+
         user = await self.user_repo.get(uuid.UUID(user_id))
         if not user:
             raise AuthenticationError("User not found")
 
-        tokens = self._create_tokens(user)
+        # Ротация: старый refresh-токен больше не действует
+        await self.redis.delete(f"refresh:{jti}")
+        await self.redis.srem(f"user_refresh:{user_id}", jti)
+        tokens = await self.issue_tokens(user)
 
         await self.audit_repo.log(
             action="token_refresh",
@@ -235,7 +271,8 @@ class AuthService:
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> None:
-        """Log out user (audit only, tokens are stateless)."""
+        """Log out user: отозвать все refresh-токены; access живёт не дольше своего срока."""
+        await self.revoke_all_tokens(user_id)
         await self.audit_repo.log(
             action="logout",
             user_id=user_id,

@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 
 from src.api.deps import CurrentUser, DBSession, require_group_moderator
+from src.api.rate_limit import user_rate_limit
 from src.core.schemas.group import (
     GroupCreate,
     GroupResponse,
@@ -36,7 +37,12 @@ async def list_groups(
     )
 
 
-@router.post("", response_model=GroupResponse, status_code=201)
+@router.post(
+    "",
+    response_model=GroupResponse,
+    status_code=201,
+    dependencies=[Depends(user_rate_limit("group_create", 5))],
+)
 async def create_group(
     data: GroupCreate,
     user: CurrentUser,
@@ -80,7 +86,12 @@ async def update_group(
     return await group_service.update_group(code, data, user.id)
 
 
-@router.post("/{code}/join", response_model=StudentResponse, status_code=201)
+@router.post(
+    "/{code}/join",
+    response_model=StudentResponse,
+    status_code=201,
+    dependencies=[Depends(user_rate_limit("group_join", 10))],
+)
 async def join_group(
     code: str,
     user: CurrentUser,

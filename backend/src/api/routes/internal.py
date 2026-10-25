@@ -46,7 +46,7 @@ async def bot_auth_complete(
         raise HTTPException(status_code=409, detail="Token already used")
 
     # Register or find user, create JWT tokens
-    auth_service = AuthService(db)
+    auth_service = AuthService(db, redis)
     user = await auth_service.register_from_bot(
         telegram_id=data.telegram_id,
         username=data.username,
@@ -55,7 +55,7 @@ async def bot_auth_complete(
     )
     await db.commit()
 
-    tokens = auth_service._create_tokens(user)
+    tokens = await auth_service.issue_tokens(user)
 
     # Store completed auth under the same Redis key (keep remaining TTL)
     ttl = await redis.ttl(key)

@@ -75,8 +75,13 @@ class AssignmentRepository(BaseRepository[Assignment]):
         *,
         days: int = 7,
         limit: int = 10,
+        viewer_id: uuid.UUID | None = None,
     ) -> list[Assignment]:
-        """Get upcoming deadlines for a group."""
+        """Get upcoming deadlines for a group.
+
+        Личные задания чужих авторов не возвращаются никогда; без viewer_id (рассылки
+        на всю группу) личных заданий нет вовсе.
+        """
         from datetime import timedelta
 
         now = datetime.utcnow()
@@ -89,6 +94,7 @@ class AssignmentRepository(BaseRepository[Assignment]):
                 Assignment.deadline.is_not(None),
                 Assignment.deadline >= now,
                 Assignment.deadline <= deadline_cutoff,
+                (Assignment.is_personal.is_(False)) | (Assignment.author_id == viewer_id),
             )
             .options(selectinload(Assignment.subject))
             .order_by(Assignment.deadline.asc())

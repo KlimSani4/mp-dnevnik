@@ -1,5 +1,7 @@
 """Settings command handlers."""
 
+from html import escape
+
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -28,7 +30,7 @@ async def cmd_settings(message: Message) -> None:
     # In real implementation, would show actual user settings
     settings_text = (
         "⚙️ <b>Настройки</b>\n\n"
-        f"<b>Пользователь:</b> {user.first_name}\n"
+        f"<b>Пользователь:</b> {escape(user.first_name or '')}\n"
         "<b>Группа:</b> не указана\n"
         "<b>Уведомления:</b> включены\n\n"
         "Выберите, что настроить:"

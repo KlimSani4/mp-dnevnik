@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Auth service unit tests — all DB/security calls are mocked."""
 
 import json
@@ -25,8 +27,39 @@ def _make_user(user_id: uuid.UUID | None = None, display_name: str = "Test User"
     return u
 
 
-def _make_service(session: MagicMock) -> AuthService:
-    svc = AuthService(session)
+class FakeRedis:
+    """Минимальный Redis в памяти для проверки ротации и отзыва refresh-токенов."""
+
+    def __init__(self) -> None:
+        self.kv: dict[str, str] = {}
+        self.sets: dict[str, set[str]] = {}
+
+    async def get(self, key: str) -> str | None:
+        return self.kv.get(key)
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self.kv[key] = value
+
+    async def delete(self, *keys: str) -> None:
+        for k in keys:
+            self.kv.pop(k, None)
+            self.sets.pop(k, None)
+
+    async def sadd(self, key: str, *values: str) -> None:
+        self.sets.setdefault(key, set()).update(values)
+
+    async def srem(self, key: str, *values: str) -> None:
+        self.sets.get(key, set()).difference_update(values)
+
+    async def smembers(self, key: str) -> set[str]:
+        return set(self.sets.get(key, set()))
+
+    async def expire(self, key: str, seconds: int) -> None:
+        return None
+
+
+def _make_service(session: MagicMock, redis: FakeRedis | None = None) -> AuthService:
+    svc = AuthService(session, redis)  # type: ignore[arg-type]
     svc.user_repo = AsyncMock()
     svc.identity_repo = AsyncMock()
     svc.consent_repo = AsyncMock()
@@ -255,17 +288,19 @@ class TestRefreshTokens:
     async def test_valid_refresh_token(self) -> None:
         session = MagicMock()
         session.commit = AsyncMock()
-        svc = _make_service(session)
+        redis = FakeRedis()
+        svc = _make_service(session, redis)
 
         user_id = uuid.uuid4()
         user = _make_user(user_id)
         svc.user_repo.get = AsyncMock(return_value=user)
         svc.audit_repo.log = AsyncMock()
+        await redis.set("refresh:j1", str(user_id))
 
         with (
             patch(
                 "src.core.services.auth.decode_token",
-                return_value={"type": "refresh", "sub": str(user_id)},
+                return_value={"type": "refresh", "sub": str(user_id), "jti": "j1"},
             ),
             patch("src.core.services.auth.create_access_token", return_value="new_acc"),
             patch("src.core.services.auth.create_refresh_token", return_value="new_ref"),
@@ -293,12 +328,15 @@ class TestRefreshTokens:
         session = MagicMock()
         svc = _make_service(session)
 
+        redis = FakeRedis()
+        svc = _make_service(session, redis)
         user_id = uuid.uuid4()
         svc.user_repo.get = AsyncMock(return_value=None)
+        await redis.set("refresh:j1", str(user_id))
 
         with patch(
             "src.core.services.auth.decode_token",
-            return_value={"type": "refresh", "sub": str(user_id)},
+            return_value={"type": "refresh", "sub": str(user_id), "jti": "j1"},
         ):
             with pytest.raises(AuthenticationError, match="User not found"):
                 await svc.refresh_tokens("token")
@@ -339,3 +377,67 @@ class TestLogout:
             user_agent="pytest",
         )
         session.commit.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# ротация и отзыв refresh-токенов (#108), настоящие JWT без подмены
+# ---------------------------------------------------------------------------
+
+class TestRefreshRotation:
+    def _svc(self) -> tuple[AuthService, FakeRedis, User]:
+        session = MagicMock()
+        session.commit = AsyncMock()
+        redis = FakeRedis()
+        svc = _make_service(session, redis)
+        user = _make_user()
+        svc.user_repo.get = AsyncMock(return_value=user)
+        svc.audit_repo.log = AsyncMock()
+        return svc, redis, user
+
+    @pytest.mark.asyncio
+    async def test_refresh_rotates_token(self) -> None:
+        svc, _, user = self._svc()
+        first = await svc.issue_tokens(user)
+
+        second = await svc.refresh_tokens(first.refresh_token)
+
+        assert second.refresh_token != first.refresh_token
+        with pytest.raises(AuthenticationError):
+            await svc.refresh_tokens(first.refresh_token)
+
+    @pytest.mark.asyncio
+    async def test_reuse_revokes_whole_chain(self) -> None:
+        svc, _, user = self._svc()
+        first = await svc.issue_tokens(user)
+        second = await svc.refresh_tokens(first.refresh_token)
+
+        with pytest.raises(AuthenticationError):
+            await svc.refresh_tokens(first.refresh_token)  # повтор старого токена
+        with pytest.raises(AuthenticationError):
+            await svc.refresh_tokens(second.refresh_token)  # новый тоже отозван
+
+    @pytest.mark.asyncio
+    async def test_logout_revokes_refresh(self) -> None:
+        svc, _, user = self._svc()
+        tokens = await svc.issue_tokens(user)
+
+        await svc.logout(user.id)
+
+        with pytest.raises(AuthenticationError):
+            await svc.refresh_tokens(tokens.refresh_token)
+
+    @pytest.mark.asyncio
+    async def test_refresh_without_redis_is_rejected(self) -> None:
+        session = MagicMock()
+        svc = _make_service(session, None)
+        user = _make_user()
+        tokens = svc._create_tokens(user)
+        with pytest.raises(AuthenticationError):
+            await svc.refresh_tokens(tokens.refresh_token)
+
+    @pytest.mark.asyncio
+    async def test_access_token_is_not_accepted_as_refresh(self) -> None:
+        svc, _, user = self._svc()
+        tokens = await svc.issue_tokens(user)
+        with pytest.raises(AuthenticationError, match="Invalid token type"):
+            await svc.refresh_tokens(tokens.access_token)

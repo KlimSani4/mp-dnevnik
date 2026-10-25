@@ -1,12 +1,16 @@
 """Schedule command handlers."""
 
+import logging
 import re
 from datetime import date, datetime, timedelta, timezone
+from html import escape
 from typing import Any
 
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="schedule")
 
@@ -53,16 +57,16 @@ def format_entry_full(entry: dict[str, Any]) -> str:
     raw = entry.get("raw_data")
     link = extract_link(raw)
 
-    lines = [f"🕑 <b>{start}–{end}</b>"]
-    lines.append(f"📖 {name}" + (f" ({lesson_type})" if lesson_type else ""))
+    lines = [f"🕑 <b>{escape(start)}–{escape(end)}</b>"]
+    lines.append(f"📖 {escape(str(name))}" + (f" ({escape(lesson_type)})" if lesson_type else ""))
     if teacher:
-        lines.append(f"👨‍🏫 Преподаватель: {teacher}")
+        lines.append(f"👨‍🏫 Преподаватель: {escape(teacher)}")
     if room and location:
-        lines.append(f"🏫 Аудитория: {room} ({location})")
+        lines.append(f"🏫 Аудитория: {escape(room)} ({escape(location)})")
     elif location:
-        lines.append(f"📍 {location}")
+        lines.append(f"📍 {escape(location)}")
     if link:
-        lines.append(f"💻 Онлайн: {link}")
+        lines.append(f"💻 Онлайн: {escape(link)}")
 
     return "\n".join(lines)
 
@@ -71,7 +75,7 @@ def format_day_full(target_date: date, entries: list[dict[str, Any]], group_code
     """Format full day schedule — matches competitor style."""
     date_str = target_date.strftime("%d.%m.%Y")
     weekday_name = WEEKDAY_NAMES.get(target_date.isoweekday(), "")
-    header = f"📅 <b>{date_str} ({weekday_name})</b>\nГруппа: {group_code}\n"
+    header = f"📅 <b>{date_str} ({weekday_name})</b>\nГруппа: {escape(group_code)}\n"
 
     if not entries:
         return header + "\nПар нет! 🎉"
@@ -155,11 +159,11 @@ async def _render_schedule(
         )
         entries = [e.model_dump() for e in day.entries] if day.entries else []
         text = format_day_full(target_date, entries, group.code)
-    except Exception as exc:
+    except Exception:
+        logger.exception("Failed to load schedule for bot")
         text = (
-            f"📅 <b>Расписание для {group.code}</b>\n\n"
-            f"Не удалось загрузить расписание. Попробуй позже.\n"
-            f"<code>{exc}</code>"
+            f"📅 <b>Расписание для {escape(group.code)}</b>\n\n"
+            "Не удалось загрузить расписание. Попробуй позже."
         )
 
     return text, schedule_keyboard(target_date)
@@ -297,13 +301,13 @@ def format_deadline(assignment: Any) -> str:
     priority_icons = {"urgent": "🔴", "high": "🟠", "normal": "🟡", "low": "🟢"}
     icon = priority_icons.get(getattr(assignment, "priority", "normal"), "📌")
 
-    lines = [f"{icon} <b>{assignment.title}</b>"]
-    lines.append(f"   📚 {subject_name}  ⏰ {deadline_str}")
+    lines = [f"{icon} <b>{escape(assignment.title)}</b>"]
+    lines.append(f"   📚 {escape(subject_name)}  ⏰ {deadline_str}")
     if assignment.description:
         desc = assignment.description[:120]
         if len(assignment.description) > 120:
             desc += "…"
-        lines.append(f"   {desc}")
+        lines.append(f"   {escape(desc)}")
     return "\n".join(lines)
 
 
@@ -332,11 +336,13 @@ async def cmd_deadlines(message: Message) -> None:
             return
 
         assignment_repo = AssignmentRepository(session)
-        deadlines = await assignment_repo.get_upcoming_deadlines(group.id, days=14, limit=10)
+        deadlines = await assignment_repo.get_upcoming_deadlines(
+            group.id, days=14, limit=10, viewer_id=identity.user_id
+        )
 
         if not deadlines:
             await message.answer(
-                f"⏰ <b>Дедлайны для {group.code}</b>\n\n"
+                f"⏰ <b>Дедлайны для {escape(group.code)}</b>\n\n"
                 "Ближайших дедлайнов нет! 🎉\n\n"
                 "Добавить можно через <a href='https://nexora.digitaldrugs.tech'>Nexora</a>.",
                 parse_mode="HTML",
@@ -344,6 +350,6 @@ async def cmd_deadlines(message: Message) -> None:
             return
 
         formatted = [format_deadline(d) for d in deadlines]
-        text = f"⏰ <b>Дедлайны для {group.code}</b>\n\n" + "\n\n".join(formatted)
+        text = f"⏰ <b>Дедлайны для {escape(group.code)}</b>\n\n" + "\n\n".join(formatted)
 
     await message.answer(text, parse_mode="HTML")

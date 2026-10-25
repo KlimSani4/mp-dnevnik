@@ -3,7 +3,6 @@ import type { ApiError, ValidationError, AuthTokens } from '../types'
 export interface ApiClientConfig {
   baseUrl: string
   getToken?: () => string | null
-  getRefreshToken?: () => string | null
   onUnauthorized?: () => void
   onTokensRefreshed?: (tokens: AuthTokens) => void
 }
@@ -11,7 +10,6 @@ export interface ApiClientConfig {
 export class ApiClient {
   private baseUrl: string
   private getToken: () => string | null
-  private getRefreshToken: (() => string | null) | undefined
   private onUnauthorized: () => void
   private onTokensRefreshed: ((tokens: AuthTokens) => void) | undefined
   private isRefreshing = false
@@ -20,7 +18,6 @@ export class ApiClient {
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '')
     this.getToken = config.getToken ?? (() => null)
-    this.getRefreshToken = config.getRefreshToken
     this.onUnauthorized = config.onUnauthorized ?? (() => {})
     this.onTokensRefreshed = config.onTokensRefreshed
   }
@@ -34,19 +31,15 @@ export class ApiClient {
       })
     }
 
-    const refreshToken = this.getRefreshToken?.()
-    if (!refreshToken) {
-      this.onUnauthorized()
-      throw new ApiClientError('Unauthorized', 'UNAUTHORIZED', 401)
-    }
-
     this.isRefreshing = true
     try {
       const refreshUrl = this.baseUrl.startsWith('http') ? `${this.baseUrl}/auth/refresh` : `${window.location.origin}${this.baseUrl}/auth/refresh`
       const response = await fetch(refreshUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        // refresh-токен лежит в HttpOnly cookie и уходит сам
+        credentials: 'include',
+        body: JSON.stringify({}),
       })
 
       if (!response.ok) {

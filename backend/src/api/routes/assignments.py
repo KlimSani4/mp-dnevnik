@@ -2,9 +2,10 @@
 
 import uuid
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 
 from src.api.deps import CurrentUser, DBSession
+from src.api.rate_limit import user_rate_limit
 from src.core.schemas.assignment import (
     AssignmentCreate,
     AssignmentUpdate,
@@ -46,7 +47,12 @@ async def list_assignments(
     )
 
 
-@router.post("", response_model=AssignmentWithSubject, status_code=201)
+@router.post(
+    "",
+    response_model=AssignmentWithSubject,
+    status_code=201,
+    dependencies=[Depends(user_rate_limit("assignment_create", 20))],
+)
 async def create_assignment(
     data: AssignmentCreate,
     user: CurrentUser,

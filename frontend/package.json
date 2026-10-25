@@ -12,6 +12,18 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"
   },
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.23",
+      "nanoid": "^3.3.18",
+      "picomatch@<2.3.2": "^2.3.2",
+      "picomatch@>=4.0.0 <4.0.4": "^4.0.4",
+      "browserslist": "^4.28.7",
+      "@babel/core": "^7.29.1",
+      "postcss-selector-parser@>=6.1.0 <6.1.3": "^6.1.3",
+      "postcss-selector-parser@>=7.0.0 <7.1.6": "^7.1.6"
+    }
+  },
   "engines": {
     "node": ">=18",
     "pnpm": ">=8"

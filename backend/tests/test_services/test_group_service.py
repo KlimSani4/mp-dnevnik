@@ -106,14 +106,37 @@ class TestJoinGroup:
         svc.student_repo.create = AsyncMock(return_value=student)
         svc.audit_repo.log = AsyncMock()
 
-        with __import__("unittest.mock", fromlist=["patch"]).patch(
-            "src.core.services.group.StudentResponse.model_validate",
-            side_effect=lambda x: x,
+        with (
+            __import__("unittest.mock", fromlist=["patch"]).patch(
+                "src.core.services.group.StudentResponse.model_validate",
+                side_effect=lambda x: x,
+            ),
+            __import__("unittest.mock", fromlist=["patch"]).patch(
+                "src.core.services.group.fetch_group_schedule",
+                new=AsyncMock(return_value=[{"subject": "x"}]),
+            ),
         ):
             result = await svc.join_group("NEW-123", user_id)
 
         svc.group_repo.create.assert_awaited_once()
         assert result is student
+
+    @pytest.mark.asyncio
+    async def test_unknown_group_code_is_not_created(self) -> None:
+        """Код, которого нет в расписании университета, группу не создаёт (#112)."""
+        from src.shared.exceptions import ValidationError
+
+        svc = _make_service(MagicMock())
+        svc.group_repo.get_by_code = AsyncMock(return_value=None)
+        svc.group_repo.create = AsyncMock()
+
+        with __import__("unittest.mock", fromlist=["patch"]).patch(
+            "src.core.services.group.fetch_group_schedule", new=AsyncMock(return_value=[])
+        ):
+            with pytest.raises(ValidationError):
+                await svc.join_group("ZZZ-999", _uuid())
+
+        svc.group_repo.create.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_raises_if_already_member(self) -> None:

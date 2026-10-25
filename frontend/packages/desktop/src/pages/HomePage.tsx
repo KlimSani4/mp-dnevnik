@@ -4,7 +4,7 @@ import { format, formatDistanceToNow, differenceInMinutes, isBefore } from 'date
 import { dateLocale, translate, translatePlural, useT, type MessageKey } from '../i18n'
 import clsx from 'clsx'
 import { Card, Badge, ProgressBar, Button, Icon, Avatar } from '../components/ui'
-import { useCurrentUser, useTodaySchedule, useTasks, useUpdateTask, useGroupContext, useDashboard } from '@nexora/shared'
+import { useCurrentUser, useTodaySchedule, useTasks, useUpdateTask, useGroupContext, useDashboard, safeHref } from '@nexora/shared'
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -175,9 +175,9 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
           </div>
           <div className="text-sm text-primary-500 mt-1 truncate">
             {isOnline ? (
-              entry.link ? (
+              safeHref(entry.link) ? (
                 <a
-                  href={entry.link}
+                  href={safeHref(entry.link)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:underline"
@@ -204,7 +204,10 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
                 variant="success"
                 size="sm"
                 icon={<Icon name="play" size={14} />}
-                onClick={() => entry.link && window.open(entry.link, '_blank')}
+                onClick={() => {
+                  const href = safeHref(entry.link)
+                  if (href) window.open(href, '_blank', 'noopener,noreferrer')
+                }}
                 className="w-full"
               >
                 {isActive

@@ -60,10 +60,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -U pip pip-audit
       - run: pip install -e .
-      # Исключения разобраны в docs/security-audit.md (п. «Зависимости»):
-      # PYSEC-2026-4298 (python-jose) — алгоритм в decode_token задан явно, подмена ключа невозможна;
-      # PYSEC-2026-1325 (ecdsa) — подпись ECDSA не используется, только HS256.
-      - run: pip-audit --ignore-vuln PYSEC-2026-4298 --ignore-vuln PYSEC-2026-1325
+      - run: pip-audit --skip-editable
 
   backend-test:
     needs: changes

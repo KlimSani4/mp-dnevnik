@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         docs_url="/docs" if settings.is_development else None,
         redoc_url="/redoc" if settings.is_development else None,
+        openapi_url="/openapi.json" if settings.is_development else None,
     )
 
     # Exception handlers
@@ -118,18 +119,14 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLoggingMiddleware)
 
     if settings.is_production:
-        app.add_middleware(
-            RateLimitMiddleware,
-            requests_per_minute=60,
-            burst=10,
-        )
+        app.add_middleware(RateLimitMiddleware, requests_per_minute=300)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
     )
 
     # Routes

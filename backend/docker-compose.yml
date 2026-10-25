@@ -1,3 +1,6 @@
+# Локальная инфраструктура для разработки. Порты БД и Redis привязаны к 127.0.0.1;
+# пароли задаются переменными POSTGRES_PASSWORD и REDIS_PASSWORD (значения по умолчанию
+# годятся только для локальной машины). Не публикуйте эти порты в сеть (#98).
 services:
   app:
     build: .
@@ -5,8 +8,8 @@ services:
       - "8000:8000"
     environment:
       - APP_ENV=production
-      - DATABASE_URL=postgresql+asyncpg://nexora:nexora@db:5432/nexora
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+asyncpg://nexora:${POSTGRES_PASSWORD:-nexora}@db:5432/nexora
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-nexora-redis}@redis:6379/0
     env_file:
       - .env
     depends_on:
@@ -26,12 +29,12 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: nexora
-      POSTGRES_PASSWORD: nexora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexora}
       POSTGRES_DB: nexora
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nexora -d nexora"]
       interval: 10s
@@ -41,13 +44,15 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexora-redis}
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping"]
       interval: 10s
       timeout: 5s
       retries: 5

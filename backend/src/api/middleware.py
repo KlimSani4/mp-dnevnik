@@ -9,6 +9,11 @@ from typing import Any
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from src.api.rate_limit import hit_limit
+from src.shared.exceptions import RateLimitError
+from src.shared.net import get_client_ip
+from src.shared.redis import get_redis
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +34,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "request_id": request_id,
                 "method": request.method,
                 "path": request.url.path,
-                "client_ip": self._get_client_ip(request),
+                "client_ip": get_client_ip(request),
             },
         )
 
@@ -69,69 +74,32 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    @staticmethod
-    def _get_client_ip(request: Request) -> str | None:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        if request.client:
-            return request.client.host
-        return None
-
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple in-memory rate limiting middleware."""
+    """Общий лимит запросов с одного IP; счётчики в Redis, поэтому едины для всех подов."""
 
-    def __init__(
-        self,
-        app: Any,
-        *,
-        requests_per_minute: int = 60,
-        burst: int = 10,
-    ) -> None:
+    def __init__(self, app: Any, *, requests_per_minute: int = 300) -> None:
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
-        self.burst = burst
-        self._buckets: dict[str, list[float]] = {}
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Any]) -> Response:
-        # Skip rate limiting for health checks
         if request.url.path in ("/health", "/ready"):
             result: Response = await call_next(request)
             return result
 
-        client_ip = self._get_client_ip(request)
-        if not client_ip:
-            result = await call_next(request)
-            return result
-
-        # Simple token bucket implementation
-        now = time.time()
-        bucket = self._buckets.get(client_ip, [])
-
-        # Remove old requests
-        window_start = now - 60
-        bucket = [t for t in bucket if t > window_start]
-
-        if len(bucket) >= self.requests_per_minute:
-            return Response(
-                content='{"detail":"Too many requests"}',
-                status_code=429,
-                media_type="application/json",
-                headers={"Retry-After": "60"},
-            )
-
-        bucket.append(now)
-        self._buckets[client_ip] = bucket
+        client_ip = get_client_ip(request)
+        if client_ip:
+            try:
+                await hit_limit(
+                    await get_redis(), f"ratelimit:global:{client_ip}", self.requests_per_minute, 60
+                )
+            except RateLimitError:
+                return Response(
+                    content='{"detail":"Too many requests"}',
+                    status_code=429,
+                    media_type="application/json",
+                    headers={"Retry-After": "60"},
+                )
 
         result = await call_next(request)
         return result
-
-    @staticmethod
-    def _get_client_ip(request: Request) -> str | None:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        if request.client:
-            return request.client.host
-        return None

@@ -18,7 +18,13 @@ from src.core.schemas.group import (
     StudentWithUser,
 )
 from src.core.schemas.schedule import SubjectCreate, SubjectRequirementsUpdate, SubjectResponse
-from src.shared.exceptions import AuthorizationError, ConflictError, NotFoundError
+from src.integrations.rasp_parser import fetch_group_schedule
+from src.shared.exceptions import (
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +41,16 @@ class GroupService:
         self.user_repo = UserRepository(session)
         self.audit_repo = AuditLogRepository(session)
 
+    async def _ensure_known_group_code(self, code: str) -> None:
+        """Новую группу можно завести только с кодом, который есть в расписании университета.
+
+        Иначе любой пользователь занимает произвольный код и становится владельцем
+        группы, в которую потом придут настоящие студенты (#112).
+        """
+        schedule = await fetch_group_schedule(code)
+        if not schedule:
+            raise ValidationError("Unknown group code: no schedule found for it")
+
     async def create_group(
         self,
         data: GroupCreate,
@@ -45,6 +61,7 @@ class GroupService:
         existing = await self.group_repo.get_by_code(data.code)
         if existing:
             raise ConflictError(f"Group {data.code} already exists")
+        await self._ensure_known_group_code(data.code)
 
         group = await self.group_repo.create(
             code=data.code,
@@ -127,7 +144,8 @@ class GroupService:
         """Join a group."""
         group = await self.group_repo.get_by_code(group_code)
         if not group:
-            # Auto-create group on first join
+            # Auto-create group on first join (только для кодов из расписания университета)
+            await self._ensure_known_group_code(group_code)
             group = await self.group_repo.create(code=group_code, name=group_code, owner_id=user_id)
 
         # Check if already member
@@ -277,7 +295,6 @@ class GroupService:
         """Join group by Telegram ID. Creates group if not exists."""
         from src.core.repositories.user import IdentityRepository
         from src.core.services.schedule import ScheduleService
-        from src.integrations.rasp_parser import fetch_group_schedule
 
         identity_repo = IdentityRepository(self.session)
 
@@ -291,6 +308,7 @@ class GroupService:
         need_import = False
 
         if not group:
+            await self._ensure_known_group_code(group_code)
             # Create group with this user as owner
             group = await self.group_repo.create(
                 code=group_code,

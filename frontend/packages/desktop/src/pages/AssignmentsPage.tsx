@@ -6,7 +6,8 @@ import {
   useCreateAssignment,
   useGroupContext,
   useGroupSubjects,
-  useCreateCustomSubject,
+  useCreateCustomSubject,
+  safeHref,
 } from '@nexora/shared'
 import clsx from 'clsx'
 import { startOfDay, addDays, isBefore } from 'date-fns'
@@ -108,9 +109,9 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
           {assignment.is_verified && (
             <Icon name="check" size={10} className="text-success-500 dark:text-success-400 flex-shrink-0" />
           )}
-          {assignment.link && (
+          {safeHref(assignment.link) && (
             <a
-              href={assignment.link}
+              href={safeHref(assignment.link)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
