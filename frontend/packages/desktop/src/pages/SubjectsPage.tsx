@@ -118,7 +118,7 @@ export function SubjectsPage() {
 
   // Determine if current user is starosta/deputy/moderator
   const myMembership = myGroupsQuery.data?.find((m) => m.group.code === groupCode)
-  const isStarosta = myMembership?.role && ['starosta', 'deputy', 'moderator'].includes(myMembership.role)
+  const isStarosta = myMembership?.role && ['starosta', 'deputy', 'assistant'].includes(myMembership.role)
 
   const groupSettings = (groupQuery.data?.settings ?? {}) as Record<string, unknown>
 

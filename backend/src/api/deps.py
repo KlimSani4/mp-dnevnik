@@ -80,6 +80,29 @@ async def get_current_user(
     """Get current authenticated user. Raises if not authenticated."""
     if user is None:
         raise AuthenticationError("Authentication required")
+    await _track_activity(user)
+    return user
+
+
+async def _track_activity(user: User) -> None:
+    """Отметить пользователя активным сегодня — для статистики модераторов (#99)."""
+    from src.core.activity import track_active
+
+    try:
+        await track_active(await get_redis(), user.id)
+    except Exception:  # noqa: BLE001 — статистика не должна ломать запрос
+        return
+
+
+async def require_moderator(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Только модератор платформы (User.is_moderator). Иначе 403.
+
+    Роль выдаётся исключительно командой на сервере: python -m src.cli.moderator.
+    """
+    if not user.is_moderator:
+        raise AuthorizationError("Moderator role required")
     return user
 
 
@@ -131,7 +154,7 @@ class RequireGroupRole:
 
 require_starosta = RequireGroupRole(StudentRole.STAROSTA, StudentRole.DEPUTY)
 require_group_moderator = RequireGroupRole(
-    StudentRole.STAROSTA, StudentRole.DEPUTY, StudentRole.MODERATOR
+    StudentRole.STAROSTA, StudentRole.DEPUTY, StudentRole.ASSISTANT
 )
 require_member = RequireGroupRole()
 
@@ -142,5 +165,6 @@ RedisClient = Annotated["_Redis", Depends(get_redis_client)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentUserOptional = Annotated[User | None, Depends(get_current_user_optional)]
 VerifiedUser = Annotated[User, Depends(require_verified)]
+ModeratorUser = Annotated[User, Depends(require_moderator)]
 ClientIP = Annotated[str | None, Depends(get_client_ip)]
 UserAgent = Annotated[str | None, Depends(get_user_agent)]

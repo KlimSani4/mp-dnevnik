@@ -82,7 +82,9 @@ class StudentRole(enum.StrEnum):
     STUDENT = "student"
     STAROSTA = "starosta"
     DEPUTY = "deputy"
-    MODERATOR = "moderator"
+    # Помощник старосты (раньше «moderator»): назначается старостой внутри группы.
+    # Не путать с модератором платформы — User.is_moderator.
+    ASSISTANT = "assistant"
 
 
 class Student(Base, UUIDMixin, TimestampMixin):

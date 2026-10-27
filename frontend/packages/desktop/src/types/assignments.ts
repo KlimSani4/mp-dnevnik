@@ -110,3 +110,37 @@ export function daysLeft(deadline: string): number {
 export function getDayWord(n: number): string {
   return translatePlural('plural.dayWord', n)
 }
+
+/* ─── Приоритет: цвет и значок для каждого уровня (#102) ─── */
+
+export const PRIORITY_ORDER: Priority[] = ['low', 'normal', 'high', 'urgent']
+
+export const PRIORITY_META: Record<
+  Priority,
+  { icon: string; hint: MessageKey; tile: string; field: string }
+> = {
+  low: {
+    icon: 'chevrons-down',
+    hint: 'assign.priority.low.hint',
+    tile: 'bg-surface-100 text-surface-500 dark:bg-surface-700 dark:text-surface-300',
+    field: '!border-surface-300 dark:!border-surface-600',
+  },
+  normal: {
+    icon: 'minus',
+    hint: 'assign.priority.normal.hint',
+    tile: 'bg-info-100 text-info-600 dark:bg-info-500/15 dark:text-info-500',
+    field: '!border-info-500/60',
+  },
+  high: {
+    icon: 'chevrons-up',
+    hint: 'assign.priority.high.hint',
+    tile: 'bg-warning-100 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500',
+    field: '!border-warning-500/70 !bg-warning-50/60 dark:!bg-warning-500/5',
+  },
+  urgent: {
+    icon: 'flame',
+    hint: 'assign.priority.urgent.hint',
+    tile: 'bg-danger-100 text-danger-600 dark:bg-danger-500/15 dark:text-danger-500',
+    field: '!border-danger-500/70 !bg-danger-50/60 dark:!bg-danger-500/5',
+  },
+}

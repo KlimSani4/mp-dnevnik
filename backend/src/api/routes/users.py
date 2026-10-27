@@ -6,8 +6,10 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
 from src.api.deps import ClientIP, CurrentUser, DBSession, UserAgent
+from src.core.schemas.moderation import MyTeacherApplicationResponse, TeacherApplicationCreate
 from src.core.schemas.user import ConsentResponse, UserResponse, UserUpdate
 from src.core.services.auth import AuthService
+from src.core.services.moderation import TeacherApplicationService
 from src.core.services.user import UserService
 
 router = APIRouter()
@@ -132,3 +134,22 @@ async def grant_consent(
 
     # Should never reach here
     return consents[0]
+
+
+@router.post(
+    "/me/teacher-application", response_model=MyTeacherApplicationResponse, status_code=201
+)
+async def apply_teacher(
+    data: TeacherApplicationCreate, user: CurrentUser, db: DBSession
+) -> MyTeacherApplicationResponse:
+    """Подать заявку на роль преподавателя. Рассматривает модератор (#99)."""
+    app = await TeacherApplicationService(db).apply(user, data)
+    return MyTeacherApplicationResponse.model_validate(app)
+
+
+@router.get("/me/teacher-application", response_model=MyTeacherApplicationResponse | None)
+async def my_teacher_application(
+    user: CurrentUser, db: DBSession
+) -> MyTeacherApplicationResponse | None:
+    app = await TeacherApplicationService(db).latest(user)
+    return MyTeacherApplicationResponse.model_validate(app) if app else None

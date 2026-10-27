@@ -7,9 +7,11 @@ from src.api.routes import (
     groups,
     health,
     internal,
+    moderation,
     notifications,
     schedule,
     semesters,
+    support,
     tasks,
     users,
 )
@@ -26,4 +28,6 @@ __all__ = [
     "semesters",
     "notifications",
     "internal",
+    "moderation",
+    "support",
 ]
