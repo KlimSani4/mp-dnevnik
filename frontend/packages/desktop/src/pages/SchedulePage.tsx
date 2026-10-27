@@ -153,6 +153,38 @@ function lessonTypeLabel(type: string | null | undefined): string {
   return key ? translate(key) : type
 }
 
+function getWeeklyCardPalette(entry: ScheduleEntry): { card: string; icon: string; title: string } {
+  if (isCustomEvent(entry)) {
+    return {
+      card: 'border-slate-200 bg-slate-50 after:border-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:after:border-slate-600',
+      icon: 'bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-500',
+      title: 'text-slate-700 dark:text-slate-200',
+    }
+  }
+
+  switch ((entry.lesson_type ?? '').toLowerCase()) {
+    case 'лекция':
+      return {
+        card: 'border-emerald-200 bg-emerald-50 after:border-emerald-200 dark:border-emerald-700 dark:bg-emerald-950/40 dark:after:border-emerald-700',
+        icon: 'bg-emerald-500 text-white border-emerald-400 dark:border-emerald-400',
+        title: 'text-emerald-800 dark:text-emerald-200',
+      }
+    case 'лаб':
+    case 'лабораторная':
+      return {
+        card: 'border-amber-200 bg-amber-50 after:border-amber-200 dark:border-amber-700 dark:bg-amber-950/40 dark:after:border-amber-700',
+        icon: 'bg-amber-500 text-white border-amber-300 dark:border-amber-300',
+        title: 'text-amber-800 dark:text-amber-200',
+      }
+    default:
+      return {
+        card: 'border-blue-200 bg-blue-50 after:border-blue-200 dark:border-blue-700 dark:bg-blue-950/40 dark:after:border-blue-700',
+        icon: 'bg-blue-500 text-white border-blue-300 dark:border-blue-300',
+        title: 'text-blue-800 dark:text-blue-200',
+      }
+  }
+}
+
 function parseTimeFlexible(t: string): Date {
   const fmt = t.length > 5 ? 'HH:mm:ss' : 'HH:mm'
   return parse(t, fmt, new Date())
@@ -791,6 +823,7 @@ function WeeklyClassCell({
 
   const type = getClassType(entry)
   const config = classTypeConfig[type]
+  const palette = getWeeklyCardPalette(entry)
   const isOnline = type === 'online' || type === 'webinar'
   const cancelled = isCancelled(entry)
   const custom = isCustomEvent(entry)
@@ -810,7 +843,7 @@ function WeeklyClassCell({
 
   return (
     <div
-      className={`card min-h-[90px] p-2.5 text-xs flex flex-col overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
+      className={`min-h-[90px] rounded-xl border ${palette.card} after:content-[''] after:absolute after:inset-[3px] after:rounded-[10px] after:border after:pointer-events-none p-2.5 text-xs flex flex-col overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
     >
       {/* Hide button */}
       {!cancelled && !custom && !entry.is_session && (
@@ -826,11 +859,11 @@ function WeeklyClassCell({
 
       <div className="flex items-center gap-1.5 mb-1">
         <div
-          className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${config.bg} ${config.text}`}
+          className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${palette.icon}`}
         >
-          <Icon name={config.icon} size={12} />
+          <Icon name={config.icon} size={14} />
         </div>
-        <span className={`min-w-0 flex-1 font-medium text-surface-900 dark:text-surface-50 truncate leading-tight${cancelled ? ' line-through' : ''}`}>
+        <span className={`min-w-0 flex-1 font-semibold ${palette.title} truncate leading-tight${cancelled ? ' line-through' : ''}`}>
           {entry.subject.short_name ?? entry.subject.name}
         </span>
         {entry.is_session && (
@@ -852,6 +885,9 @@ function WeeklyClassCell({
 
       <div className="text-surface-500 dark:text-surface-400 truncate">
         {lessonTypeLabel(entry.lesson_type)}
+      </div>
+      <div className="mt-0.5 text-[10px] font-medium text-surface-500 dark:text-surface-400">
+        {formatTimeDisplay(entry.start_time)} – {formatTimeDisplay(entry.end_time)}
       </div>
       {entry.is_session && (
         <div className="text-[10px] text-primary-600 dark:text-primary-400">
@@ -875,6 +911,27 @@ function WeeklyClassCell({
   )
 }
 
+function ScheduleViewToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: 'daily' | 'weekly'
+  onChange: (mode: 'daily' | 'weekly') => void
+}) {
+  const { t } = useT()
+
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <Button variant={viewMode === 'weekly' ? 'secondary' : 'ghost'} size="sm" onClick={() => onChange('weekly')} icon={<Icon name="calendar" size={16} />}>
+        {t('schedule.week')}
+      </Button>
+      <Button variant={viewMode === 'daily' ? 'secondary' : 'ghost'} size="sm" onClick={() => onChange('daily')} icon={<Icon name="clock" size={16} />}>
+        {t('schedule.day')}
+      </Button>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Daily view
 // ---------------------------------------------------------------------------
@@ -885,12 +942,18 @@ function DailyView({
   onNext,
   onToday,
   daySchedule,
+  viewMode,
+  onViewModeChange,
+  showViewToggle,
 }: {
   dayOffset: number
   onPrev: () => void
   onNext: () => void
   onToday: () => void
   daySchedule?: DaySchedule
+  viewMode: 'daily' | 'weekly'
+  onViewModeChange: (mode: 'daily' | 'weekly') => void
+  showViewToggle: boolean
 }) {
   const { t } = useT()
   const targetDate = addDays(new Date(), dayOffset)
@@ -916,10 +979,7 @@ function DailyView({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-            {t('nav.schedule')}
-          </h1>
-          <p className="text-sm text-surface-500 dark:text-surface-400 mt-1 capitalize">
+          <p className="text-sm text-surface-500 dark:text-surface-400 capitalize">
             {dateLabel}
           </p>
         </div>
@@ -931,12 +991,15 @@ function DailyView({
       </div>
 
       {/* Day navigation */}
-      <div className="flex items-center gap-2 mb-5">
+      <div className="flex items-center justify-between gap-2 mb-5">
+        {showViewToggle && <ScheduleViewToggle viewMode={viewMode} onChange={onViewModeChange} />}
+        <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" iconOnly icon={<Icon name="chevron-left" size={18} />} onClick={onPrev} />
         <span className="text-sm font-medium text-surface-700 dark:text-surface-200 min-w-[120px] text-center capitalize">
           {format(targetDate, 'EEEE', { locale: dateLocale() })}
         </span>
         <Button variant="ghost" size="sm" iconOnly icon={<Icon name="chevron-right" size={18} />} onClick={onNext} />
+        </div>
       </div>
 
       {/* Entries */}
@@ -1019,12 +1082,16 @@ function WeeklyView({
   onNextWeek,
   onToday,
   weekData,
+  viewMode,
+  onViewModeChange,
 }: {
   weekOffset: number
   onPrevWeek: () => void
   onNextWeek: () => void
   onToday: () => void
   weekData: DaySchedule[]
+  viewMode: 'daily' | 'weekly'
+  onViewModeChange: (mode: 'daily' | 'weekly') => void
 }) {
   const { t } = useT()
   const today = new Date()
@@ -1056,10 +1123,8 @@ function WeeklyView({
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-surface-900 dark:text-surface-50">
-          {t('nav.schedule')}
-        </h1>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <ScheduleViewToggle viewMode={viewMode} onChange={onViewModeChange} />
         <div className="flex items-center gap-2">
           {weekOffset !== 0 && (
             <Button variant="ghost" size="sm" onClick={onToday}>
@@ -1109,14 +1174,14 @@ function WeeklyView({
                     key={day.schedule_date}
                     className={`p-2 text-center ${
                       current
-                        ? 'bg-primary-50 dark:bg-primary-900/20 rounded-t-lg'
+                        ? 'bg-blue-50/60 dark:bg-blue-900/10 rounded-t-lg'
                         : ''
                     }`}
                   >
                     <div
                       className={`text-xs font-medium ${
                         current
-                          ? 'text-primary-600 dark:text-primary-400'
+                          ? 'text-blue-600 dark:text-blue-400'
                           : 'text-surface-400 dark:text-surface-500'
                       }`}
                     >
@@ -1125,7 +1190,7 @@ function WeeklyView({
                     <div
                       className={`text-sm font-semibold mt-0.5 ${
                         current
-                          ? 'text-primary-600 dark:text-primary-400'
+                          ? 'text-blue-600 dark:text-blue-400'
                           : 'text-surface-700 dark:text-surface-200'
                       }`}
                     >
@@ -1162,11 +1227,13 @@ function WeeklyView({
                   return (
                     <td
                       key={`${day.schedule_date}-${pn}`}
-                      className={`p-1 align-top ${
-                        current
-                          ? 'bg-primary-50/50 dark:bg-primary-900/10'
-                          : ''
-                      }`}
+                      className="p-1 align-top border-l border-surface-200/70 dark:border-surface-700/70"
+                      style={{
+                        backgroundImage: current
+                          ? 'radial-gradient(circle, rgba(100,116,139,.22) 1px, transparent 1px), linear-gradient(rgba(59,130,246,.06), rgba(59,130,246,.06))'
+                          : 'radial-gradient(circle, rgba(100,116,139,.22) 1px, transparent 1px)',
+                        backgroundSize: '14px 14px, 100% 100%',
+                      }}
                     >
                       {entries.length > 0 && (
                         <div className="space-y-1">
@@ -1191,8 +1258,13 @@ function WeeklyView({
               <td className="p-2" />
               {weekData.map((day) => {
                 const anchorExists = day.entries.some(canAnchorEvent)
+                const current = isToday(parse(day.schedule_date, 'yyyy-MM-dd', new Date()))
                 return (
-                  <td key={`add-${day.schedule_date}`} className="p-1">
+                  <td
+                    key={`add-${day.schedule_date}`}
+                    className="p-1 border-l border-surface-200/70 dark:border-surface-700/70"
+                    style={current ? { backgroundColor: 'rgba(59,130,246,.06)' } : undefined}
+                  >
                     {anchorExists && (
                       <button
                         onClick={() => openAddModal(day.schedule_date, day.entries)}
@@ -1258,28 +1330,6 @@ export function SchedulePage() {
 
   return (
     <div>
-      {/* View mode toggle (only visible on non-mobile) */}
-      {!isMobile && (
-        <div className="flex items-center gap-1 mb-4">
-          <Button
-            variant={viewMode === 'weekly' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('weekly')}
-            icon={<Icon name="calendar" size={16} />}
-          >
-            {t('schedule.week')}
-          </Button>
-          <Button
-            variant={viewMode === 'daily' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('daily')}
-            icon={<Icon name="clock" size={16} />}
-          >
-            {t('schedule.day')}
-          </Button>
-        </div>
-      )}
-
       {!groupCode ? (
         <div className="flex flex-col items-center justify-center py-20">
           <p className="text-surface-500 dark:text-surface-400 font-medium">
@@ -1303,6 +1353,9 @@ export function SchedulePage() {
           onNext={() => setDayOffset((d) => d + 1)}
           onToday={() => setDayOffset(0)}
           daySchedule={dayData}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          showViewToggle={!isMobile}
         />
       ) : (
         <WeeklyView
@@ -1311,6 +1364,8 @@ export function SchedulePage() {
           onNextWeek={() => setWeekOffset((w) => w + 1)}
           onToday={() => setWeekOffset(0)}
           weekData={weekData}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
         />
       )}
 
