@@ -1,4 +1,23 @@
 import clsx from 'clsx';
+import bellSvg from '../../assets/icons/bell.svg?raw'
+import crownSvg from '../../assets/icons/crown.svg?raw'
+import filesSvg from '../../assets/icons/files.svg?raw'
+import dragSvg from '../../assets/icons/grag-drop.svg?raw'
+import calendarSvg from '../../assets/icons/calendar.svg?raw'
+import chevronSvg from '../../assets/icons/chevron.svg?raw'
+import clockSvg from '../../assets/icons/clock.svg?raw'
+import deleteSvg from '../../assets/icons/delete.svg?raw'
+import documentSvg from '../../assets/icons/document.svg?raw'
+import editSvg from '../../assets/icons/edit.svg?raw'
+import geoSvg from '../../assets/icons/geo.svg?raw'
+import groupSvg from '../../assets/icons/group.svg?raw'
+import homeSvg from '../../assets/icons/home.svg?raw'
+import playerSvg from '../../assets/icons/player.svg?raw'
+import settingsSvg from '../../assets/icons/settings.svg?raw'
+import sortSvg from '../../assets/icons/sort.svg?raw'
+import sortAzSvg from '../../assets/icons/sort-a-z.svg?raw'
+import telegramSvg from '../../assets/icons/telegram.svg?raw'
+import webSvg from '../../assets/icons/web.svg?raw'
 
 const iconPaths: Record<string, string> = {
   home: 'M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z',
@@ -53,6 +72,32 @@ const iconPaths: Record<string, string> = {
   minus: 'M5 12h14',
 };
 
+const assetIcons: Record<string, string> = {
+  bell: bellSvg,
+  calendar: calendarSvg,
+  'chevron-down': chevronSvg,
+  'chevron-up': chevronSvg,
+  'chevron-left': chevronSvg,
+  'chevron-right': chevronSvg,
+  clock: clockSvg,
+  crown: crownSvg,
+  'trash-2': deleteSvg,
+  file: documentSvg,
+  clipboard: documentSvg,
+  files: filesSvg,
+  pencil: editSvg,
+  users: groupSvg,
+  'map-pin': geoSvg,
+  home: homeSvg,
+  play: playerSvg,
+  settings: settingsSvg,
+  sort: sortSvg,
+  'sort-a-z': sortAzSvg,
+  'grip-vertical': dragSvg,
+  telegram: telegramSvg,
+  web: webSvg,
+}
+
 type IconName = keyof typeof iconPaths;
 
 interface IconProps {
@@ -64,12 +109,40 @@ interface IconProps {
 
 function Icon({ name, size = 20, className, strokeWidth = 2 }: IconProps) {
   const path = iconPaths[name];
+  const asset = assetIcons[name];
 
-  if (!path) {
+  if (!path && !asset) {
     if (import.meta.env.DEV) {
       console.warn(`[Icon] Unknown icon name: "${name}"`);
     }
     return null;
+  }
+
+  if (asset) {
+    const content = asset
+      .replace(/^<svg[^>]*>/, '')
+      .replace(/<\/svg>\s*$/, '')
+      .replace(/stroke="#[0-9a-f]{6}"/gi, 'stroke="currentColor"')
+      .replace(/stroke-width="[^"]+"/g, `stroke-width="${strokeWidth}"`)
+
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 20 20"
+        fill="none"
+        className={clsx(
+          'shrink-0',
+          name === 'chevron-right' && '-rotate-90',
+          name === 'chevron-left' && 'rotate-90',
+          name === 'chevron-up' && 'rotate-180',
+          className,
+        )}
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
+    )
   }
 
   return (
