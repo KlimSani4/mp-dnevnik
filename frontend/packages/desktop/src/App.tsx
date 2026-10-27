@@ -10,6 +10,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { ModerationPage } from './pages/ModerationPage'
+import { JoinPage } from './pages/JoinPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,6 +27,7 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/join/:code" element={<JoinPage />} />
           <Route element={<AuthGuard />}>
             <Route element={<Layout />}>
               <Route path="/" element={<HomePage />} />

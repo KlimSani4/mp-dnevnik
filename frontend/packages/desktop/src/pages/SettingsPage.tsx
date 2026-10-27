@@ -17,6 +17,7 @@ import {
 } from '@nexora/shared'
 import type { NotificationPreferenceType, GroupRole } from '@nexora/shared'
 import { SupportSection } from '../components/SupportSection'
+import { InviteBlock } from '../components/InviteBlock'
 import { LANGUAGES, useLangStore, useT, type MessageKey } from '../i18n'
 
 interface NotificationSettingMeta {
@@ -426,6 +427,12 @@ export function SettingsPage() {
                   </div>
                 )}
               </div>
+
+              {memberships
+                .filter((m) => m.role === 'starosta' || m.role === 'deputy')
+                .map((m) => (
+                  <InviteBlock key={m.id} code={m.group.code} />
+                ))}
 
               {/* Join group */}
               <div className="pt-4 border-t border-surface-200 dark:border-surface-700">

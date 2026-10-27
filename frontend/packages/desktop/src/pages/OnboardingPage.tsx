@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Button, Card, Input } from '../components/ui'
 import { useSearchGroups, useJoinGroup, useAuthStore, useDevLogin, useTelegramBotAuth, useTelegramBotPoll, useTodaySchedule } from '@nexora/shared'
@@ -19,8 +19,9 @@ const PAIR_TIMES = [
 export function OnboardingPage() {
   const navigate = useNavigate()
   const { t } = useT()
+  const invite = useSearchParams()[0].get('group')
   const [step, setStep] = useState<Step>('welcome')
-  const [groupCode, setGroupCode] = useState('')
+  const [groupCode, setGroupCode] = useState(invite ?? '')
   const [selectedGroup, setSelectedGroup] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
   const [joinResult, setJoinResult] = useState<GroupMembership | null>(null)
@@ -43,9 +44,9 @@ export function OnboardingPage() {
   // Redirect if already authenticated and has gone through onboarding
   useEffect(() => {
     if (isAuthenticated && step === 'welcome') {
-      navigate('/', { replace: true })
+      navigate(invite ? `/join/${encodeURIComponent(invite)}` : '/', { replace: true })
     }
-  }, [isAuthenticated, step, navigate])
+  }, [isAuthenticated, step, navigate, invite])
 
   const displayedGroups = searchGroupsQuery.data?.map((g) => g.code) ?? []
 
