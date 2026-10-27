@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
 import { Button } from './ui'
 import { useT } from '../i18n'
 
@@ -12,14 +11,22 @@ export function InviteBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    QRCode.toDataURL(url, { margin: 1, width: 192 }).then(setQr, () => setQr(''))
+    let stale = false
+    import('qrcode')
+      .then((m) => m.toDataURL(url, { margin: 1, width: 192 }))
+      .then((dataUrl) => !stale && setQr(dataUrl), () => !stale && setQr(''))
+    return () => {
+      stale = true
+    }
   }, [url])
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  useEffect(() => {
+    if (!copied) return
+    const id = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(id)
+  }, [copied])
+
+  const copy = () => navigator.clipboard?.writeText(url).then(() => setCopied(true), () => {})
 
   return (
     <div className="pt-4 mb-6 border-t border-surface-200 dark:border-surface-700">

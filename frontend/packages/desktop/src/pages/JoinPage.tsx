@@ -6,22 +6,26 @@ import { useT } from '../i18n'
 
 type State = 'joining' | 'done' | 'already' | 'error'
 
+const GROUP_CODE = /^\d{2,3}-\d{2,3}$/
+
 export function JoinPage() {
   const { code = '' } = useParams()
   const { t } = useT()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const { mutateAsync } = useJoinGroup()
-  const [state, setState] = useState<State>('joining')
-  const sent = useRef(false)
+  const valid = GROUP_CODE.test(code)
+  const [state, setState] = useState<State>(valid ? 'joining' : 'error')
+  const sent = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!isAuthenticated || sent.current) return
-    sent.current = true
+    if (!valid || !isAuthenticated || sent.current === code) return
+    sent.current = code
+    setState('joining')
     mutateAsync(code).then(
       () => setState('done'),
       (e: { status?: number }) => setState(e?.status === 409 ? 'already' : 'error'),
     )
-  }, [isAuthenticated, code, mutateAsync])
+  }, [valid, isAuthenticated, code, mutateAsync])
 
   if (!isAuthenticated) return <Navigate to={`/onboarding?group=${encodeURIComponent(code)}`} replace />
 
