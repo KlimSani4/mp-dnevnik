@@ -19,8 +19,9 @@ interface ScheduleEntry {
   room: string | null
   teacher: string | null
   lesson_type: 'очно' | 'онлайн' | 'вебинар'
+  class_kind?: string | null
   is_session?: boolean
-  subject: { id: string; name: string; short_name?: string | null }
+  subject: { id: string; name: string; short_name?: string | null; is_custom?: boolean }
   link?: string
 }
 
@@ -129,9 +130,42 @@ const taskStateColors: Record<Task['state'], string> = {
 // Sub-components
 // ────────────────────────────────────────────────────────
 
+function getSchedulePalette(entry: ScheduleEntry) {
+  if (entry.subject.is_custom || entry.class_kind === 'custom') {
+    return {
+      card: 'border-slate-200 bg-slate-50 after:border-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:after:border-slate-600',
+      icon: 'bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-500',
+      title: 'text-slate-700 dark:text-slate-200',
+    }
+  }
+
+  switch ((entry.class_kind ?? '').toLowerCase()) {
+    case 'лекция':
+      return {
+        card: 'border-emerald-200 bg-emerald-50 after:border-emerald-200 dark:border-emerald-700 dark:bg-emerald-950/40 dark:after:border-emerald-700',
+        icon: 'bg-emerald-500 text-white border-emerald-400 dark:border-emerald-400',
+        title: 'text-emerald-800 dark:text-emerald-200',
+      }
+    case 'лаб':
+    case 'лабораторная':
+      return {
+        card: 'border-amber-200 bg-amber-50 after:border-amber-200 dark:border-amber-700 dark:bg-amber-950/40 dark:after:border-amber-700',
+        icon: 'bg-amber-500 text-white border-amber-300 dark:border-amber-300',
+        title: 'text-amber-800 dark:text-amber-200',
+      }
+    default:
+      return {
+        card: 'border-blue-200 bg-blue-50 after:border-blue-200 dark:border-blue-700 dark:bg-blue-950/40 dark:after:border-blue-700',
+        icon: 'bg-blue-500 text-white border-blue-300 dark:border-blue-300',
+        title: 'text-blue-800 dark:text-blue-200',
+      }
+  }
+}
+
 function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
   const { t } = useT()
   const config = lessonTypeConfig[entry.lesson_type]
+  const palette = getSchedulePalette(entry)
   const isOnline = entry.lesson_type === 'онлайн' || entry.lesson_type === 'вебинар'
   const now = new Date()
   const startTime = parseTime(entry.start_time)
@@ -143,22 +177,23 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
     <Card
       variant="default"
       className={clsx(
-        'transition-all duration-200',
-        isActive && 'ring-2 ring-primary-500/30 border-primary-300 dark:border-primary-600',
+        'relative overflow-hidden rounded-xl border after:content-[\'\'] after:absolute after:inset-[3px] after:rounded-[10px] after:border after:pointer-events-none transition-all duration-200',
+        palette.card,
+        isActive && 'shadow-md shadow-primary-500/20',
       )}
     >
       <div className="flex items-start gap-3">
         <div
           className={clsx(
-            'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
-            config.iconBg,
+            'w-9 h-9 rounded-lg border flex items-center justify-center shrink-0',
+            palette.icon,
           )}
         >
           <Icon name={config.icon} size={18} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-surface-900 dark:text-surface-50 truncate">
+            <span className={`font-semibold ${palette.title} truncate`}>
               {entry.subject.name}
             </span>
             {entry.is_session && (
@@ -173,7 +208,7 @@ function ScheduleCard({ entry }: { entry: ScheduleEntry }) {
           <div className="text-sm text-surface-500 dark:text-surface-400 mt-0.5">
             {formatTime(entry.start_time)} – {formatTime(entry.end_time)}
           </div>
-          <div className="text-sm text-primary-500 mt-1 truncate">
+          <div className={`text-sm ${palette.title} mt-1 truncate`}>
             {isOnline ? (
               entry.link ? (
                 <a
@@ -458,6 +493,7 @@ export function HomePage() {
       room: entry.room,
       teacher: entry.teacher,
       lesson_type: isWebinar ? 'вебинар' : isOnline ? 'онлайн' : 'очно',
+      class_kind: entry.lesson_type,
       is_session: entry.is_session,
       subject: entry.subject,
       link,

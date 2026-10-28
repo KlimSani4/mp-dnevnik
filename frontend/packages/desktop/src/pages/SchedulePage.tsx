@@ -644,6 +644,7 @@ function DailyClassCard({
 
   const type = getClassType(entry)
   const config = classTypeConfig[type]
+  const palette = getWeeklyCardPalette(entry)
   const isOnline = type === 'online' || type === 'webinar'
   const cancelled = isCancelled(entry)
   const custom = isCustomEvent(entry)
@@ -682,8 +683,8 @@ function DailyClassCard({
   }
 
   return (
-    <Card
-      className={`overflow-hidden relative group${cancelled ? ' opacity-50' : ''}`}
+    <div
+      className={`relative group overflow-hidden rounded-xl border ${palette.card} after:content-[''] after:absolute after:inset-[3px] after:rounded-[10px] after:border after:pointer-events-none${cancelled ? ' opacity-50' : ''}`}
     >
       {/* Hide button (top-right, on hover) */}
       {!custom && !cancelled && !entry.is_session && (
@@ -699,10 +700,12 @@ function DailyClassCard({
       )}
 
       <div className="flex items-start gap-3 p-4">
-        <ClassTypeIcon type={type} size={20} />
+        <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${palette.icon}`}>
+          <Icon name={config.icon} size={18} />
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`font-medium text-surface-900 dark:text-surface-50 truncate${cancelled ? ' line-through' : ''}`}>
+            <span className={`font-semibold ${palette.title} truncate${cancelled ? ' line-through' : ''}`}>
               {entry.subject.name}
             </span>
             {entry.is_session && (
@@ -716,7 +719,7 @@ function DailyClassCard({
               </span>
             )}
             {custom && (
-              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                 {t('schedule.mine')}
               </span>
             )}
@@ -784,7 +787,7 @@ function DailyClassCard({
           </div>
         </div>
       </div>
-    </Card>
+    </div>
   )
 }
 
@@ -877,7 +880,7 @@ function WeeklyClassCell({
           </span>
         )}
         {custom && (
-          <span className="shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
+          <span className="shrink-0 text-[9px] font-semibold px-1 py-0.5 rounded bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
             {t('schedule.mine')}
           </span>
         )}
@@ -959,8 +962,10 @@ function DailyView({
   const targetDate = addDays(new Date(), dayOffset)
   const targetDateStr = format(targetDate, 'yyyy-MM-dd')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [slideDirection, setSlideDirection] = useState<'next' | 'previous' | null>(null)
 
   const dateLabel = format(targetDate, 'd MMMM, EEEE', { locale: dateLocale() })
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
   const entries = daySchedule?.entries ?? []
   const sorted = [...entries].sort(
     (a, b) =>
@@ -974,32 +979,67 @@ function DailyView({
     [sorted],
   )
 
+  function navigateDay(direction: 'next' | 'previous') {
+    setSlideDirection(direction)
+    if (direction === 'next') onNext()
+    else onPrev()
+  }
+
+  function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
+    if (showViewToggle) return
+    const touch = event.touches[0]
+    if (touch) touchStart.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  function handleTouchEnd(event: React.TouchEvent<HTMLDivElement>) {
+    const start = touchStart.current
+    touchStart.current = null
+    if (showViewToggle || !start) return
+
+    const touch = event.changedTouches[0]
+    if (!touch) return
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < 55 || Math.abs(deltaX) < Math.abs(deltaY) * 1.3) return
+
+    if (deltaX < 0) navigateDay('next')
+    else navigateDay('previous')
+  }
+
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-sm text-surface-500 dark:text-surface-400 capitalize">
-            {dateLabel}
-          </p>
+    <div
+      className="touch-pan-y"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => { touchStart.current = null }}
+    >
+      <div
+        key={targetDateStr}
+        className={slideDirection ? `schedule-day-enter-${slideDirection}` : undefined}
+      >
+      {/* Day navigation */}
+      <div className="relative mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+        {showViewToggle && (
+          <div className="absolute left-0">
+            <ScheduleViewToggle viewMode={viewMode} onChange={onViewModeChange} />
+          </div>
+        )}
+        <div className="col-start-2 flex items-center justify-center gap-1">
+        <Button variant="ghost" size="sm" iconOnly icon={<Icon name="chevron-left" size={18} />} onClick={() => navigateDay('previous')} />
+        <span className="w-[100px] text-center text-xs font-medium capitalize text-surface-700 dark:text-surface-200 md:w-auto md:min-w-[150px] md:text-sm">
+          <span className="md:hidden">
+            {format(targetDate, 'd MMMM', { locale: dateLocale() })},<br />
+            {format(targetDate, 'EEEE', { locale: dateLocale() })}
+          </span>
+          <span className="hidden md:inline">{dateLabel}</span>
+        </span>
+        <Button variant="ghost" size="sm" iconOnly icon={<Icon name="chevron-right" size={18} />} onClick={() => navigateDay('next')} />
         </div>
         {dayOffset !== 0 && (
-          <Button variant="ghost" size="sm" onClick={onToday}>
+          <Button variant="ghost" size="sm" onClick={onToday} className="col-start-3 justify-self-end !px-1.5 text-[11px] md:!px-3 md:text-xs">
             {t('nav.today')}
           </Button>
         )}
-      </div>
-
-      {/* Day navigation */}
-      <div className="flex items-center justify-between gap-2 mb-5">
-        {showViewToggle && <ScheduleViewToggle viewMode={viewMode} onChange={onViewModeChange} />}
-        <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" iconOnly icon={<Icon name="chevron-left" size={18} />} onClick={onPrev} />
-        <span className="text-sm font-medium text-surface-700 dark:text-surface-200 min-w-[120px] text-center capitalize">
-          {format(targetDate, 'EEEE', { locale: dateLocale() })}
-        </span>
-        <Button variant="ghost" size="sm" iconOnly icon={<Icon name="chevron-right" size={18} />} onClick={onNext} />
-        </div>
       </div>
 
       {/* Entries */}
@@ -1016,7 +1056,10 @@ function DailyView({
           </p>
         </Card>
       ) : (
-        <div className="space-y-1">
+        <div
+          className="space-y-2 rounded-xl border border-surface-200/70 p-2 dark:border-surface-700/70"
+          style={{ backgroundImage: 'radial-gradient(circle, rgba(100,116,139,.18) 1px, transparent 1px)', backgroundSize: '14px 14px' }}
+        >
           {sorted.map((entry, idx) => (
             <div key={entry.id}>
               {idx > 0 && (() => {
@@ -1054,6 +1097,7 @@ function DailyView({
           onClose={() => setShowAddModal(false)}
         />
       )}
+      </div>
     </div>
   )
 }
