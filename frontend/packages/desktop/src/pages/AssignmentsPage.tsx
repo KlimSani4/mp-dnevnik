@@ -72,17 +72,15 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
     <div
       onClick={onClick}
       className={clsx(
-        'group relative rounded-md border cursor-pointer transition-all duration-150',
-        'border-l-[3px]',
+        'group relative overflow-hidden rounded-xl border cursor-pointer transition-all duration-150 after:content-[\'\'] after:absolute after:inset-[3px] after:rounded-[10px] after:border after:pointer-events-none',
         isDone
-          ? 'bg-surface-50 dark:bg-surface-800/60 border-surface-200 dark:border-surface-700 border-l-success-400 dark:border-l-success-600'
+          ? 'bg-surface-50 dark:bg-surface-800/60 border-surface-200 dark:border-surface-700 after:border-surface-200 dark:after:border-surface-700'
           : isExpired
-            ? 'bg-danger-50/50 dark:bg-danger-950/20 border-danger-200 dark:border-danger-800/50 border-l-danger-500'
-            : 'bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700 shadow-sm',
-        !isDone && !isExpired && PRIORITY_BORDER_COLORS[assignment.priority],
+            ? 'bg-danger-50/50 dark:bg-danger-950/20 border-danger-200 dark:border-danger-800/50 after:border-danger-200 dark:after:border-danger-800/50'
+            : PRIORITY_BORDER_COLORS[assignment.priority],
         isDragOverlay
           ? 'shadow-xl opacity-90 rotate-[2deg] scale-105'
-          : !isDone && 'hover:shadow-md hover:border-surface-300 dark:hover:border-surface-600',
+          : !isDone && 'hover:shadow-md',
       )}
     >
       {/* Drag handle */}
