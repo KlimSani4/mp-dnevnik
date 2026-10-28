@@ -1008,7 +1008,7 @@ function DailyView({
 
   return (
     <div
-      className="touch-pan-y"
+      className="touch-pan-y mx-auto w-full md:max-w-3xl"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={() => { touchStart.current = null }}
