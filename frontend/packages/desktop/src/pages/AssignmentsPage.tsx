@@ -696,6 +696,7 @@ export function AssignmentsPage() {
   // DnD state
   const [activeId, setActiveId] = useState<string | null>(null)
   const [overColumnId, setOverColumnId] = useState<string | null>(null)
+  const [optimisticTaskStates, setOptimisticTaskStates] = useState<Record<string, TaskState>>({})
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -735,21 +736,33 @@ export function AssignmentsPage() {
   const tasksByColumn = useMemo(() => {
     const grouped: Record<TaskState, Task[]> = { todo: [], review: [], done: [] }
     for (const task of filteredTasks) {
+      const state = optimisticTaskStates[task.id] ?? task.state
       // The API also has a `doing` state, which is shown in the TODO column here.
-      const column = task.state === 'todo' || task.state === 'review' || task.state === 'done'
-        ? task.state
+      const column = state === 'todo' || state === 'review' || state === 'done'
+        ? state
         : 'todo'
-      grouped[column].push(task)
+      grouped[column].push(state === task.state ? task : { ...task, state })
     }
     return grouped
-  }, [filteredTasks])
+  }, [filteredTasks, optimisticTaskStates])
 
   // ─── Actions ───
 
   const moveTask = useCallback((taskId: string, newState: TaskState) => {
     const task = tasks.find((t) => t.id === taskId)
     if (!task) return
-    updateTaskMutation.mutate({ assignmentId: task.assignment.id, data: { state: newState } })
+
+    setOptimisticTaskStates((current) => ({ ...current, [taskId]: newState }))
+    const clearOptimisticState = () => {
+      setOptimisticTaskStates((current) => {
+        if (current[taskId] !== newState) return current
+        const next = { ...current }
+        delete next[taskId]
+        return next
+      })
+    }
+    void updateTaskMutation.mutateAsync({ assignmentId: task.assignment.id, data: { state: newState } })
+      .then(clearOptimisticState, clearOptimisticState)
   }, [tasks, updateTaskMutation])
 
   const toggleVote = useCallback(
@@ -1030,7 +1043,7 @@ export function AssignmentsPage() {
                 ))}
               </div>
 
-              <DragOverlay>
+              <DragOverlay dropAnimation={null}>
                 {activeTask ? (
                   <BoardCard
                     task={activeTask}
