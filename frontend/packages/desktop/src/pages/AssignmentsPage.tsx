@@ -72,17 +72,15 @@ function BoardCard({ task, userVote, onVote, onClick, isDragOverlay }: BoardCard
     <div
       onClick={onClick}
       className={clsx(
-        'group relative rounded-md border cursor-pointer transition-all duration-150',
-        'border-l-[3px]',
+        'group relative overflow-hidden rounded-xl border cursor-pointer transition-all duration-150 after:content-[\'\'] after:absolute after:inset-[3px] after:rounded-[10px] after:border after:pointer-events-none',
         isDone
-          ? 'bg-surface-50 dark:bg-surface-800/60 border-surface-200 dark:border-surface-700 border-l-success-400 dark:border-l-success-600'
+          ? 'bg-surface-50 dark:bg-surface-800/60 border-surface-200 dark:border-surface-700 after:border-surface-200 dark:after:border-surface-700'
           : isExpired
-            ? 'bg-danger-50/50 dark:bg-danger-950/20 border-danger-200 dark:border-danger-800/50 border-l-danger-500'
-            : 'bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700 shadow-sm',
-        !isDone && !isExpired && PRIORITY_BORDER_COLORS[assignment.priority],
+            ? 'bg-danger-50/50 dark:bg-danger-950/20 border-danger-200 dark:border-danger-800/50 after:border-danger-200 dark:after:border-danger-800/50'
+            : PRIORITY_BORDER_COLORS[assignment.priority],
         isDragOverlay
           ? 'shadow-xl opacity-90 rotate-[2deg] scale-105'
-          : !isDone && 'hover:shadow-md hover:border-surface-300 dark:hover:border-surface-600',
+          : !isDone && 'hover:shadow-md',
       )}
     >
       {/* Drag handle */}
@@ -696,6 +694,7 @@ export function AssignmentsPage() {
   // DnD state
   const [activeId, setActiveId] = useState<string | null>(null)
   const [overColumnId, setOverColumnId] = useState<string | null>(null)
+  const [optimisticTaskStates, setOptimisticTaskStates] = useState<Record<string, TaskState>>({})
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -735,21 +734,33 @@ export function AssignmentsPage() {
   const tasksByColumn = useMemo(() => {
     const grouped: Record<TaskState, Task[]> = { todo: [], review: [], done: [] }
     for (const task of filteredTasks) {
+      const state = optimisticTaskStates[task.id] ?? task.state
       // The API also has a `doing` state, which is shown in the TODO column here.
-      const column = task.state === 'todo' || task.state === 'review' || task.state === 'done'
-        ? task.state
+      const column = state === 'todo' || state === 'review' || state === 'done'
+        ? state
         : 'todo'
-      grouped[column].push(task)
+      grouped[column].push(state === task.state ? task : { ...task, state })
     }
     return grouped
-  }, [filteredTasks])
+  }, [filteredTasks, optimisticTaskStates])
 
   // ─── Actions ───
 
   const moveTask = useCallback((taskId: string, newState: TaskState) => {
     const task = tasks.find((t) => t.id === taskId)
     if (!task) return
-    updateTaskMutation.mutate({ assignmentId: task.assignment.id, data: { state: newState } })
+
+    setOptimisticTaskStates((current) => ({ ...current, [taskId]: newState }))
+    const clearOptimisticState = () => {
+      setOptimisticTaskStates((current) => {
+        if (current[taskId] !== newState) return current
+        const next = { ...current }
+        delete next[taskId]
+        return next
+      })
+    }
+    void updateTaskMutation.mutateAsync({ assignmentId: task.assignment.id, data: { state: newState } })
+      .then(clearOptimisticState, clearOptimisticState)
   }, [tasks, updateTaskMutation])
 
   const toggleVote = useCallback(
@@ -1030,7 +1041,7 @@ export function AssignmentsPage() {
                 ))}
               </div>
 
-              <DragOverlay>
+              <DragOverlay dropAnimation={null}>
                 {activeTask ? (
                   <BoardCard
                     task={activeTask}

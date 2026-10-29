@@ -76,10 +76,10 @@ export const COLUMN_COUNT_COLORS: Record<string, string> = {
 }
 
 export const PRIORITY_BORDER_COLORS: Record<Priority, string> = {
-  urgent: 'border-l-danger-500',
-  high: 'border-l-warning-500',
-  normal: 'border-l-info-500',
-  low: 'border-l-surface-300 dark:border-l-surface-600',
+  urgent: 'border-danger-500/60 bg-danger-50/60 after:border-danger-500/60 dark:border-danger-500/70 dark:bg-danger-500/10 dark:after:border-danger-500/70',
+  high: 'border-warning-500/60 bg-warning-50/60 after:border-warning-500/60 dark:border-warning-500/70 dark:bg-warning-500/10 dark:after:border-warning-500/70',
+  normal: 'border-info-500/50 bg-info-50/60 after:border-info-500/50 dark:border-info-500/60 dark:bg-info-500/10 dark:after:border-info-500/60',
+  low: 'border-surface-300 bg-surface-50 after:border-surface-300 dark:border-surface-600 dark:bg-surface-800/60 dark:after:border-surface-600',
 }
 
 /* ─── Helpers ─── */

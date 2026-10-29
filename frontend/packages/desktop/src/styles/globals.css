@@ -2,6 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes schedule-day-enter-next {
+  from { opacity: 0.55; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes schedule-day-enter-previous {
+  from { opacity: 0.55; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes dock-active-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dock-active-indicator {
+  animation: dock-active-in 180ms ease-out both;
+}
+
+.schedule-day-enter-next {
+  animation: schedule-day-enter-next 180ms ease-out both;
+}
+
+.schedule-day-enter-previous {
+  animation: schedule-day-enter-previous 180ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .schedule-day-enter-next,
+  .schedule-day-enter-previous,
+  .dock-active-indicator {
+    animation: none;
+  }
+}
+
 @layer base {
   html {
     @apply antialiased;

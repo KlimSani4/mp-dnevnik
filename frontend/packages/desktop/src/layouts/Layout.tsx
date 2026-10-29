@@ -193,9 +193,9 @@ export function Layout() {
         </div>
       </main>
 
-      {/* Mobile TabBar */}
-      <nav className="flex md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-surface-800 border-t border-surface-200 dark:border-surface-700 z-50">
-        <div className="flex w-full pb-[env(safe-area-inset-bottom)]">
+      {/* Mobile navigation dock */}
+      <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:hidden">
+        <div className="flex w-full items-center rounded-2xl border border-surface-200/80 bg-white p-1.5 shadow-lg shadow-surface-900/10 dark:border-surface-700 dark:bg-surface-800 dark:shadow-black/20">
           {tabBarItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -203,15 +203,20 @@ export function Layout() {
               end={to === '/'}
               className={({ isActive }) =>
                 clsx(
-                  'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors',
+                  'relative flex-1 flex flex-col items-center justify-center gap-1 rounded-xl py-2 transition-colors duration-200',
                   isActive
-                    ? 'text-primary-500'
-                    : 'text-surface-400 dark:text-surface-500'
+                    ? 'text-primary-600 dark:text-primary-400'
+                    : 'text-surface-400 hover:text-surface-600 dark:text-surface-500 dark:hover:text-surface-300',
                 )
               }
             >
-              <Icon className="w-5 h-5" />
-              <span className="text-2xs font-medium">{t(label)}</span>
+              {({ isActive }) => (
+                <>
+                  {isActive && <span className="dock-active-indicator absolute inset-0 rounded-xl bg-primary-50 dark:bg-primary-500/15" />}
+                  <Icon className="relative z-10 h-5 w-5 transition-colors duration-200" />
+                  <span className="relative z-10 text-2xs font-medium">{t(label)}</span>
+                </>
+              )}
             </NavLink>
           ))}
         </div>
