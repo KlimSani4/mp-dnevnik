@@ -14,12 +14,15 @@ from src.core.schemas.auth import (
     RefreshTokenRequest,
     TelegramAuthRequest,
     TokenResponse,
+    VKAuthRequest,
 )
 from src.core.services.auth import AuthService
+from src.gateways.vk.auth import VKAuthProvider
 
 router = APIRouter()
 
 _rate_limit_telegram = make_rate_limit_dependency("/api/v1/auth/telegram")
+_rate_limit_vk = make_rate_limit_dependency("/api/v1/auth/vk")
 _rate_limit_refresh = make_rate_limit_dependency("/api/v1/auth/refresh")
 
 BOT_USERNAME = "nexora_mpu_bot"
@@ -63,6 +66,26 @@ async def authenticate_telegram(
     user, tokens, is_new = await auth_service.authenticate_telegram(
         init_data=data.init_data,
         widget_data=data.widget_data,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+
+    return tokens
+
+
+@router.post("/vk", response_model=TokenResponse, dependencies=[Depends(_rate_limit_vk)])
+async def authenticate_vk(
+    data: VKAuthRequest,
+    db: DBSession,
+    ip_address: ClientIP,
+    user_agent: UserAgent,
+) -> TokenResponse:
+    """Authenticate via VK ID (authorization code + PKCE)."""
+    auth_service = AuthService(db)
+
+    user, tokens, is_new = await auth_service.authenticate(
+        VKAuthProvider(),
+        data.model_dump(),
         ip_address=ip_address,
         user_agent=user_agent,
     )

@@ -13,6 +13,14 @@ async def test_telegram_auth_requires_data(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_vk_auth_requires_data(client: AsyncClient) -> None:
+    """Test VK auth requires code, code_verifier and device_id."""
+    response = await client.post("/api/v1/auth/vk", json={})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_refresh_requires_token(client: AsyncClient) -> None:
     """Test refresh endpoint requires refresh_token."""
     response = await client.post("/api/v1/auth/refresh", json={})
