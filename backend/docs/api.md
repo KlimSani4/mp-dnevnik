@@ -28,6 +28,30 @@ Authenticate via Telegram Mini App or Login Widget.
 }
 ```
 
+### POST /auth/vk
+
+Authenticate via VK ID (authorization code + PKCE). The frontend runs the VK ID SDK
+and sends the result of the redirect; the backend exchanges the code with VK and takes
+the user ID only from VK's response. All four fields come from the VK ID flow
+(`device_id`, `code` and `state` are returned to the redirect URL; `code_verifier`
+is the PKCE secret the frontend generated). The code lives 10 minutes.
+
+**Request:**
+```json
+{
+  "code": "string",
+  "code_verifier": "string",
+  "device_id": "string",
+  "state": "string"
+}
+```
+
+**Response:** `200 OK` (same as /auth/telegram)
+
+**Errors:** `401` VK rejected the code, `422` missing fields, `429` rate limit
+(10 requests per minute per IP), `502` VK is unavailable, `503` VK is not configured
+(`VK_CLIENT_ID` / `VK_REDIRECT_URI`).
+
 ### POST /auth/refresh
 
 Refresh access token.
@@ -220,10 +244,6 @@ Create schedule override.
 }
 ```
 
-Личное переопределение (`"scope": "personal"`) привязывается к студенту автора в группе занятия;
-если автор не состоит в этой группе, ответ `403`. Видно только автору. Групповое видно всей группе.
-Без токена (или не из группы) в расписании применяются только групповые переопределения.
-
 ### DELETE /schedule/override/{id}
 
 Delete schedule override.
@@ -306,10 +326,6 @@ Update task status.
 ```
 
 ---
-
-## Moderation
-
-Модерация платформы, обращения в поддержку и заявки преподавателей — см. [docs/moderation.md](../../docs/moderation.md). Все маршруты `/moderation/*` требуют `users.is_moderator`, иначе `403`. Роль модератора через API не выдаётся.
 
 ## Health Checks
 

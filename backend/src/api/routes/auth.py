@@ -17,7 +17,7 @@ from src.core.schemas.auth import (
     VKAuthRequest,
 )
 from src.core.services.auth import AuthService
-from src.gateways.vk import VKAuthProvider
+from src.gateways.vk.auth import VKAuthProvider
 
 router = APIRouter()
 

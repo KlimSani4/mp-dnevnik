@@ -12,6 +12,7 @@ class TelegramAuthRequest(BaseModel):
     init_data: str | None = None
     widget_data: dict[str, Any] | None = None
 
+
 class VKAuthRequest(BaseModel):
     """VK ID authentication request (result of the VK ID SDK / PKCE flow)."""
 
@@ -19,6 +20,7 @@ class VKAuthRequest(BaseModel):
     code_verifier: str = Field(..., min_length=1, max_length=256)
     device_id: str = Field(..., min_length=1, max_length=256)
     state: str = Field(..., min_length=1, max_length=256)
+
 
 class TokenResponse(BaseModel):
     """JWT token response."""

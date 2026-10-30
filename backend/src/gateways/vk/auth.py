@@ -9,8 +9,8 @@ from src.shared.exceptions import AuthenticationError, ValidationError
 VK_TOKEN_URL = "https://id.vk.ru/oauth2/auth"
 VK_USER_INFO_URL = "https://id.vk.ru/oauth2/user_info"
 
-class VKAuthProvider(AuthProvider):
 
+class VKAuthProvider(AuthProvider):
     provider = "vk"
 
     async def validate(self, data: dict[str, Any]) -> ExternalIdentity:
@@ -46,13 +46,14 @@ class VKAuthProvider(AuthProvider):
                 VK_USER_INFO_URL,
                 data={"client_id": settings.VK_CLIENT_ID, "access_token": access_token},
             )
-            user = response.json()["user"]
+            user = response.json()
             if "error" in user:
-                            raise AuthenticationError("user data error")
+                raise AuthenticationError("user data error")
+            user_data = user["user"]
 
-        external_id = str(user["user_id"])
-        first_name = user.get("first_name", "")
-        last_name = user.get("last_name", "")
+        external_id = str(user_data["user_id"])
+        first_name = user_data.get("first_name", "")
+        last_name = user_data.get("last_name", "")
 
         return ExternalIdentity(
             provider=self.provider,
