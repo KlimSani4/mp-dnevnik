@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     TELEGRAM_WEBHOOK_URL: str = ""
     TELEGRAM_WEBHOOK_SECRET: str = ""
 
+    # VK
+    VK_CLIENT_ID: str = ""
+    VK_REDIRECT_URI: str = ""
+    VK_SERVICE_TOKEN: str = ""
+
     # CORS
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
