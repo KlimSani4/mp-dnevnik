@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,9 @@ from src.shared.security import (
     validate_telegram_init_data,
     validate_telegram_widget_data,
 )
+
+if TYPE_CHECKING:
+    from src.gateways.base import AuthProvider
 
 logger = logging.getLogger(__name__)
 
@@ -82,13 +85,48 @@ class AuthService:
             raw_data=data,
         )
 
-        # Find or create user
+        return await self._login(identity, ip_address=ip_address, user_agent=user_agent)
+
+    async def authenticate(
+        self,
+        provider: "AuthProvider",
+        data: dict[str, Any],
+        *,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> tuple[User, TokenResponse, bool]:
+        """
+        Authenticate user via any AuthProvider (VK, ...).
+        The provider validates the data and returns the identity.
+        Returns (user, tokens, is_new_user).
+        """
+        external = await provider.validate(data)
+
+        if not external.external_id:
+            raise AuthenticationError(f"Invalid {provider.provider} data: missing user ID")
+
+        identity = ExternalIdentity(
+            provider=external.provider,
+            external_id=external.external_id,
+            username=external.username,
+            display_name=external.display_name,
+            raw_data=external.raw_data,
+        )
+
+        return await self._login(identity, ip_address=ip_address, user_agent=user_agent)
+
+    async def _login(
+        self,
+        identity: ExternalIdentity,
+        *,
+        ip_address: str | None,
+        user_agent: str | None,
+    ) -> tuple[User, TokenResponse, bool]:
+        """Find or create the user for a validated identity, issue tokens, write audit."""
         user, is_new = await self._get_or_create_user(identity)
 
-        # Create tokens
         tokens = self._create_tokens(user)
 
-        # Audit log
         await self.audit_repo.log(
             action="login" if not is_new else "register",
             user_id=user.id,

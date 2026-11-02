@@ -10,6 +10,7 @@ import pytest
 from src.core.models.user import User
 from src.core.schemas.auth import TokenResponse
 from src.core.services.auth import AuthService
+from src.gateways.base import AuthProvider, ExternalIdentity
 from src.shared.exceptions import AuthenticationError, ValidationError
 
 
@@ -203,6 +204,90 @@ class TestAuthenticateTelegramInitData:
 
         with pytest.raises(ValidationError):
             await svc.authenticate_telegram()
+
+
+# ---------------------------------------------------------------------------
+# authenticate — generic provider path
+# ---------------------------------------------------------------------------
+
+class _FakeProvider(AuthProvider):
+    provider = "vk"
+
+    def __init__(self, external_id: str = "777") -> None:
+        self.external_id = external_id
+        self.received: dict | None = None
+
+    async def validate(self, data: dict) -> ExternalIdentity:
+        self.received = data
+        return ExternalIdentity(
+            provider="vk",
+            external_id=self.external_id,
+            username=None,
+            display_name="Алина Минок",
+            raw_data={"first_name": "Алина"},
+        )
+
+
+class TestAuthenticateProvider:
+    @pytest.mark.asyncio
+    async def test_new_user_is_registered(self) -> None:
+        session = MagicMock()
+        session.commit = AsyncMock()
+        svc = _make_service(session)
+        new_user = _make_user()
+        svc.user_repo.get_by_identity = AsyncMock(return_value=None)
+        svc.user_repo.create = AsyncMock(return_value=new_user)
+        provider = _FakeProvider()
+
+        with (
+            patch("src.core.services.auth.create_access_token", return_value="acc"),
+            patch("src.core.services.auth.create_refresh_token", return_value="ref"),
+            patch("src.core.services.auth.settings") as mock_settings,
+        ):
+            mock_settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 60
+            user, tokens, is_new = await svc.authenticate(provider, {"code": "c"})
+
+        assert user is new_user
+        assert is_new is True
+        assert tokens.access_token == "acc"
+        assert provider.received == {"code": "c"}
+        svc.user_repo.get_by_identity.assert_awaited_once_with("vk", "777")
+        identity_kwargs = svc.identity_repo.create.call_args.kwargs
+        assert identity_kwargs["provider"] == "vk"
+        assert identity_kwargs["external_id"] == "777"
+        assert svc.audit_repo.log.call_args.kwargs["action"] == "register"
+        session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_existing_user_logs_in(self) -> None:
+        session = MagicMock()
+        session.commit = AsyncMock()
+        svc = _make_service(session)
+        existing = _make_user()
+        svc.user_repo.get_by_identity = AsyncMock(return_value=existing)
+
+        with (
+            patch("src.core.services.auth.create_access_token", return_value="acc"),
+            patch("src.core.services.auth.create_refresh_token", return_value="ref"),
+            patch("src.core.services.auth.settings") as mock_settings,
+        ):
+            mock_settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 60
+            user, _, is_new = await svc.authenticate(_FakeProvider(), {})
+
+        assert user is existing
+        assert is_new is False
+        svc.user_repo.create.assert_not_called()
+        assert svc.audit_repo.log.call_args.kwargs["action"] == "login"
+
+    @pytest.mark.asyncio
+    async def test_missing_external_id_raises(self) -> None:
+        session = MagicMock()
+        svc = _make_service(session)
+
+        with pytest.raises(AuthenticationError, match="missing user ID"):
+            await svc.authenticate(_FakeProvider(external_id=""), {})
+
+        svc.user_repo.get_by_identity.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
