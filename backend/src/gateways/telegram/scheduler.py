@@ -1,6 +1,8 @@
 """APScheduler tasks for Nexora bot notifications."""
 
+import functools
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -12,22 +14,83 @@ scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
-_DEDUP_TTL = 30 * 60  # 30 minutes in seconds
+Job = Callable[[], Awaitable[None]]
+
+# Сколько хранится отметка «уже отправлено» (#135). Должно быть больше окна, в котором
+# задача может снова выбрать то же уведомление.
+_DEDUP_TTL = 30 * 60  # напоминание о паре: окно в минуту, запас на рестарт
+_DAILY_DEDUP_TTL = 26 * 3600  # дайджест, утреннее расписание, дедлайны
+
+# Блокировка запуска задачи: при нескольких экземплярах бэкенда задачу в этот слот
+# выполняет только один из них. Живёт меньше интервала самой частой задачи (минута).
+_JOB_LOCK_TTL = 55
 
 
-async def _is_duplicate(user_id: str, notif_type: str, identifier: str) -> bool:
-    """Return True if this notification was already sent recently (Redis dedup)."""
+async def _is_duplicate(
+    user_id: str, notif_type: str, identifier: str, ttl: int = _DEDUP_TTL
+) -> bool:
+    """True, если это уведомление уже отправлено (или отправляется) другим запуском.
+
+    Одна атомарная команда SET NX EX: из нескольких параллельных запусков ключ создаёт
+    только один, остальные получают True и сообщение не шлют (#135). Раньше проверка
+    шла в два шага (EXISTS, затем SETEX), и два пода успевали отправить оба.
+    """
     from src.shared.redis import get_redis
 
     redis = await get_redis()
     key = f"notification:{user_id}:{notif_type}:{identifier}"
-    exists = await redis.exists(key)
-    if exists:
-        return True
-    await redis.setex(key, _DEDUP_TTL, "1")
-    return False
+    created = await redis.set(key, "1", nx=True, ex=ttl)
+    return not created
 
 
+def _single_instance(job_id: str) -> Callable[[Job], Job]:
+    """Выполнять задачу в одном экземпляре бэкенда на каждый запуск по расписанию (#135).
+
+    Планировщик работает в каждом поде, поэтому без блокировки каждая задача выполнялась
+    столько раз, сколько подов. Слот — минута запуска, округлённая до ближайшей (APScheduler
+    срабатывает в начале минуты, а у подов могут быть миллисекунды разницы): в этот слот
+    задачу берёт тот, кто первым поставил ключ. Если Redis недоступен, задачу пропускаем: без Redis не работает и
+    защита от повторной отправки.
+    """
+
+    def decorator(func: Job) -> Job:
+        @functools.wraps(func)
+        async def wrapper() -> None:
+            from src.shared.redis import get_redis
+
+            slot = (datetime.now(tz=UTC) + timedelta(seconds=30)).strftime("%Y%m%d%H%M")
+            try:
+                redis = await get_redis()
+                acquired = await redis.set(
+                    f"scheduler:lock:{job_id}:{slot}", "1", nx=True, ex=_JOB_LOCK_TTL
+                )
+            except Exception as e:
+                logger.warning(
+                    "Scheduler lock unavailable, job skipped",
+                    extra={"job": job_id, "error": str(e)},
+                )
+                return
+            if not acquired:
+                logger.debug("Job already running in another instance", extra={"job": job_id})
+                return
+            await func()
+
+        return wrapper
+
+    return decorator
+
+
+def in_window(hours_left: float, target: float) -> bool:
+    """Попадает ли дедлайн в окно напоминания: [target - 0.5; target + 0.5).
+
+    Задача запускается раз в час, а окно полуоткрытое и шириной ровно час, поэтому
+    каждый дедлайн попадает в него ровно один раз. Раньше границы были закрыты с обеих
+    сторон, и дедлайн в hh:30 срабатывал в двух запусках подряд (#135).
+    """
+    return target - 0.5 <= hours_left < target + 0.5
+
+
+@_single_instance("upcoming_class_notifications")
 async def send_upcoming_class_notifications() -> None:
     """Напоминание о паре за 10–15 минут (#26): аудитория или ссылка на вебинар.
 
@@ -162,6 +225,7 @@ async def send_upcoming_class_notifications() -> None:
                 )
 
 
+@_single_instance("evening_digest")
 async def send_evening_digest() -> None:
     """Send evening digest at 20:00 Moscow with tomorrow's schedule and upcoming deadlines."""
     from src.core.repositories.group import GroupRepository, StudentRepository
@@ -220,7 +284,9 @@ async def send_evening_digest() -> None:
                 for student in students:
                     identity = await identity_repo.get_user_telegram_identity(student.user_id)
                     if identity and identity.external_id:
-                        if await _is_duplicate(str(student.user_id), "evening_digest", dedup_id):
+                        if await _is_duplicate(
+                            str(student.user_id), "evening_digest", dedup_id, _DAILY_DEDUP_TTL
+                        ):
                             continue
                         try:
                             await bot.send_message(
@@ -240,6 +306,7 @@ async def send_evening_digest() -> None:
                 )
 
 
+@_single_instance("morning_schedule")
 async def send_morning_schedule() -> None:
     """Send morning schedule at 07:30 Moscow with today's classes."""
     from src.core.repositories.group import GroupRepository, StudentRepository
@@ -285,7 +352,9 @@ async def send_morning_schedule() -> None:
                 for student in students:
                     identity = await identity_repo.get_user_telegram_identity(student.user_id)
                     if identity and identity.external_id:
-                        if await _is_duplicate(str(student.user_id), "morning_schedule", dedup_id):
+                        if await _is_duplicate(
+                            str(student.user_id), "morning_schedule", dedup_id, _DAILY_DEDUP_TTL
+                        ):
                             continue
                         try:
                             await bot.send_message(
@@ -305,6 +374,7 @@ async def send_morning_schedule() -> None:
                 )
 
 
+@_single_instance("deadline_reminders")
 async def send_deadline_reminders() -> None:
     """Hourly job: remind students about deadlines in ~24h or ~3h."""
     from src.core.repositories.group import GroupRepository, StudentRepository
@@ -346,10 +416,10 @@ async def send_deadline_reminders() -> None:
                     hours_left = (dl - now).total_seconds() / 3600
                     subject_name = a.subject.name if a.subject else "Предмет"
 
-                    if abs(hours_left - 24) <= 0.5:
+                    if in_window(hours_left, 24):
                         msg = f"⏰ Завтра дедлайн: {a.title} ({subject_name})"
                         reminders.append((a, msg, "deadline_24h"))
-                    elif abs(hours_left - 3) <= 0.5:
+                    elif in_window(hours_left, 3):
                         msg = f"🔥 Через 3 часа дедлайн: {a.title} ({subject_name})"
                         reminders.append((a, msg, "deadline_3h"))
 
@@ -361,7 +431,9 @@ async def send_deadline_reminders() -> None:
                     if identity and identity.external_id:
                         for assignment, text, notif_type in reminders:
                             dedup_id = str(assignment.id)
-                            if await _is_duplicate(str(student.user_id), notif_type, dedup_id):
+                            if await _is_duplicate(
+                                str(student.user_id), notif_type, dedup_id, _DAILY_DEDUP_TTL
+                            ):
                                 continue
                             try:
                                 await bot.send_message(
@@ -380,6 +452,7 @@ async def send_deadline_reminders() -> None:
                 )
 
 
+@_single_instance("sync_all_schedules")
 async def sync_all_schedules() -> None:
     """Sync schedules for all groups from rasp.dmami.ru every 15 minutes."""
     from src.core.repositories.group import GroupRepository
