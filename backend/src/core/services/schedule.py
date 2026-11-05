@@ -216,79 +216,94 @@ class ScheduleService:
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
 
-        # Upsert: match by (group_id, weekday, pair_number, subject_name) to keep stable IDs
+        # Upsert с сохранением id записей (к ним привязаны переопределения).
+        # В одной ячейке (день, пара, предмет) у rasp бывает несколько записей с разными
+        # периодами: «до 01.11 в ав1209», «с 02.11 в ав5108». Раньше ключ был без периода,
+        # обе записи обновляли одну строку, а вторая строка оставалась навсегда с тем же
+        # периодом — пара в расписании и в уведомлениях дублировалась (#135).
         existing_entries = await self.entry_repo.get_group_schedule(group.id, with_subject=True)
-        existing_map: dict[tuple[int, int, str], Any] = {}
+        candidates: dict[tuple[int, int, str], list[Any]] = defaultdict(list)
         for e in existing_entries:
             if has_session_marker(e):
                 continue  # exams/consultations are managed by import_session_schedule
-            key = (e.weekday, e.pair_number, e.subject.name if e.subject else "")
-            existing_map[key] = e
+            candidates[(e.weekday, e.pair_number, e.subject.name if e.subject else "")].append(e)
 
-        seen_keys: set[tuple[int, int, str]] = set()
-        count = 0
+        parsed: list[dict[str, Any]] = []
         for item in schedule_data:
+            parsed.append(
+                {
+                    **item,
+                    "base_key": (item["weekday"], item["pair_number"], item["subject"]),
+                    "start": time.fromisoformat(item["start_time"]),
+                    "end": time.fromisoformat(item["end_time"]),
+                    "date_from": date.fromisoformat(item["date_from"])
+                    if item.get("date_from")
+                    else None,
+                    "date_to": date.fromisoformat(item["date_to"]) if item.get("date_to") else None,
+                }
+            )
+
+        # Сопоставление: сначала точное совпадение периода и чётности, затем любая свободная
+        # запись той же ячейки. Каждая существующая запись используется не больше одного раза.
+        matched: dict[int, Any] = {}
+        used: set[uuid.UUID] = set()
+        for exact in (True, False):
+            for i, item in enumerate(parsed):
+                if i in matched:
+                    continue
+                for e in candidates.get(item["base_key"], []):
+                    if e.id in used:
+                        continue
+                    if exact and (e.date_from, e.date_to, e.week_parity) != (
+                        item["date_from"],
+                        item["date_to"],
+                        item.get("week_parity"),
+                    ):
+                        continue
+                    matched[i] = e
+                    used.add(e.id)
+                    break
+
+        count = 0
+        for i, item in enumerate(parsed):
             subject = await self.subject_repo.get_or_create(
                 name=item["subject"],
                 short_name=item.get("short_name"),
                 group_id=group.id,
             )
-
-            start_time = time.fromisoformat(item["start_time"])
-            end_time = time.fromisoformat(item["end_time"])
-
-            date_from = None
-            date_to = None
-            if item.get("date_from"):
-                date_from = date.fromisoformat(item["date_from"])
-            if item.get("date_to"):
-                date_to = date.fromisoformat(item["date_to"])
-
-            key = (item["weekday"], item["pair_number"], item["subject"])
-            seen_keys.add(key)
-
-            existing = existing_map.get(key)
+            fields: dict[str, Any] = {
+                "subject_id": subject.id,
+                "start_time": item["start"],
+                "end_time": item["end"],
+                "location": item.get("location"),
+                "room": item.get("room"),
+                "teacher": item.get("teacher"),
+                "lesson_type": item.get("lesson_type"),
+                "date_from": item["date_from"],
+                "date_to": item["date_to"],
+                "week_parity": item.get("week_parity"),
+                "external_link": item.get("external_link"),
+                "raw_data": item.get("raw_data", {}),
+            }
+            existing = matched.get(i)
             if existing:
                 # Update in place — keep same ID
-                existing.subject_id = subject.id
-                existing.start_time = start_time
-                existing.end_time = end_time
-                existing.location = item.get("location")
-                existing.room = item.get("room")
-                existing.teacher = item.get("teacher")
-                existing.lesson_type = item.get("lesson_type")
-                existing.date_from = date_from
-                existing.date_to = date_to
-                existing.week_parity = item.get("week_parity")
-                existing.external_link = item.get("external_link")
-                existing.raw_data = item.get("raw_data", {})
-                count += 1
-                continue
-
-            # New entry
-            await self.entry_repo.create(
-                group_id=group.id,
-                subject_id=subject.id,
-                weekday=item["weekday"],
-                pair_number=item["pair_number"],
-                start_time=start_time,
-                end_time=end_time,
-                location=item.get("location"),
-                room=item.get("room"),
-                teacher=item.get("teacher"),
-                lesson_type=item.get("lesson_type"),
-                date_from=date_from,
-                date_to=date_to,
-                week_parity=item.get("week_parity"),
-                external_link=item.get("external_link"),
-                raw_data=item.get("raw_data", {}),
-            )
+                for name, value in fields.items():
+                    setattr(existing, name, value)
+            else:
+                await self.entry_repo.create(
+                    group_id=group.id,
+                    weekday=item["weekday"],
+                    pair_number=item["pair_number"],
+                    **fields,
+                )
             count += 1
 
-        # Remove entries that no longer exist in source (but keep custom/personal ones)
-        for key, entry in existing_map.items():
-            if key not in seen_keys:
-                await self.entry_repo.delete(entry)
+        # Записи, которых больше нет в источнике, и лишние дубли прошлых импортов
+        for entries in candidates.values():
+            for entry in entries:
+                if entry.id not in used:
+                    await self.entry_repo.delete(entry)
 
         await self.session.commit()
 

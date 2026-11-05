@@ -11,7 +11,7 @@ import json
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import date, datetime, time
 from html import escape
 from typing import Any
 
@@ -129,6 +129,27 @@ def lesson_from_add(override: ScheduleOverride) -> Lesson | None:
         link=link,
         online=bool(link),
     )
+
+
+def dedup_id(lesson: Lesson, day: date) -> str:
+    """Ключ «уже напомнили» по содержанию пары, а не по id записи (#135).
+
+    Если одна и та же пара оказалась в базе дважды (две записи расписания с разными id),
+    напоминание всё равно уходит одно.
+    """
+    return f"{day.isoformat()}:{lesson.start.strftime('%H%M')}:{lesson.subject}"
+
+
+def unique(lessons: Iterable[Lesson]) -> list[Lesson]:
+    """Одна пара — одно напоминание: записи с тем же временем и предметом схлопываются."""
+    seen: set[tuple[time, str]] = set()
+    out: list[Lesson] = []
+    for lesson in lessons:
+        key = (lesson.start, lesson.subject)
+        if key not in seen:
+            seen.add(key)
+            out.append(lesson)
+    return out
 
 
 def format_reminder(lesson: Lesson, minutes: int) -> str:
