@@ -201,8 +201,8 @@ async def send_upcoming_class_notifications() -> None:
                     identity = await identity_repo.get_user_telegram_identity(student.user_id)
                     if not identity or not identity.external_id:
                         continue
-                    for lesson in lessons:
-                        dedup_id = f"{lesson.key}:{today.isoformat()}"
+                    for lesson in cr.unique(lessons):
+                        dedup_id = cr.dedup_id(lesson, today)
                         if await _is_duplicate(str(student.user_id), "class_reminder", dedup_id):
                             continue
                         bot = bot or await get_bot()
@@ -231,6 +231,7 @@ async def send_evening_digest() -> None:
     from src.core.repositories.group import GroupRepository, StudentRepository
     from src.core.repositories.user import IdentityRepository
     from src.core.services.assignment import AssignmentService
+    from src.core.services.daily_digest import plural
     from src.core.services.schedule import ScheduleService
     from src.gateways.telegram.bot import get_bot
     from src.gateways.telegram.deps import get_session
@@ -261,8 +262,9 @@ async def send_evening_digest() -> None:
                     first_subject = first.subject.name if first.subject else "Пара"
                     first_room = first.location or "—"
                     first_time = str(first.start_time)[:5]
+                    n = len({(e.start_time, e.subject_id) for e in day_schedule.entries})
                     schedule_part = (
-                        f"📅 Завтра {len(day_schedule.entries)} пар"
+                        f"📅 Завтра {n} {plural(n, 'пара', 'пары', 'пар')}"
                         f" с {first_time}\n"
                         f"Первая — {first_subject} в {first_room}"
                     )
@@ -308,9 +310,17 @@ async def send_evening_digest() -> None:
 
 @_single_instance("morning_schedule")
 async def send_morning_schedule() -> None:
-    """Send morning schedule at 07:30 Moscow with today's classes."""
+    """Утреннее сообщение в 07:30: пары на сегодня и дедлайны на ближайшие дни (#135).
+
+    Дедлайны у каждого свои: чужие личные задания не показываем, выполненные — тоже.
+    """
+    from sqlalchemy import select
+
+    from src.core.models.assignment import TaskState, TaskStatus
     from src.core.repositories.group import GroupRepository, StudentRepository
     from src.core.repositories.user import IdentityRepository
+    from src.core.services import daily_digest as dd
+    from src.core.services.assignment import AssignmentService
     from src.core.services.schedule import ScheduleService
     from src.gateways.telegram.bot import get_bot
     from src.gateways.telegram.deps import get_session
@@ -322,6 +332,7 @@ async def send_morning_schedule() -> None:
         student_repo = StudentRepository(session)
         identity_repo = IdentityRepository(session)
         schedule_service = ScheduleService(session)
+        assignment_service = AssignmentService(session)
 
         groups = await group_repo.get_all_groups()
         bot = await get_bot()
@@ -333,40 +344,77 @@ async def send_morning_schedule() -> None:
                     continue
 
                 day_schedule = await schedule_service.get_day_schedule(group.code, today)
-
-                if day_schedule.entries:
-                    first = day_schedule.entries[0]
-                    first_subject = first.subject.name if first.subject else "Пара"
-                    first_room = first.location or "—"
-                    first_time = str(first.start_time)[:5]
-                    text = (
-                        f"☀️ Доброе утро!\n\n"
-                        f"Сегодня {len(day_schedule.entries)} пар"
-                        f" с {first_time}\n"
-                        f"Первая — {first_subject} в {first_room}"
+                lessons = [
+                    dd.DigestLesson(
+                        subject=e.subject.name if e.subject else "Пара",
+                        start=e.start_time,
+                        end=e.end_time,
+                        lesson_type=e.lesson_type if e.lesson_type != "custom" else None,
+                        place=e.room or e.location,
                     )
-                else:
-                    text = "☀️ Доброе утро!\n\nСегодня пар нет"
+                    for e in day_schedule.entries
+                ]
+
+                # До конца послезавтрашнего дня по Москве
+                horizon = datetime.combine(
+                    today + timedelta(days=dd.DEADLINE_DAYS), datetime.min.time(), MOSCOW_TZ
+                )
+                group_deadlines = [
+                    a
+                    for a in await assignment_service.get_upcoming_deadlines(
+                        group.id, days=dd.DEADLINE_DAYS, limit=50
+                    )
+                    if a.deadline
+                    and (a.deadline if a.deadline.tzinfo else a.deadline.replace(tzinfo=UTC))
+                    < horizon
+                ]
+                done: set[tuple[object, object]] = set()
+                if group_deadlines:
+                    done = {
+                        (row.student_id, row.assignment_id)
+                        for row in (
+                            await session.execute(
+                                select(TaskStatus.student_id, TaskStatus.assignment_id).where(
+                                    TaskStatus.student_id.in_([s.id for s in students]),
+                                    TaskStatus.assignment_id.in_([a.id for a in group_deadlines]),
+                                    TaskStatus.state == TaskState.DONE,
+                                )
+                            )
+                        ).all()
+                    }
 
                 dedup_id = today.isoformat()
                 for student in students:
                     identity = await identity_repo.get_user_telegram_identity(student.user_id)
-                    if identity and identity.external_id:
-                        if await _is_duplicate(
-                            str(student.user_id), "morning_schedule", dedup_id, _DAILY_DEDUP_TTL
-                        ):
-                            continue
-                        try:
-                            await bot.send_message(
-                                chat_id=int(identity.external_id),
-                                text=text,
-                                parse_mode="HTML",
-                            )
-                        except Exception as e:
-                            logger.warning(
-                                "Failed to send morning schedule",
-                                extra={"user": identity.external_id, "error": str(e)},
-                            )
+                    if not identity or not identity.external_id:
+                        continue
+                    deadlines = [
+                        dd.DigestDeadline(
+                            title=a.title,
+                            subject=a.subject.name if a.subject else "Предмет",
+                            deadline=a.deadline,
+                        )
+                        for a in group_deadlines
+                        if a.deadline
+                        and (not a.is_personal or a.author_id == student.user_id)
+                        and (student.id, a.id) not in done
+                    ]
+                    if await _is_duplicate(
+                        str(student.user_id), "morning_schedule", dedup_id, _DAILY_DEDUP_TTL
+                    ):
+                        continue
+                    try:
+                        await bot.send_message(
+                            chat_id=int(identity.external_id),
+                            text=dd.format_morning(lessons, deadlines, today),
+                            parse_mode="HTML",
+                            disable_web_page_preview=True,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to send morning schedule",
+                            extra={"user": identity.external_id, "error": str(e)},
+                        )
             except Exception as e:
                 logger.warning(
                     "Failed to process morning schedule for group",
