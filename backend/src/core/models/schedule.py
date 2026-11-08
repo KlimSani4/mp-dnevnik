@@ -5,7 +5,7 @@ import uuid
 from datetime import date, time
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import Boolean, Date, Enum, ForeignKey, Index, Integer, String, Text, Time, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,6 +21,17 @@ class Subject(Base, UUIDMixin):
     """Academic subject."""
 
     __tablename__ = "subjects"
+    __table_args__ = (
+        # Один предмет из официального расписания на группу (#139, миграция 006).
+        # Личные предметы пользователей могут повторять название.
+        Index(
+            "uq_subjects_group_name_official",
+            "group_id",
+            "name",
+            unique=True,
+            postgresql_where=text("NOT is_custom AND group_id IS NOT NULL"),
+        ),
+    )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     short_name: Mapped[str | None] = mapped_column(String(64))
