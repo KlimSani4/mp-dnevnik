@@ -63,8 +63,21 @@ class SubjectRepository(BaseRepository[Subject]):
         short_name: str | None = None,
         group_id: uuid.UUID | None = None,
     ) -> Subject:
-        """Get existing subject or create new one."""
-        existing = await self.get_by_name(name, group_id)
+        """Предмет из официального расписания: найти или создать.
+
+        Ищем только среди неличных предметов: у пользователя может быть свой предмет
+        с тем же названием. Если в базе уже есть дубли (наследие параллельных импортов,
+        #139), берём один, а не падаем на MultipleResultsFound: раньше из-за этого
+        синхронизация группы ломалась навсегда и дубли пар не исчезали.
+        """
+        stmt = select(Subject).where(Subject.name == name, Subject.is_custom.is_(False))
+        stmt = (
+            stmt.where(Subject.group_id == group_id)
+            if group_id is not None
+            else stmt.where(Subject.group_id.is_(None))
+        )
+        result = await self.session.execute(stmt.order_by(Subject.id).limit(1))
+        existing = result.scalars().first()
         if existing:
             return existing
         return await self.create(name=name, short_name=short_name, group_id=group_id)
@@ -77,6 +90,12 @@ class ScheduleEntryRepository(BaseRepository[ScheduleEntry]):
 
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
+
+    async def has_entries(self, group_id: uuid.UUID) -> bool:
+        """Есть ли у группы хоть одна запись расписания."""
+        stmt = select(ScheduleEntry.id).where(ScheduleEntry.group_id == group_id).limit(1)
+        result = await self.session.execute(stmt)
+        return result.first() is not None
 
     async def get_group_schedule(
         self,

@@ -8,6 +8,7 @@ from collections import defaultdict
 from datetime import date, time, timedelta
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
@@ -63,8 +64,11 @@ class ScheduleService:
         # Get base entries
         entries = await self.entry_repo.get_day_schedule(group.id, target_date)
 
-        # Auto-import from rasp.dmami.ru if no entries in DB
-        if not entries and auto_import:
+        # Автоимпорт с rasp.dmami.ru — только если у группы вообще нет расписания.
+        # Раньше он срабатывал на любой день без пар (каждое воскресенье, каждый свободный
+        # день в неделе), и параллельные запросы недели запускали несколько импортов
+        # одновременно — так в базе появлялись дубли пар и предметов (#139).
+        if not entries and auto_import and not await self.entry_repo.has_entries(group.id):
             try:
                 schedule_data = await fetch_group_schedule(group_code)
                 if schedule_data:
@@ -206,6 +210,21 @@ class ScheduleService:
 
         return [ScheduleEntryWithSubject.model_validate(e) for e in entries]
 
+    async def _lock_group_import(self, group_id: uuid.UUID) -> None:
+        """Импорт расписания группы — строго по одному (#139).
+
+        Транзакционная advisory-блокировка PostgreSQL: второй импорт той же группы ждёт,
+        пока первый закоммитит, и видит уже созданные записи. Без неё синхронизация,
+        автоимпорт и импорт из бота могли одновременно создать одни и те же пары
+        и предметы. Снимается сама при commit или rollback.
+        """
+        if self.session.get_bind().dialect.name != "postgresql":
+            return
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+            {"key": f"schedule-import:{group_id}"},
+        )
+
     async def import_schedule(
         self,
         group_code: str,
@@ -215,6 +234,8 @@ class ScheduleService:
         group = await self.group_repo.get_by_code(group_code)
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
+
+        await self._lock_group_import(group.id)
 
         # Upsert с сохранением id записей (к ним привязаны переопределения).
         # В одной ячейке (день, пара, предмет) у rasp бывает несколько записей с разными
@@ -332,6 +353,8 @@ class ScheduleService:
         group = await self.group_repo.get_by_code(group_code)
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
+
+        await self._lock_group_import(group.id)
 
         existing_entries = await self.entry_repo.get_group_schedule(group.id, with_subject=True)
         existing_map: dict[tuple[date, int, str, str], Any] = {}
