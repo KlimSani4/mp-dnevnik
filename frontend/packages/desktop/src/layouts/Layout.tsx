@@ -5,6 +5,9 @@ import { useCurrentUser, useGroupContext } from '@nexora/shared'
 import { Icon } from '../components/ui/Icon'
 import { useT, type MessageKey } from '../i18n'
 
+// Ключ в localStorage; тот же ключ читает скрипт в index.html
+const THEME_STORAGE_KEY = 'nexora-theme'
+
 const mainNav = [
   { to: '/', label: 'nav.home' as MessageKey, icon: HomeIcon },
   { to: '/schedule', label: 'nav.schedule' as MessageKey, icon: CalendarIcon },
@@ -38,6 +41,7 @@ export function Layout() {
   const { t } = useT()
   const displayName = user?.display_name || t('layout.userFallback')
   const initial = displayName.trim()[0]?.toUpperCase() || '?'
+  // Класс 'dark' на <html> до первой отрисовки ставит скрипт в index.html (по THEME_STORAGE_KEY)
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark')
@@ -50,6 +54,11 @@ export function Layout() {
       document.documentElement.classList.add('dark')
     } else {
       document.documentElement.classList.remove('dark')
+    }
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, darkMode ? 'dark' : 'light')
+    } catch {
+      // localStorage может быть недоступен (приватный режим) — тема просто не запомнится
     }
   }, [darkMode])
 
