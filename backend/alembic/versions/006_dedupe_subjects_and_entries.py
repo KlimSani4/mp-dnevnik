@@ -72,8 +72,19 @@ def upgrade() -> None:
             "WHERE e.subject_id = m.dup"
         )
     )
-    # Требования к семестру уникальны по (предмет, семестр, студент): конфликтующие
-    # строки дубля удаляем, остальные переносим
+    # Требования к семестру уникальны по (предмет, семестр, студент). Сначала убираем
+    # конфликты между самими дублями (три копии предмета, у студента привязка на двух из них:
+    # без этого перенос на один предмет упал бы на uq_subject_semester_student), оставляя
+    # строку с наименьшим id; потом конфликты с оставшимся предметом; остальные переносим
+    conn.execute(
+        sa.text(
+            "DELETE FROM subject_semesters s USING subject_map m "
+            "WHERE s.subject_id = m.dup AND EXISTS ("
+            "SELECT 1 FROM subject_semesters o JOIN subject_map m2 ON o.subject_id = m2.dup "
+            "WHERE m2.keep = m.keep AND o.semester_id = s.semester_id "
+            "AND o.student_id = s.student_id AND o.id::text < s.id::text)"
+        )
+    )
     conn.execute(
         sa.text(
             "DELETE FROM subject_semesters d USING subject_map m, subject_semesters k "
