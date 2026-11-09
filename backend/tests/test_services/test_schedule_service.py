@@ -279,6 +279,7 @@ class TestGetDaySchedule:
         svc.group_repo.get_by_code = AsyncMock(return_value=group)
         # First call returns empty, second call (after import) also empty
         svc.entry_repo.get_day_schedule = AsyncMock(return_value=[])
+        svc.entry_repo.has_entries = AsyncMock(return_value=False)
         svc.override_repo.get_entry_overrides = AsyncMock(return_value=[])
         svc.student_repo.get_user_students = AsyncMock(return_value=[])
 
@@ -294,6 +295,25 @@ class TestGetDaySchedule:
 
         # import_schedule should NOT be called when fetch returns empty list
         mock_import.assert_not_awaited()
+        assert result.entries == []
+
+    @pytest.mark.asyncio
+    async def test_no_auto_import_for_free_day(self) -> None:
+        """День без пар у группы с расписанием не запускает импорт (#139)."""
+        session = MagicMock()
+        svc = _make_service(session)
+        group = _make_group()
+        svc.group_repo.get_by_code = AsyncMock(return_value=group)
+        svc.entry_repo.get_day_schedule = AsyncMock(return_value=[])
+        svc.entry_repo.has_entries = AsyncMock(return_value=True)
+        svc.override_repo.get_add_overrides_for_date = AsyncMock(return_value=[])
+
+        with patch(
+            "src.core.services.schedule.fetch_group_schedule", new_callable=AsyncMock
+        ) as fetch:
+            result = await svc.get_day_schedule(group.code, date.today())
+
+        fetch.assert_not_awaited()
         assert result.entries == []
 
 
