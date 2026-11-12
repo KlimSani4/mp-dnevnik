@@ -302,21 +302,101 @@ class TestGetDaySchedule:
 # ---------------------------------------------------------------------------
 
 class TestGetWeekSchedule:
+    @staticmethod
+    def _service(entries: list[ScheduleEntry], group: Group) -> ScheduleService:
+        svc = _make_service(MagicMock())
+        svc.group_repo.get_by_code = AsyncMock(return_value=group)
+        svc.entry_repo.get_group_schedule = AsyncMock(return_value=entries)
+        svc.override_repo.get_overrides_for_entries = AsyncMock(return_value=[])
+        svc.override_repo.get_add_overrides_between = AsyncMock(return_value=[])
+        svc.student_repo.get_user_students = AsyncMock(return_value=[])
+        return svc
+
     @pytest.mark.asyncio
     async def test_returns_six_days(self) -> None:
-        session = MagicMock()
-        svc = _make_service(session)
-
         group = _make_group()
+        svc = self._service([], group)
 
-        svc.group_repo.get_by_code = AsyncMock(return_value=group)
-        svc.entry_repo.get_day_schedule = AsyncMock(return_value=[])
-        svc.override_repo.get_entry_overrides = AsyncMock(return_value=[])
-        svc.student_repo.get_user_students = AsyncMock(return_value=[])
-
-        result = await svc.get_week_schedule(group.code)
+        with patch(
+            "src.core.services.schedule.fetch_group_schedule",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            result = await svc.get_week_schedule(group.code)
 
         assert len(result) == 6
+
+    @pytest.mark.asyncio
+    async def test_queries_do_not_depend_on_number_of_lessons(self) -> None:
+        """Неделя берёт переопределения одним запросом, а не по запросу на занятие."""
+        group = _make_group()
+        subject = _make_subject(group.id)
+        entries = [_make_entry(group, subject, weekday=d) for d in (1, 2, 3, 4, 5)]
+        svc = self._service(entries, group)
+
+        await svc.get_week_schedule(group.code, date(2026, 10, 12))
+
+        svc.entry_repo.get_group_schedule.assert_awaited_once()
+        svc.override_repo.get_overrides_for_entries.assert_awaited_once()
+        svc.override_repo.get_add_overrides_between.assert_awaited_once()
+        svc.override_repo.get_entry_overrides.assert_not_called()
+        svc.entry_repo.get_day_schedule.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_import_when_group_has_schedule(self) -> None:
+        group = _make_group()
+        entry = _make_entry(group, _make_subject(group.id))
+        svc = self._service([entry], group)
+
+        with patch(
+            "src.core.services.schedule.fetch_group_schedule",
+            new_callable=AsyncMock,
+        ) as mock_fetch:
+            await svc.get_week_schedule(group.code, date(2026, 10, 12))
+
+        mock_fetch.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_imports_once_when_group_is_empty(self) -> None:
+        """Пустая суббота не должна дёргать rasp.dmami.ru: импорт один на всю неделю."""
+        group = _make_group()
+        svc = self._service([], group)
+
+        with (
+            patch(
+                "src.core.services.schedule.fetch_group_schedule",
+                new_callable=AsyncMock,
+                return_value=[{"weekday": 1}],
+            ) as mock_fetch,
+            patch.object(svc, "import_schedule", new_callable=AsyncMock) as mock_import,
+        ):
+            await svc.get_week_schedule(group.code, date(2026, 10, 12))
+
+        mock_fetch.assert_awaited_once_with(group.code)
+        mock_import.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_import_failure_does_not_break_week(self) -> None:
+        group = _make_group()
+        svc = self._service([], group)
+
+        with patch(
+            "src.core.services.schedule.fetch_group_schedule",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("rasp is down"),
+        ):
+            result = await svc.get_week_schedule(group.code, date(2026, 10, 12))
+
+        assert len(result) == 6
+        assert all(day.entries == [] for day in result)
+
+    @pytest.mark.asyncio
+    async def test_unknown_group_raises(self) -> None:
+        svc = _make_service(MagicMock())
+        svc.group_repo.get_by_code = AsyncMock(return_value=None)
+
+        with pytest.raises(NotFoundError):
+            await svc.get_week_schedule("UNKNOWN")
 
 
 # ---------------------------------------------------------------------------
