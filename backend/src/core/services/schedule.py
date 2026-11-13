@@ -487,19 +487,18 @@ class ScheduleService:
         *,
         user_id: uuid.UUID | None = None,
     ) -> list[DayScheduleResponse]:
-        """Get schedule for a week."""
-        if start_date is None:
-            start_date = date.today()
-            # Start from Monday
-            start_date -= timedelta(days=start_date.weekday())
+        """Get schedule for a week (Mon-Sat).
 
-        days = []
-        for i in range(6):  # Mon-Sat
-            day = start_date + timedelta(days=i)
-            day_schedule = await self.get_day_schedule(group_code, day, user_id=user_id)
-            days.append(day_schedule)
-
-        return days
+        a fixed number of queries to the database instead of queries
+        for each lesson of each day.
+        """
+        return await self.get_schedule_range(
+            group_code,
+            start_date,
+            1,
+            user_id=user_id,
+            auto_import=True,
+        )
 
     async def get_schedule_range(
         self,
@@ -508,6 +507,7 @@ class ScheduleService:
         weeks: int = 1,
         *,
         user_id: uuid.UUID | None = None,
+        auto_import: bool = False,
     ) -> list[DayScheduleResponse]:
         if start_date is None:
             start_date = date.today()
@@ -527,6 +527,20 @@ class ScheduleService:
                     break
 
         entries = await self.entry_repo.get_group_schedule(group.id, with_subject=True)
+
+        # У группы ещё нет расписания в БД: один раз тянем его с rasp.dmami.ru
+        if not entries and auto_import:
+            try:
+                schedule_data = await fetch_group_schedule(group_code)
+                if schedule_data:
+                    await self.import_schedule(group_code, schedule_data)
+                    entries = await self.entry_repo.get_group_schedule(group.id, with_subject=True)
+            except Exception:
+                logger.exception(
+                    "Failed to auto-import schedule",
+                    extra={"group_code": group_code},
+                )
+
         overrides = await self.override_repo.get_overrides_for_entries(
             [e.id for e in entries],
             start=monday,
