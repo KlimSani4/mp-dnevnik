@@ -489,8 +489,8 @@ class ScheduleService:
     ) -> list[DayScheduleResponse]:
         """Get schedule for a week (Mon-Sat).
 
-        Один и тот же пакетный путь, что и у выгрузки: фиксированное число запросов
-        к БД вместо запросов на каждое занятие каждого дня.
+        a fixed number of queries to the database instead of queries
+        for each lesson of each day.
         """
         return await self.get_schedule_range(
             group_code,
