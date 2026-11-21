@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
 import type {
   AssignmentCreateRequest,
@@ -10,6 +10,19 @@ import type {
   TaskSearchParams,
   BulkTaskUpdateRequest,
 } from '../types'
+
+/**
+ * Задание показывается в трёх местах: список заданий (['assignments']), доска задач
+ * (['tasks']) и главная (['dashboard']). После любого изменения задания обновляем все три,
+ * иначе страница показывает старые данные до перезагрузки (#103).
+ */
+function refreshAssignmentViews(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['assignments'] }),
+    queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+  ])
+}
 
 export function useAssignments(params: AssignmentSearchParams) {
   const api = useApi()
@@ -37,10 +50,7 @@ export function useCreateAssignment() {
 
   return useMutation({
     mutationFn: (data: AssignmentCreateRequest) => api.assignments.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assignments'] })
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    },
+    onSuccess: () => refreshAssignmentViews(queryClient),
   })
 }
 
@@ -51,9 +61,7 @@ export function useUpdateAssignment() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: AssignmentUpdateRequest }) =>
       api.assignments.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assignments'] })
-    },
+    onSuccess: () => refreshAssignmentViews(queryClient),
   })
 }
 
@@ -63,9 +71,26 @@ export function useDeleteAssignment() {
 
   return useMutation({
     mutationFn: (id: string) => api.assignments.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assignments'] })
+    // Убираем задание с доски сразу, не дожидаясь ответа сервера; при ошибке возвращаем
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] })
+      const snapshots = queryClient.getQueriesData<Task[]>({ queryKey: ['tasks'] })
+      for (const [key, prev] of snapshots) {
+        if (prev) {
+          queryClient.setQueryData<Task[]>(key, prev.filter((t) => t.assignment.id !== id))
+        }
+      }
+      return { snapshots }
     },
+    onError: (_err, _id, ctx) => {
+      for (const [key, data] of ctx?.snapshots ?? []) {
+        queryClient.setQueryData(key, data)
+      }
+    },
+    onSuccess: (_data, id) => {
+      queryClient.removeQueries({ queryKey: ['assignments', id], exact: true })
+    },
+    onSettled: () => refreshAssignmentViews(queryClient),
   })
 }
 
@@ -76,10 +101,7 @@ export function useVoteAssignment() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: AssignmentVoteRequest }) =>
       api.assignments.vote(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assignments'] })
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-    },
+    onSuccess: () => refreshAssignmentViews(queryClient),
   })
 }
 
@@ -122,13 +144,7 @@ export function useUpdateTask() {
         queryClient.setQueryData(key, data)
       }
     },
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['tasks'] }),
-        queryClient.invalidateQueries({ queryKey: ['assignments'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-      ])
-    },
+    onSettled: () => refreshAssignmentViews(queryClient),
   })
 }
 
@@ -138,10 +154,6 @@ export function useBulkUpdateTasks() {
 
   return useMutation({
     mutationFn: (data: BulkTaskUpdateRequest) => api.tasks.bulkUpdate(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['assignments'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-    },
+    onSuccess: () => refreshAssignmentViews(queryClient),
   })
 }
