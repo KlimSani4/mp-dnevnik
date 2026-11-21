@@ -72,25 +72,24 @@ def upgrade() -> None:
             "WHERE e.subject_id = m.dup"
         )
     )
-    # Требования к семестру уникальны по (предмет, семестр, студент). Сначала убираем
-    # конфликты между самими дублями (три копии предмета, у студента привязка на двух из них:
-    # без этого перенос на один предмет упал бы на uq_subject_semester_student), оставляя
-    # строку с наименьшим id; потом конфликты с оставшимся предметом; остальные переносим
+    # Требования к семестру уникальны по (предмет, семестр, студент). После слияния у
+    # студента может оказаться несколько строк на один предмет: на оставляемом и на одном
+    # или нескольких дублях (случай нашла PiuiP: без этого перенос падал на
+    # uq_subject_semester_student). Из каждой такой группы оставляем строку с наибольшим
+    # прогрессом (сданные лабы + ПЗ), при равенстве — самую свежую; остальные удаляем
     conn.execute(
         sa.text(
-            "DELETE FROM subject_semesters s USING subject_map m "
-            "WHERE s.subject_id = m.dup AND EXISTS ("
-            "SELECT 1 FROM subject_semesters o JOIN subject_map m2 ON o.subject_id = m2.dup "
-            "WHERE m2.keep = m.keep AND o.semester_id = s.semester_id "
-            "AND o.student_id = s.student_id AND o.id::text < s.id::text)"
-        )
-    )
-    conn.execute(
-        sa.text(
-            "DELETE FROM subject_semesters d USING subject_map m, subject_semesters k "
-            "WHERE d.subject_id = m.dup AND k.subject_id = m.keep "
-            "AND k.semester_id = d.semester_id "
-            "AND k.student_id IS NOT DISTINCT FROM d.student_id"
+            "DELETE FROM subject_semesters WHERE id IN ("
+            "  SELECT id FROM ("
+            "    SELECT s.id, row_number() OVER ("
+            "      PARTITION BY coalesce(m.keep, s.subject_id), s.semester_id, s.student_id"
+            "      ORDER BY s.done_labs + s.done_pz DESC, s.updated_at DESC, s.id::text"
+            "    ) AS rn"
+            "    FROM subject_semesters s LEFT JOIN subject_map m ON m.dup = s.subject_id"
+            "    WHERE s.subject_id IN (SELECT dup FROM subject_map)"
+            "       OR s.subject_id IN (SELECT keep FROM subject_map)"
+            "  ) ranked WHERE rn > 1"
+            ")"
         )
     )
     conn.execute(
