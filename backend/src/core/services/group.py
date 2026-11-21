@@ -198,12 +198,14 @@ class GroupService:
         students = await self.student_repo.get_user_students(user_id)
         return [StudentWithGroup.model_validate(s) for s in students]
 
-    async def get_group_subjects(self, group_code: str) -> list[SubjectResponse]:
-        """Get all subjects for a group."""
+    async def get_group_subjects(
+        self, group_code: str, viewer_id: uuid.UUID | None = None
+    ) -> list[SubjectResponse]:
+        """Предметы группы; личные предметы — только их владельцу (#101)."""
         group = await self.group_repo.get_by_code(group_code)
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
-        subjects = await self.subject_repo.get_group_subjects(group.id)
+        subjects = await self.subject_repo.get_group_subjects(group.id, viewer_id)
         return [SubjectResponse.model_validate(s) for s in subjects]
 
     async def create_custom_subject(
@@ -212,7 +214,7 @@ class GroupService:
         data: SubjectCreate,
         user_id: uuid.UUID,
     ) -> SubjectResponse:
-        """Create a custom personal subject linked to this group."""
+        """Личный предмет пользователя в группе: виден только ему (#101)."""
         group = await self.group_repo.get_by_code(group_code)
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
@@ -226,6 +228,7 @@ class GroupService:
             name=data.name,
             group_id=group.id,
             is_custom=True,
+            owner_id=user_id,
         )
         await self.session.commit()
 

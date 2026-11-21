@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { clsx } from 'clsx'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button, Card, Input, Avatar, Icon } from '../components/ui'
 import {
   useCurrentUser,
@@ -93,7 +93,14 @@ export function SettingsPage() {
     }
   }
 
-  const [activeSection, setActiveSection] = useState<'profile' | 'notifications' | 'group' | 'support' | 'about'>('profile')
+  type Section = 'profile' | 'notifications' | 'group' | 'support' | 'about'
+  const SECTIONS: Section[] = ['profile', 'notifications', 'group', 'support', 'about']
+  // Раздел можно открыть по ссылке: /settings?section=group (#101)
+  const [searchParams] = useSearchParams()
+  const requested = searchParams.get('section') as Section | null
+  const [activeSection, setActiveSection] = useState<Section>(
+    requested && SECTIONS.includes(requested) ? requested : 'profile',
+  )
 
   const prefsQuery = useNotificationPreferences()
   const updatePrefsMutation = useUpdateNotificationPreferences()

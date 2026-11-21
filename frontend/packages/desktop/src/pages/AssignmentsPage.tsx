@@ -9,6 +9,7 @@ import {
   useCreateCustomSubject,
 } from '@nexora/shared'
 import clsx from 'clsx'
+import { Link } from 'react-router-dom'
 import { startOfDay, addDays, isBefore } from 'date-fns'
 import {
   DndContext,
@@ -508,7 +509,9 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
                 error={errors.subjectId}
               />
               {/* Custom subject inline creation */}
-              {!showCustomSubjectInput ? (
+              {!groupCode ? (
+                <p className="text-xs text-surface-500 dark:text-surface-400">{t('assign.noGroup.subjectHint')}</p>
+              ) : !showCustomSubjectInput ? (
                 <button
                   type="button"
                   onClick={() => setShowCustomSubjectInput(true)}
@@ -548,6 +551,16 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
                     <Icon name="x" size={14} />
                   </Button>
                 </div>
+              )}
+              {showCustomSubjectInput && (
+                <p
+                  className={clsx(
+                    'text-xs',
+                    createCustomSubject.isError ? 'text-danger-500' : 'text-surface-400 dark:text-surface-500',
+                  )}
+                >
+                  {createCustomSubject.isError ? t('assign.addSubjectError') : t('assign.personalSubjectHint')}
+                </p>
               )}
           </div>
 
@@ -665,7 +678,7 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
 export function AssignmentsPage() {
   const { t } = useT()
   // ─── API hooks ───
-  const { groupId, groupCode } = useGroupContext()
+  const { groupId, groupCode, isLoading: groupLoading } = useGroupContext()
   const tasksQuery = useTasks({ group_id: groupId ?? '' })
   const updateTaskMutation = useUpdateTask()
   const voteAssignmentMutation = useVoteAssignment()
@@ -891,6 +904,30 @@ export function AssignmentsPage() {
     { value: '', label: t('assign.allSubjects') },
     ...apiSubjects.map((s) => ({ value: s.id, label: s.name })),
   ]
+
+  // Без группы задания и предметы создать нельзя: объясняем это вместо кнопки,
+  // которая молча ничего не делала (#101)
+  if (!groupId && !groupLoading) {
+    return (
+      <div>
+        <h1 className="mb-4 text-xl font-semibold text-surface-900 dark:text-surface-50">
+          {t('nav.assignments')}
+        </h1>
+        <div className="mx-auto mt-10 flex max-w-md flex-col items-center rounded-2xl border border-surface-200 bg-white px-6 py-10 text-center dark:border-surface-700 dark:bg-surface-800">
+          <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-500 dark:bg-primary-500/10">
+            <Icon name="users" size={22} />
+          </span>
+          <h2 className="mb-2 text-base font-semibold text-surface-900 dark:text-surface-50">
+            {t('assign.noGroup.title')}
+          </h2>
+          <p className="mb-6 text-sm text-surface-500 dark:text-surface-400">{t('assign.noGroup.text')}</p>
+          <Link to="/settings?section=group">
+            <Button variant="primary">{t('assign.noGroup.action')}</Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
