@@ -40,6 +40,15 @@ export interface GroupStudentUser {
   display_name: string | null
 }
 
+/** Контакт Telegram — приходит только старосте и его помощникам (#148) */
+export interface TelegramContact {
+  username: string | null
+  name: string | null
+  profile_url: string | null
+}
+
+export type JoinedVia = 'site' | 'bot' | 'invite'
+
 export interface GroupStudent {
   id: string
   user_id: string
@@ -47,8 +56,11 @@ export interface GroupStudent {
   role: GroupRole
   verified: boolean
   user: GroupStudentUser
+  /** Когда подана заявка */
   created_at: string
   updated_at: string
+  joined_via?: JoinedVia | null
+  telegram?: TelegramContact | null
 }
 
 export interface RoleUpdateRequest {

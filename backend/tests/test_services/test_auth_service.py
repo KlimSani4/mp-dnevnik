@@ -30,6 +30,7 @@ def _make_service(session: MagicMock) -> AuthService:
     svc = AuthService(session)
     svc.user_repo = AsyncMock()
     svc.identity_repo = AsyncMock()
+    svc.identity_repo.get_by_external = AsyncMock(return_value=None)
     svc.consent_repo = AsyncMock()
     svc.audit_repo = AsyncMock()
     return svc

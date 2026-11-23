@@ -29,6 +29,7 @@ export {
   useUpdateGroup,
   useGroupStudents,
   useVerifyStudent,
+  useRejectStudent,
   useChangeStudentRole,
   useCreateCustomSubject,
   useUpdateSubjectRequirements,

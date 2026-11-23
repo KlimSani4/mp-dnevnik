@@ -104,6 +104,20 @@ export function useVerifyStudent() {
   })
 }
 
+/** Отклонить заявку в группу (#148) */
+export function useRejectStudent() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ code, userId }: { code: string; userId: string }) =>
+      api.groups.reject(code, userId),
+    onSuccess: (_data, { code }) => {
+      queryClient.invalidateQueries({ queryKey: ['groups', code, 'students'] })
+    },
+  })
+}
+
 export function useChangeStudentRole() {
   const api = useApi()
   const queryClient = useQueryClient()

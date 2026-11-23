@@ -116,6 +116,25 @@ class StudentWithUser(StudentResponse):
     user: UserBrief
 
 
+class TelegramContact(BaseModel):
+    """Кто это в Telegram — только для старосты и его помощников (#148)."""
+
+    username: str | None = None
+    name: str | None = None
+    profile_url: str | None = None
+
+
+class StudentWithContact(StudentWithUser):
+    """Участник или заявка в списке группы для старосты (#148).
+
+    created_at — когда подана заявка, joined_via — как: site, bot, invite.
+    Обычным участникам эти данные не отдаются.
+    """
+
+    joined_via: str | None = None
+    telegram: TelegramContact | None = None
+
+
 class RoleUpdateRequest(BaseModel):
     """Request to change a student's role."""
 
