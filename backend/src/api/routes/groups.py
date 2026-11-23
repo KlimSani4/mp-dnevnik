@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query
 
-from src.api.deps import CurrentUser, DBSession, require_group_moderator
+from src.api.deps import CurrentUser, CurrentUserOptional, DBSession, require_group_moderator
 from src.core.schemas.group import (
     GroupCreate,
     GroupResponse,
@@ -95,10 +95,11 @@ async def join_group(
 async def get_group_subjects(
     code: str,
     db: DBSession,
+    user: CurrentUserOptional,
 ) -> list[SubjectResponse]:
-    """Get all subjects for a group."""
+    """Предметы группы; личные предметы видит только их владелец."""
     group_service = GroupService(db)
-    return await group_service.get_group_subjects(code)
+    return await group_service.get_group_subjects(code, user.id if user else None)
 
 
 @router.get("/{code}/students", response_model=list[StudentWithUser])

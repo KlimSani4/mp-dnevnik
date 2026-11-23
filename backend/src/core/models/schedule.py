@@ -40,6 +40,13 @@ class Subject(Base, UUIDMixin):
         ForeignKey("groups.id"),
     )
     is_custom: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Владелец личного предмета (#101): такой предмет видит только он.
+    # NULL — предмет из расписания или личный предмет, созданный до миграции 007.
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
 
     # Relationships
     group: Mapped["Group | None"] = relationship("Group", back_populates="subjects")

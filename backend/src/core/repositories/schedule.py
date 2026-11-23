@@ -3,7 +3,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import and_, select
+from sqlalchemy import ColumnElement, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -50,9 +50,21 @@ class SubjectRepository(BaseRepository[Subject]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_group_subjects(self, group_id: uuid.UUID) -> list[Subject]:
-        """Get all subjects for a group (including global ones)."""
-        stmt = select(Subject).where((Subject.group_id == group_id) | (Subject.group_id.is_(None)))
+    async def get_group_subjects(
+        self, group_id: uuid.UUID, viewer_id: uuid.UUID | None = None
+    ) -> list[Subject]:
+        """Предметы группы (и общие) для этого пользователя.
+
+        Личные предметы с владельцем видит только владелец (#101); без viewer_id
+        они не возвращаются вовсе.
+        """
+        visible: ColumnElement[bool] = Subject.owner_id.is_(None)
+        if viewer_id is not None:
+            visible = or_(visible, Subject.owner_id == viewer_id)
+        stmt = select(Subject).where(
+            (Subject.group_id == group_id) | (Subject.group_id.is_(None)),
+            visible,
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

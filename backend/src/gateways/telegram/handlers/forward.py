@@ -270,7 +270,7 @@ async def handle_forwarded_message(message: Message) -> None:
         group = students[0].group
 
         subject_repo = SubjectRepository(session)
-        subjects = await subject_repo.get_group_subjects(group.id)
+        subjects = await subject_repo.get_group_subjects(group.id, identity.user_id)
 
     # Parse
     title = _make_title(text)
@@ -404,7 +404,9 @@ async def fw_edit_title(message: Message, state: FSMContext) -> None:
     # Load subjects for inline keyboard
     async with get_session() as session:
         subject_repo = SubjectRepository(session)
-        subjects = await subject_repo.get_group_subjects(uuid.UUID(payload["g"]))
+        subjects = await subject_repo.get_group_subjects(
+            uuid.UUID(payload["g"]), uuid.UUID(payload["u"])
+        )
 
     # Store subjects names temporarily, show keyboard
     encoded_base = _encode_payload(payload)
