@@ -108,6 +108,9 @@ class Student(Base, UUIDMixin, TimestampMixin):
         default=StudentRole.STUDENT,
     )
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Как человек подал заявку (#148): site — по коду на сайте, bot — через бота,
+    # invite — по ссылке-приглашению. NULL — до миграции 008.
+    joined_via: Mapped[str | None] = mapped_column(String(16))
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="students")

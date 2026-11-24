@@ -112,6 +112,9 @@ export function createGroupsApi(client: ApiClient) {
     verify(code: string, userId: string) {
       return client.post<void>(`/groups/${code}/verify/${userId}`)
     },
+    reject(code: string, userId: string) {
+      return client.post<void>(`/groups/${code}/reject/${userId}`)
+    },
     getSubjects(code: string) {
       return client.get<Subject[]>(`/groups/${code}/subjects`)
     },

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.core.models.group import Group, GroupChat, Student, StudentRole
+from src.core.models.user import User
 from src.core.repositories.base import BaseRepository
 
 
@@ -91,7 +92,10 @@ class StudentRepository(BaseRepository[Student]):
         """Get all students in a group with user relationship loaded."""
 
         stmt = (
-            select(Student).where(Student.group_id == group_id).options(selectinload(Student.user))
+            select(Student)
+            .where(Student.group_id == group_id)
+            .options(selectinload(Student.user).selectinload(User.identities))
+            .order_by(Student.verified, Student.created_at)
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

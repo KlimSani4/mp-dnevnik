@@ -11,8 +11,8 @@ from src.core.schemas.group import (
     GroupUpdate,
     RoleUpdateRequest,
     StudentResponse,
+    StudentWithContact,
     StudentWithGroup,
-    StudentWithUser,
 )
 from src.core.schemas.schedule import SubjectCreate, SubjectRequirementsUpdate, SubjectResponse
 from src.core.services.group import GroupService
@@ -102,14 +102,17 @@ async def get_group_subjects(
     return await group_service.get_group_subjects(code, user.id if user else None)
 
 
-@router.get("/{code}/students", response_model=list[StudentWithUser])
+@router.get("/{code}/students", response_model=list[StudentWithContact])
 async def get_group_students(
     code: str,
     _user: CurrentUser,
     db: DBSession,
     _moderator: object = Depends(require_group_moderator),
-) -> list[StudentWithUser]:
-    """Get all students in a group with user info (moderator only)."""
+) -> list[StudentWithContact]:
+    """Участники и заявки группы с контактом Telegram.
+
+    Только старосте, заместителю и помощнику: обычные участники контакты не видят (#148).
+    """
     group_service = GroupService(db)
     return await group_service.get_group_students_with_users(code)
 
@@ -125,6 +128,19 @@ async def verify_student(
     """Verify student membership (moderator only)."""
     group_service = GroupService(db)
     return await group_service.verify_student(code, user_id, user.id)
+
+
+@router.post("/{code}/reject/{user_id}", status_code=204)
+async def reject_student(
+    code: str,
+    user_id: uuid.UUID,
+    user: CurrentUser,
+    db: DBSession,
+    _moderator: object = Depends(require_group_moderator),
+) -> None:
+    """Отклонить заявку в группу (староста или заместитель) (#148)."""
+    group_service = GroupService(db)
+    await group_service.reject_student(code, user_id, user.id)
 
 
 @router.patch("/{code}/students/{user_id}/role", response_model=StudentResponse)

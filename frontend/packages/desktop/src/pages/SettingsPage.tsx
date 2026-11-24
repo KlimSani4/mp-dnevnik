@@ -13,9 +13,11 @@ import {
   useUpdateNotificationPreferences,
   useGroupStudents,
   useVerifyStudent,
+  useRejectStudent,
   useChangeStudentRole,
 } from '@nexora/shared'
-import type { NotificationPreferenceType, GroupRole } from '@nexora/shared'
+import type { NotificationPreferenceType, GroupRole, GroupStudent } from '@nexora/shared'
+import { format } from 'date-fns'
 import { SupportSection } from '../components/SupportSection'
 import { LANGUAGES, useLangStore, useT, type MessageKey } from '../i18n'
 
@@ -35,7 +37,7 @@ const NOTIFICATION_META: NotificationSettingMeta[] = [
 ]
 
 export function SettingsPage() {
-  const { t, lang } = useT()
+  const { t, lang, locale } = useT()
   const setLang = useLangStore((s) => s.setLang)
   const currentUserQuery = useCurrentUser()
   const logoutMutation = useLogout()
@@ -168,11 +170,19 @@ export function SettingsPage() {
 
   const groupStudentsQuery = useGroupStudents(moderatedGroupCode)
   const verifyStudentMutation = useVerifyStudent()
+  const rejectStudentMutation = useRejectStudent()
   const changeRoleMutation = useChangeStudentRole()
+  // Подтверждать и отклонять заявки могут староста и заместитель (как на бэкенде)
+  const canReview = primaryGroup?.role === 'starosta' || primaryGroup?.role === 'deputy'
 
   const handleVerify = (userId: string) => {
     if (!moderatedGroupCode) return
     verifyStudentMutation.mutate({ code: moderatedGroupCode, userId })
+  }
+
+  const handleReject = (userId: string) => {
+    if (!moderatedGroupCode) return
+    rejectStudentMutation.mutate({ code: moderatedGroupCode, userId })
   }
 
   const handleChangeRole = (userId: string, role: GroupRole) => {
@@ -520,7 +530,10 @@ export function SettingsPage() {
                   ) : (
                     <div className="space-y-1">
                       {groupStudentsQuery.data.map((student) => {
-                        const isPending = verifyStudentMutation.isPending || changeRoleMutation.isPending
+                        const isPending =
+                          verifyStudentMutation.isPending ||
+                          rejectStudentMutation.isPending ||
+                          changeRoleMutation.isPending
                         return (
                           <div
                             key={student.id}
@@ -531,6 +544,7 @@ export function SettingsPage() {
                               <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">
                                 {student.user.display_name || t('common.student')}
                               </div>
+                              <TelegramLine student={student} />
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {student.verified ? (
                                   <span className="text-xs text-success-600 dark:text-success-400 flex items-center gap-1">
@@ -542,6 +556,10 @@ export function SettingsPage() {
                                     {t('settings.awaitingApproval')}
                                   </span>
                                 )}
+                                <span className="text-xs text-surface-400 dark:text-surface-500">
+                                  · {format(new Date(student.created_at), 'd MMM', { locale })}
+                                  {student.joined_via && ` · ${t(JOINED_VIA[student.joined_via])}`}
+                                </span>
                                 {student.role !== 'student' && (
                                   <span className="text-xs px-1.5 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded font-medium capitalize">
                                     {student.role === 'starosta' ? t('roles.starosta') : student.role === 'deputy' ? t('roles.deputy') : student.role === 'assistant' ? t('roles.assistant') : student.role}
@@ -550,15 +568,25 @@ export function SettingsPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              {!student.verified && (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={isPending}
-                                  onClick={() => handleVerify(student.user_id)}
-                                >
-                                  {t('settings.approve')}
-                                </Button>
+                              {!student.verified && canReview && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={isPending}
+                                    onClick={() => handleReject(student.user_id)}
+                                  >
+                                    {t('settings.reject')}
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={isPending}
+                                    onClick={() => handleVerify(student.user_id)}
+                                  >
+                                    {t('settings.approve')}
+                                  </Button>
+                                </>
                               )}
                               {student.role === 'student' && student.verified && (
                                 <Button
@@ -664,5 +692,41 @@ function ChatIcon({ className }: { className?: string }) {
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.83L3 20l1.4-3.72A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
     </svg>
+  )
+}
+
+
+const JOINED_VIA: Record<NonNullable<GroupStudent['joined_via']>, MessageKey> = {
+  site: 'settings.joinedVia.site',
+  bot: 'settings.joinedVia.bot',
+  invite: 'settings.joinedVia.invite',
+}
+
+/** Кто это в Telegram: @username со ссылкой на профиль или имя (#148) */
+function TelegramLine({ student }: { student: GroupStudent }) {
+  const { t } = useT()
+  const tg = student.telegram
+  if (!tg) {
+    return <div className="text-xs text-surface-400 dark:text-surface-500">{t('settings.noTelegram')}</div>
+  }
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 text-xs">
+      {tg.username && tg.profile_url ? (
+        <a
+          href={tg.profile_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-primary-600 hover:underline dark:text-primary-400"
+          title={t('settings.openTelegram')}
+        >
+          @{tg.username}
+        </a>
+      ) : (
+        <span className="text-surface-400 dark:text-surface-500">{t('settings.noUsername')}</span>
+      )}
+      {tg.name && tg.name !== student.user.display_name && (
+        <span className="truncate text-surface-500 dark:text-surface-400">· {tg.name}</span>
+      )}
+    </div>
   )
 }

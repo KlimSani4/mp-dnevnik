@@ -193,11 +193,26 @@ class AuthService:
 
         return user
 
+    async def _refresh_identity(self, identity: ExternalIdentity) -> None:
+        """Обновить username и имя при каждом входе (#148).
+
+        Люди меняют @username; староста должен видеть актуальный, а не тот, что был
+        при регистрации. Пустые значения не затирают уже сохранённые.
+        """
+        stored = await self.identity_repo.get_by_external(identity.provider, identity.external_id)
+        if stored is None:
+            return
+        if identity.username and stored.username != identity.username:
+            stored.username = identity.username
+        if identity.raw_data:
+            stored.raw_data = {**(stored.raw_data or {}), **identity.raw_data}
+
     async def _get_or_create_user(self, identity: ExternalIdentity) -> tuple[User, bool]:
         """Get existing user or create new one with identity."""
         existing = await self.user_repo.get_by_identity(identity.provider, identity.external_id)
 
         if existing:
+            await self._refresh_identity(identity)
             return existing, False
 
         # Create new user
