@@ -84,6 +84,34 @@ export interface ModerationStats {
   teacher_pending: number
   active_by_day: DayPoint[]
   new_users_by_day: DayPoint[]
+  // Расширенная статистика (#152); необязательные — старый бэкенд их не присылает
+  active_1d?: number
+  users_new_prev_7d?: number
+  assignments_new_prev_7d?: number
+  users_requested_group?: number
+  users_in_group?: number
+  groups_active?: number
+  groups_without_starosta?: number
+  join_requests_pending?: number
+  assignments_personal?: number
+  assignments_by_day?: DayPoint[]
+  tasks_by_state?: KeyValue[]
+  tasks_done_7d?: number
+  notifications_by_type_7d?: KeyValue[]
+  support_by_status?: KeyValue[]
+  support_median_reply_hours?: number | null
+  top_groups?: TopGroup[]
+}
+
+export interface KeyValue {
+  key: string
+  value: number
+}
+
+export interface TopGroup {
+  code: string
+  members: number
+  assignments_30d: number
 }
 
 /** Группа в списке модератора платформы (#150) */

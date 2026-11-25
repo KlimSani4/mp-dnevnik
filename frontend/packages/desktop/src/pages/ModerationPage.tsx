@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { Badge, Button, Card, Icon, SearchInput } from '../components/ui'
 import { GroupMembers } from '../components/GroupMembers'
+import { DaySeriesChart, Funnel, SegmentedBar, StatTile, fmt } from '../components/moderation/charts'
+import { DELIVERY, MONITORING, type ToolLink } from '../components/moderation/tools'
 import { APPLICATION_STATUS, SUPPORT_STATUS } from '../components/SupportSection'
 import {
   useCurrentUser,
@@ -15,10 +17,10 @@ import {
   useTeacherApplications,
   useUpdateSupportRequest,
 } from '@nexora/shared'
-import type { DayPoint, SupportRequest, SupportStatus } from '@nexora/shared'
+import type { SupportRequest, SupportStatus } from '@nexora/shared'
 import { useT, type MessageKey } from '../i18n'
 
-type Tab = 'stats' | 'support' | 'teachers' | 'groups' | 'moderators' | 'audit'
+type Tab = 'stats' | 'support' | 'teachers' | 'groups' | 'moderators' | 'audit' | 'tools'
 
 const TABS: { id: Tab; label: MessageKey }[] = [
   { id: 'stats', label: 'mod.tab.stats' },
@@ -27,6 +29,7 @@ const TABS: { id: Tab; label: MessageKey }[] = [
   { id: 'groups', label: 'mod.tab.groups' },
   { id: 'moderators', label: 'mod.tab.moderators' },
   { id: 'audit', label: 'mod.tab.audit' },
+  { id: 'tools', label: 'mod.tab.tools' },
 ]
 
 /** Страница модератора платформы (#99). Видна только при user.is_moderator. */
@@ -69,66 +72,311 @@ export function ModerationPage() {
       {user && tab === 'groups' && <GroupsTab />}
       {user && tab === 'moderators' && <ModeratorsTab />}
       {user && tab === 'audit' && <AuditTab />}
+      {user && tab === 'tools' && <ToolsTab />}
     </div>
   )
 }
 
-/* ─── Статистика ─── */
+/* ─── Статистика (#152) ─── */
+
+const TASK_SEGMENTS: { key: string; label: MessageKey; color: string; ink?: 'dark' }[] = [
+  { key: 'todo', label: 'mod.stats.task.todo', color: 'bg-[#71717a]' },
+  { key: 'doing', label: 'mod.stats.task.doing', color: 'bg-[#3b82f6]' },
+  { key: 'review', label: 'mod.stats.task.review', color: 'bg-[#f59e0b] dark:bg-[#d97706]', ink: 'dark' },
+  { key: 'done', label: 'mod.stats.task.done', color: 'bg-[#15803d] dark:bg-[#16a34a]' },
+]
+
+const SUPPORT_SEGMENTS: { key: string; label: MessageKey; color: string; ink?: 'dark' }[] = [
+  { key: 'new', label: 'support.status.new', color: 'bg-[#f59e0b] dark:bg-[#d97706]', ink: 'dark' },
+  { key: 'in_progress', label: 'support.status.in_progress', color: 'bg-[#3b82f6]' },
+  { key: 'closed', label: 'support.status.closed', color: 'bg-[#15803d] dark:bg-[#16a34a]' },
+]
+
+const NOTIFICATION_TYPES: Record<string, MessageKey> = {
+  schedule_change: 'mod.stats.notif.schedule_change',
+  new_assignment: 'mod.stats.notif.new_assignment',
+  deadline: 'mod.stats.notif.deadline',
+  vote: 'mod.stats.notif.vote',
+  digest: 'mod.stats.notif.digest',
+  class_reminder: 'mod.stats.notif.class_reminder',
+}
+
+function Section({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+  return (
+    <Card padding="lg" className={className}>
+      <h3 className="mb-4 text-sm font-semibold text-surface-800 dark:text-surface-100">{title}</h3>
+      {children}
+    </Card>
+  )
+}
+
+function Row({ label, value, tone }: { label: string; value: ReactNode; tone?: 'warn' }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
+      <span className="text-surface-500 dark:text-surface-400">{label}</span>
+      <span
+        className={clsx(
+          'font-semibold tabular-nums',
+          tone === 'warn' ? 'text-warning-600 dark:text-warning-500' : 'text-surface-900 dark:text-surface-50',
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  )
+}
 
 function StatsTab() {
-  const { t } = useT()
+  const { t, locale } = useT()
   const { data, isLoading } = useModerationStats()
-  if (isLoading || !data) return <p className="text-sm text-surface-400">{t('common.loading')}</p>
-
-  const tiles: { label: MessageKey; value: number; sub?: string }[] = [
-    { label: 'mod.stats.users', value: data.users_total, sub: t('mod.stats.newWeek', { n: data.users_new_7d }) },
-    { label: 'mod.stats.active7', value: data.active_7d },
-    { label: 'mod.stats.active30', value: data.active_30d },
-    { label: 'mod.stats.groups', value: data.groups_total },
-    { label: 'mod.stats.assignments', value: data.assignments_total, sub: t('mod.stats.newWeek', { n: data.assignments_new_7d }) },
-    { label: 'mod.stats.notifications', value: data.notifications_7d },
-    { label: 'mod.stats.supportOpen', value: data.support_open },
-    { label: 'mod.stats.teacherPending', value: data.teacher_pending },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {tiles.map((tile) => (
-          <Card key={tile.label} padding="default">
-            <div className="text-xs text-surface-500 dark:text-surface-400">{t(tile.label)}</div>
-            <div className="text-2xl font-semibold text-surface-900 dark:text-surface-50 mt-1">{tile.value}</div>
-            {tile.sub && <div className="text-xs text-surface-400 mt-0.5">{tile.sub}</div>}
-          </Card>
+  if (isLoading || !data) {
+    return (
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-28 animate-pulse rounded-xl bg-surface-100 dark:bg-surface-800" />
         ))}
       </div>
-      <DayChart title={t('mod.stats.activeByDay')} points={data.active_by_day} />
-      <DayChart title={t('mod.stats.newByDay')} points={data.new_users_by_day} />
+    )
+  }
+
+  const week = t('mod.stats.vsPrevWeek')
+  const stickiness = data.active_30d ? Math.round(((data.active_1d ?? 0) / data.active_30d) * 100) : 0
+  const spark = data.active_by_day.slice(-14).map((p) => p.value)
+  const tasks = data.tasks_by_state ?? []
+  const tasksTotal = tasks.reduce((s, x) => s + x.value, 0)
+  const tasksDone = tasks.find((x) => x.key === 'done')?.value ?? 0
+  const notif = data.notifications_by_type_7d ?? []
+  const notifMax = Math.max(1, ...notif.map((x) => x.value))
+  const value = (list: { key: string; value: number }[] | undefined, key: string) =>
+    list?.find((x) => x.key === key)?.value ?? 0
+
+  return (
+    <div className="space-y-4">
+      {/* Главные числа */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          emphasis
+          label={t('mod.stats.dau')}
+          value={data.active_1d ?? 0}
+          spark={spark}
+          hint={t('mod.stats.stickiness', { n: stickiness })}
+        />
+        <StatTile
+          label={t('mod.stats.active7')}
+          value={data.active_7d}
+          hint={t('mod.stats.active30short', { n: fmt(data.active_30d) })}
+        />
+        <StatTile
+          label={t('mod.stats.newUsers7')}
+          value={data.users_new_7d}
+          delta={{ value: data.users_new_7d - (data.users_new_prev_7d ?? 0), period: week }}
+          hint={t('mod.stats.usersTotal', { n: fmt(data.users_total) })}
+        />
+        <StatTile
+          label={t('mod.stats.newAssignments7')}
+          value={data.assignments_new_7d}
+          delta={{ value: data.assignments_new_7d - (data.assignments_new_prev_7d ?? 0), period: week }}
+          hint={t('mod.stats.assignmentsTotal', { n: fmt(data.assignments_total) })}
+        />
+      </div>
+
+      <DaySeriesChart
+        kind="area"
+        title={t('mod.stats.activeByDay')}
+        subtitle={t('mod.stats.last30')}
+        valueLabel={t('mod.stats.activeShort')}
+        points={data.active_by_day}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <DaySeriesChart
+          kind="columns"
+          title={t('mod.stats.newByDay')}
+          subtitle={t('mod.stats.last30')}
+          valueLabel={t('mod.stats.totalFor30')}
+          points={data.new_users_by_day}
+        />
+        <DaySeriesChart
+          kind="columns"
+          title={t('mod.stats.assignmentsByDay')}
+          subtitle={t('mod.stats.last30')}
+          valueLabel={t('mod.stats.totalFor30')}
+          points={data.assignments_by_day ?? []}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Section title={t('mod.stats.funnel')}>
+          <Funnel
+            steps={[
+              { label: t('mod.stats.funnel.registered'), value: data.users_total },
+              { label: t('mod.stats.funnel.requested'), value: data.users_requested_group ?? 0 },
+              { label: t('mod.stats.funnel.inGroup'), value: data.users_in_group ?? 0 },
+            ]}
+          />
+          <p className="mt-4 text-xs text-surface-400 dark:text-surface-500">{t('mod.stats.funnel.hint')}</p>
+        </Section>
+
+        <Section title={t('mod.stats.groups')}>
+          <Row label={t('mod.stats.groupsTotal')} value={fmt(data.groups_total)} />
+          <Row label={t('mod.stats.groupsActive')} value={fmt(data.groups_active ?? 0)} />
+          <Row
+            label={t('mod.stats.groupsNoStarosta')}
+            value={fmt(data.groups_without_starosta ?? 0)}
+            tone={(data.groups_without_starosta ?? 0) > 0 ? 'warn' : undefined}
+          />
+          <Row
+            label={t('mod.stats.joinPending')}
+            value={fmt(data.join_requests_pending ?? 0)}
+            tone={(data.join_requests_pending ?? 0) > 0 ? 'warn' : undefined}
+          />
+          {(data.top_groups?.length ?? 0) > 0 && (
+            <table className="mt-3 w-full text-xs">
+              <caption className="mb-1 text-left text-surface-400 dark:text-surface-500">{t('mod.stats.topGroups')}</caption>
+              <thead>
+                <tr className="text-surface-400">
+                  <th className="py-1 text-left font-normal">{t('mod.stats.col.group')}</th>
+                  <th className="py-1 text-right font-normal">{t('mod.stats.col.members')}</th>
+                  <th className="py-1 text-right font-normal">{t('mod.stats.col.assignments30')}</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {data.top_groups!.map((g) => (
+                  <tr key={g.code} className="border-t border-surface-100 dark:border-surface-700">
+                    <td className="py-1.5 font-medium text-surface-800 dark:text-surface-100">{g.code}</td>
+                    <td className="py-1.5 text-right text-surface-700 dark:text-surface-200">{fmt(g.members)}</td>
+                    <td className="py-1.5 text-right text-surface-700 dark:text-surface-200">{fmt(g.assignments_30d)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Section>
+
+        <Section title={t('mod.stats.tasks')}>
+          <SegmentedBar
+            emptyText={t('mod.stats.noData')}
+            segments={TASK_SEGMENTS.map((s) => ({ ...s, label: t(s.label), value: value(tasks, s.key) }))}
+          />
+          <div className="mt-4 border-t border-surface-100 pt-2 dark:border-surface-700">
+            <Row label={t('mod.stats.tasksDone7')} value={fmt(data.tasks_done_7d ?? 0)} />
+            <Row
+              label={t('mod.stats.completion')}
+              value={tasksTotal ? `${Math.round((tasksDone / tasksTotal) * 100)}%` : '—'}
+            />
+            <Row
+              label={t('mod.stats.personalShare')}
+              value={data.assignments_total ? `${Math.round(((data.assignments_personal ?? 0) / data.assignments_total) * 100)}%` : '—'}
+            />
+          </div>
+        </Section>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Section title={t('mod.stats.support')}>
+          <SegmentedBar
+            emptyText={t('mod.stats.noData')}
+            segments={SUPPORT_SEGMENTS.map((s) => ({ ...s, label: t(s.label), value: value(data.support_by_status, s.key) }))}
+          />
+          <div className="mt-4 border-t border-surface-100 pt-2 dark:border-surface-700">
+            <Row
+              label={t('mod.stats.replyMedian')}
+              value={data.support_median_reply_hours == null ? '—' : t('mod.stats.hours', { n: data.support_median_reply_hours.toLocaleString(locale.code) })}
+            />
+            <Row
+              label={t('mod.stats.teacherPending')}
+              value={fmt(data.teacher_pending)}
+              tone={data.teacher_pending > 0 ? 'warn' : undefined}
+            />
+          </div>
+        </Section>
+
+        <Section title={t('mod.stats.notifications')}>
+          {notif.length === 0 ? (
+            <p className="py-3 text-sm text-surface-400">{t('mod.stats.noData')}</p>
+          ) : (
+            <ul className="space-y-2.5">
+              {notif.map((n) => (
+                <li key={n.key}>
+                  <div className="mb-1 flex justify-between text-xs">
+                    <span className="text-surface-600 dark:text-surface-300">
+                      {NOTIFICATION_TYPES[n.key] ? t(NOTIFICATION_TYPES[n.key]) : n.key}
+                    </span>
+                    <span className="font-semibold tabular-nums text-surface-900 dark:text-surface-50">{fmt(n.value)}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-surface-100 dark:bg-surface-700">
+                    <div className="h-2 rounded-full bg-primary-500" style={{ width: `${(n.value / notifMax) * 100}%` }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-4 text-xs text-surface-400 dark:text-surface-500">
+            {t('mod.stats.notificationsTotal', { n: fmt(data.notifications_7d) })}
+          </p>
+        </Section>
+      </div>
     </div>
   )
 }
 
-function DayChart({ title, points }: { title: string; points: DayPoint[] }) {
-  const { locale } = useT()
-  const max = Math.max(1, ...points.map((p) => p.value))
+/* ─── Инструменты (#152) ─── */
+
+function ToolsTab() {
+  const { t } = useT()
+  const group = (title: string, items: ToolLink[]) => (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold text-surface-800 dark:text-surface-100">{title}</h3>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map((tool) =>
+          tool.url ? (
+            <a
+              key={tool.id}
+              href={tool.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-start gap-3 rounded-xl border border-surface-200 bg-white p-4 transition-colors hover:border-primary-500/60 dark:border-surface-700 dark:bg-surface-800"
+            >
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">
+                <Icon name={tool.icon} size={18} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-surface-900 dark:text-surface-50">
+                  {tool.title}
+                  <Icon name="external-link" size={12} className="text-surface-400 group-hover:text-primary-500" />
+                </span>
+                <span className="mt-0.5 block text-xs text-surface-500 dark:text-surface-400">{t(tool.description)}</span>
+              </span>
+            </a>
+          ) : (
+            <div
+              key={tool.id}
+              aria-disabled
+              className="flex items-start gap-3 rounded-xl border border-dashed border-surface-200 p-4 dark:border-surface-700"
+            >
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-100 text-surface-400 dark:bg-surface-700">
+                <Icon name={tool.icon} size={18} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2 text-sm font-semibold text-surface-500 dark:text-surface-400">
+                  {tool.title}
+                  <Badge size="sm" variant="default">{t('mod.tools.soon')}</Badge>
+                </span>
+                <span className="mt-0.5 block text-xs text-surface-400 dark:text-surface-500">{t(tool.description)}</span>
+                {tool.env && <code className="mt-1 block text-2xs text-surface-400">{tool.env}</code>}
+              </span>
+            </div>
+          ),
+        )}
+      </div>
+    </div>
+  )
   return (
-    <Card padding="lg">
-      <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-300 mb-4">{title}</h3>
-      <div className="flex items-end gap-1 h-32">
-        {points.map((p) => (
-          <div
-            key={p.day}
-            className="flex-1 rounded-t bg-primary-500/80 hover:bg-primary-500 min-h-[2px]"
-            style={{ height: `${(p.value / max) * 100}%` }}
-            title={`${format(new Date(p.day), 'd MMM', { locale })}: ${p.value}`}
-          />
-        ))}
-      </div>
-      <div className="flex justify-between text-2xs text-surface-400 mt-1">
-        <span>{points[0] && format(new Date(points[0].day), 'd MMM', { locale })}</span>
-        <span>{points.at(-1) && format(new Date(points.at(-1)!.day), 'd MMM', { locale })}</span>
-      </div>
-    </Card>
+    <div className="space-y-6">
+      <p className="text-sm text-surface-500 dark:text-surface-400">{t('mod.tools.hint')}</p>
+      {group(t('mod.tools.monitoring'), MONITORING)}
+      {group(t('mod.tools.delivery'), DELIVERY)}
+    </div>
   )
 }
 

@@ -134,3 +134,21 @@ async def test_starosta_verify_returns_student(ctx: Any) -> None:
     r = await c.post(f"/groups/241-327/verify/{ids['Заявка']}", headers=_auth(ids["Староста"]))
     assert r.status_code == 200
     assert r.json()["verified"] is True
+
+
+async def test_extended_stats(ctx: Any) -> None:
+    """Расширенная статистика модерации считается на настоящей базе (#152)."""
+    c, ids, _ = ctx
+    r = await c.get("/moderation/stats", headers=_auth(ids["Модератор"]))
+    assert r.status_code == 200
+    d = r.json()
+    assert d["users_total"] == 4
+    # воронка: двое подали заявку в группу, подтверждён один (староста)
+    assert (d["users_requested_group"], d["users_in_group"]) == (2, 1)
+    assert d["join_requests_pending"] == 1
+    assert (d["groups_total"], d["groups_active"], d["groups_without_starosta"]) == (2, 1, 1)
+    assert len(d["assignments_by_day"]) == 30
+    assert [x["key"] for x in d["tasks_by_state"]] == ["todo", "doing", "review", "done"]
+    assert [x["key"] for x in d["support_by_status"]] == ["new", "in_progress", "closed"]
+    assert d["top_groups"][0] == {"code": "241-327", "members": 1, "assignments_30d": 0}
+    assert d["support_median_reply_hours"] is None
