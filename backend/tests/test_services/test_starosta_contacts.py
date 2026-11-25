@@ -51,6 +51,8 @@ def _group_service() -> GroupService:
     svc.group_repo = AsyncMock()
     svc.group_repo.get_by_code = AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4()))
     svc.student_repo = AsyncMock()
+    svc.user_repo = AsyncMock()
+    svc.user_repo.get = AsyncMock(return_value=SimpleNamespace(is_moderator=False))
     svc.audit_repo = AsyncMock()
     return svc
 

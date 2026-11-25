@@ -12,6 +12,7 @@ from src.api.deps import DBSession, ModeratorUser, RedisClient, require_moderato
 from src.core.models.moderation import ApplicationStatus, SupportStatus
 from src.core.schemas.moderation import (
     AuditEntryResponse,
+    GroupOverview,
     ModerationStats,
     ModeratorResponse,
     SupportRequestResponse,
@@ -90,6 +91,15 @@ async def reject_application(
 async def list_moderators(db: DBSession) -> list[ModeratorResponse]:
     """Список модераторов — только просмотр."""
     return await ModerationService(db).list_moderators()
+
+
+@router.get("/groups", response_model=list[GroupOverview])
+async def list_groups(
+    db: DBSession, q: str | None = Query(None, max_length=32)
+) -> list[GroupOverview]:
+    """Все группы. Участников и заявки модератор смотрит и меняет через обычные
+    маршруты /groups/{code}/… — там он действует как староста (#150)."""
+    return await ModerationService(db).list_groups(q)
 
 
 @router.get("/audit", response_model=list[AuditEntryResponse])

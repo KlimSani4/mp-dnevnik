@@ -51,6 +51,7 @@ export {
   useReviewTeacherApplication,
   useModerators,
   useModerationAudit,
+  useModerationGroups,
   useMySupportRequests,
   useCreateSupportRequest,
   useMyTeacherApplication,

@@ -11,13 +11,9 @@ import {
   useJoinGroup,
   useNotificationPreferences,
   useUpdateNotificationPreferences,
-  useGroupStudents,
-  useVerifyStudent,
-  useRejectStudent,
-  useChangeStudentRole,
 } from '@nexora/shared'
-import type { NotificationPreferenceType, GroupRole, GroupStudent } from '@nexora/shared'
-import { format } from 'date-fns'
+import type { NotificationPreferenceType } from '@nexora/shared'
+import { GroupMembers } from '../components/GroupMembers'
 import { SupportSection } from '../components/SupportSection'
 import { LANGUAGES, useLangStore, useT, type MessageKey } from '../i18n'
 
@@ -168,27 +164,8 @@ export function SettingsPage() {
     (primaryGroup.role === 'starosta' || primaryGroup.role === 'deputy' || primaryGroup.role === 'assistant')
   const moderatedGroupCode = isModerator ? primaryGroup.group.code : undefined
 
-  const groupStudentsQuery = useGroupStudents(moderatedGroupCode)
-  const verifyStudentMutation = useVerifyStudent()
-  const rejectStudentMutation = useRejectStudent()
-  const changeRoleMutation = useChangeStudentRole()
   // Подтверждать и отклонять заявки могут староста и заместитель (как на бэкенде)
   const canReview = primaryGroup?.role === 'starosta' || primaryGroup?.role === 'deputy'
-
-  const handleVerify = (userId: string) => {
-    if (!moderatedGroupCode) return
-    verifyStudentMutation.mutate({ code: moderatedGroupCode, userId })
-  }
-
-  const handleReject = (userId: string) => {
-    if (!moderatedGroupCode) return
-    rejectStudentMutation.mutate({ code: moderatedGroupCode, userId })
-  }
-
-  const handleChangeRole = (userId: string, role: GroupRole) => {
-    if (!moderatedGroupCode) return
-    changeRoleMutation.mutate({ code: moderatedGroupCode, userId, role })
-  }
 
   return (
     <div>
@@ -507,8 +484,8 @@ export function SettingsPage() {
                 )}
               </div>
 
-              {/* Moderator: group member management */}
-              {isModerator && (
+              {/* Управление участниками: староста, заместитель, помощник */}
+              {isModerator && moderatedGroupCode && (
                 <div className="pt-6 mt-2 border-t border-surface-200 dark:border-surface-700">
                   <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">
                     {t('settings.members')}
@@ -516,104 +493,11 @@ export function SettingsPage() {
                   <p className="text-xs text-surface-500 dark:text-surface-400 mb-4">
                     {t('settings.membersHint')}
                   </p>
-
-                  {groupStudentsQuery.isLoading ? (
-                    <div className="space-y-2">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-12 bg-surface-200 dark:bg-surface-700 rounded animate-pulse" />
-                      ))}
-                    </div>
-                  ) : !groupStudentsQuery.data || groupStudentsQuery.data.length === 0 ? (
-                    <p className="text-sm text-surface-500 dark:text-surface-400 py-2">
-                      {t('settings.noMembers')}
-                    </p>
-                  ) : (
-                    <div className="space-y-1">
-                      {groupStudentsQuery.data.map((student) => {
-                        const isPending =
-                          verifyStudentMutation.isPending ||
-                          rejectStudentMutation.isPending ||
-                          changeRoleMutation.isPending
-                        return (
-                          <div
-                            key={student.id}
-                            className="flex items-center gap-3 py-2.5 border-b border-surface-100 dark:border-surface-700 last:border-0"
-                          >
-                            <Avatar name={student.user.display_name || student.user_id} size="sm" />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-surface-900 dark:text-surface-50 truncate">
-                                {student.user.display_name || t('common.student')}
-                              </div>
-                              <TelegramLine student={student} />
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                {student.verified ? (
-                                  <span className="text-xs text-success-600 dark:text-success-400 flex items-center gap-1">
-                                    <CheckIcon className="w-3 h-3" />
-                                    {t('settings.verified')}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-warning-600 dark:text-warning-400">
-                                    {t('settings.awaitingApproval')}
-                                  </span>
-                                )}
-                                <span className="text-xs text-surface-400 dark:text-surface-500">
-                                  · {format(new Date(student.created_at), 'd MMM', { locale })}
-                                  {student.joined_via && ` · ${t(JOINED_VIA[student.joined_via])}`}
-                                </span>
-                                {student.role !== 'student' && (
-                                  <span className="text-xs px-1.5 py-0.5 bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400 rounded font-medium capitalize">
-                                    {student.role === 'starosta' ? t('roles.starosta') : student.role === 'deputy' ? t('roles.deputy') : student.role === 'assistant' ? t('roles.assistant') : student.role}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {!student.verified && canReview && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={isPending}
-                                    onClick={() => handleReject(student.user_id)}
-                                  >
-                                    {t('settings.reject')}
-                                  </Button>
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={isPending}
-                                    onClick={() => handleVerify(student.user_id)}
-                                  >
-                                    {t('settings.approve')}
-                                  </Button>
-                                </>
-                              )}
-                              {student.role === 'student' && student.verified && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={isPending}
-                                  onClick={() => handleChangeRole(student.user_id, 'assistant')}
-                                >
-                                  {t('settings.makeAssistant')}
-                                </Button>
-                              )}
-                              {student.role === 'assistant' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={isPending}
-                                  onClick={() => handleChangeRole(student.user_id, 'student')}
-                                >
-                                  {t('settings.removeRole')}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <GroupMembers
+                    code={moderatedGroupCode}
+                    canReview={canReview}
+                    canManageRoles={primaryGroup?.role === 'starosta'}
+                  />
                 </div>
               )}
             </Card>
@@ -679,54 +563,10 @@ function InfoIcon({ className }: { className?: string }) {
   )
 }
 
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-    </svg>
-  )
-}
-
 function ChatIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.83L3 20l1.4-3.72A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
     </svg>
-  )
-}
-
-
-const JOINED_VIA: Record<NonNullable<GroupStudent['joined_via']>, MessageKey> = {
-  site: 'settings.joinedVia.site',
-  bot: 'settings.joinedVia.bot',
-  invite: 'settings.joinedVia.invite',
-}
-
-/** Кто это в Telegram: @username со ссылкой на профиль или имя (#148) */
-function TelegramLine({ student }: { student: GroupStudent }) {
-  const { t } = useT()
-  const tg = student.telegram
-  if (!tg) {
-    return <div className="text-xs text-surface-400 dark:text-surface-500">{t('settings.noTelegram')}</div>
-  }
-  return (
-    <div className="flex min-w-0 items-center gap-1.5 text-xs">
-      {tg.username && tg.profile_url ? (
-        <a
-          href={tg.profile_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-primary-600 hover:underline dark:text-primary-400"
-          title={t('settings.openTelegram')}
-        >
-          @{tg.username}
-        </a>
-      ) : (
-        <span className="text-surface-400 dark:text-surface-500">{t('settings.noUsername')}</span>
-      )}
-      {tg.name && tg.name !== student.user.display_name && (
-        <span className="truncate text-surface-500 dark:text-surface-400">· {tg.name}</span>
-      )}
-    </div>
   )
 }

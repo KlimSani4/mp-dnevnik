@@ -29,6 +29,7 @@ from src.core.models.moderation import (
 )
 from src.core.models.user import User
 from src.core.repositories.moderation import (
+    GroupOverviewRepository,
     ModerationStatsRepository,
     ModeratorRepository,
     SupportRequestRepository,
@@ -38,6 +39,7 @@ from src.core.repositories.user import AuditLogRepository, IdentityRepository, U
 from src.core.schemas.moderation import (
     AuditEntryResponse,
     DayPoint,
+    GroupOverview,
     ModerationStats,
     ModeratorResponse,
     SupportRequestUpdate,
@@ -60,6 +62,10 @@ MODERATION_ACTIONS = [
     "support_status_changed",
     "teacher_approved",
     "teacher_rejected",
+    # Действия модератора в чужих группах на правах старосты (#150)
+    "student_verified_by_moderator",
+    "student_rejected_by_moderator",
+    "role_changed_by_moderator",
 ]
 MAX_OPEN_SUPPORT_REQUESTS = 5
 
@@ -223,6 +229,21 @@ class ModerationService:
         return [
             ModeratorResponse(id=u.id, display_name=u.display_name, granted_at=g)
             for u, g in await self.moderator_repo.list_moderators()
+        ]
+
+    async def list_groups(self, query: str | None = None) -> list[GroupOverview]:
+        """Все группы платформы: участники, заявки, староста (#150)."""
+        rows = await GroupOverviewRepository(self.session).list_groups(query)
+        return [
+            GroupOverview(
+                code=g.code,
+                name=g.name,
+                members=members,
+                pending=pending,
+                starosta_name=starosta,
+                created_at=g.created_at,
+            )
+            for g, members, pending, starosta in rows
         ]
 
     async def audit_log(self, limit: int = 100) -> list[AuditEntryResponse]:

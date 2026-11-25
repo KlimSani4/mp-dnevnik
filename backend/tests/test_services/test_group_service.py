@@ -50,12 +50,15 @@ def _make_student(
 
 
 def _make_service(session: MagicMock) -> GroupService:
+    session.refresh = AsyncMock()
     svc = GroupService(session)
     svc.group_repo = AsyncMock()
     svc.chat_repo = AsyncMock()
     svc.student_repo = AsyncMock()
     svc.subject_repo = AsyncMock()
     svc.user_repo = AsyncMock()
+    # По умолчанию пользователь — не модератор платформы (#150)
+    svc.user_repo.get = AsyncMock(return_value=MagicMock(is_moderator=False))
     svc.audit_repo = AsyncMock()
     return svc
 

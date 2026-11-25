@@ -5,7 +5,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.models.group import StudentRole
+from src.core.models.group import Group, StudentRole
 from src.core.repositories.group import GroupChatRepository, GroupRepository, StudentRepository
 from src.core.repositories.schedule import SubjectRepository
 from src.core.repositories.user import AuditLogRepository, UserRepository
@@ -35,6 +35,35 @@ class GroupService:
         self.subject_repo = SubjectRepository(session)
         self.user_repo = UserRepository(session)
         self.audit_repo = AuditLogRepository(session)
+
+    async def _authorize(
+        self,
+        group: Group,
+        user_id: uuid.UUID,
+        roles: tuple[StudentRole, ...],
+        message: str,
+        *,
+        allow_owner: bool = False,
+    ) -> bool:
+        """Проверить, что пользователь может управлять группой.
+
+        Возвращает True, если право есть только как у модератора платформы: модератор
+        действует в любой группе как староста, чтобы проверять и тестировать (#150).
+        Такие действия пишутся в журнал с суффиксом _by_moderator.
+        """
+        if allow_owner and group.owner_id == user_id:
+            return False
+        student = await self.student_repo.get_by_user_and_group(user_id, group.id)
+        if student and student.role in roles:
+            return False
+        user = await self.user_repo.get(user_id)
+        if user and user.is_moderator:
+            return True
+        raise AuthorizationError(message)
+
+    @staticmethod
+    def _audit_action(action: str, by_moderator: bool) -> str:
+        return f"{action}_by_moderator" if by_moderator else action
 
     async def create_group(
         self,
@@ -108,11 +137,14 @@ class GroupService:
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
 
-        # Only owner or starosta can update
-        if group.owner_id != user_id:
-            student = await self.student_repo.get_by_user_and_group(user_id, group.id)
-            if not student or student.role not in (StudentRole.STAROSTA, StudentRole.DEPUTY):
-                raise AuthorizationError("Cannot update this group")
+        # Владелец, староста, заместитель или модератор платформы
+        await self._authorize(
+            group,
+            user_id,
+            (StudentRole.STAROSTA, StudentRole.DEPUTY),
+            "Cannot update this group",
+            allow_owner=True,
+        )
 
         update_data = data.model_dump(exclude_unset=True)
         group = await self.group_repo.update(group, **update_data)
@@ -151,6 +183,9 @@ class GroupService:
             resource_id=str(group.id),
         )
         await self.session.commit()
+        # updated_at обновляет база: без refresh pydantic лезет за ним лениво и
+        # падает на MissingGreenlet — «Подтвердить» отвечал 500 (#150)
+        await self.session.refresh(student)
 
         return StudentResponse.model_validate(student)
 
@@ -165,10 +200,12 @@ class GroupService:
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
 
-        # Check verifier is starosta
-        verifier = await self.student_repo.get_by_user_and_group(verifier_id, group.id)
-        if not verifier or verifier.role not in (StudentRole.STAROSTA, StudentRole.DEPUTY):
-            raise AuthorizationError("Only starosta can verify students")
+        by_moderator = await self._authorize(
+            group,
+            verifier_id,
+            (StudentRole.STAROSTA, StudentRole.DEPUTY),
+            "Only starosta can verify students",
+        )
 
         # Get target student
         student = await self.student_repo.get_by_user_and_group(target_user_id, group.id)
@@ -178,12 +215,15 @@ class GroupService:
         student = await self.student_repo.verify_student(student)
 
         await self.audit_repo.log(
-            action="student_verified",
+            action=self._audit_action("student_verified", by_moderator),
             user_id=verifier_id,
             resource="student",
             resource_id=str(student.id),
         )
         await self.session.commit()
+        # updated_at обновляет база: без refresh pydantic лезет за ним лениво и
+        # падает на MissingGreenlet — «Подтвердить» отвечал 500 (#150)
+        await self.session.refresh(student)
 
         return StudentResponse.model_validate(student)
 
@@ -198,9 +238,12 @@ class GroupService:
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
 
-        reviewer = await self.student_repo.get_by_user_and_group(reviewer_id, group.id)
-        if not reviewer or reviewer.role not in (StudentRole.STAROSTA, StudentRole.DEPUTY):
-            raise AuthorizationError("Only starosta can reject students")
+        by_moderator = await self._authorize(
+            group,
+            reviewer_id,
+            (StudentRole.STAROSTA, StudentRole.DEPUTY),
+            "Only starosta can reject students",
+        )
 
         student = await self.student_repo.get_by_user_and_group(target_user_id, group.id)
         if not student:
@@ -210,7 +253,7 @@ class GroupService:
 
         await self.student_repo.delete(student)
         await self.audit_repo.log(
-            action="student_rejected",
+            action=self._audit_action("student_rejected", by_moderator),
             user_id=reviewer_id,
             resource="student",
             resource_id=str(student.id),
@@ -402,11 +445,13 @@ class GroupService:
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
 
-        # Check permissions
-        if group.owner_id != admin_id:
-            admin_student = await self.student_repo.get_by_user_and_group(admin_id, group.id)
-            if not admin_student or admin_student.role != StudentRole.STAROSTA:
-                raise AuthorizationError("Only owner or starosta can change roles")
+        by_moderator = await self._authorize(
+            group,
+            admin_id,
+            (StudentRole.STAROSTA,),
+            "Only owner or starosta can change roles",
+            allow_owner=True,
+        )
 
         student = await self.student_repo.get_by_user_and_group(target_user_id, group.id)
         if not student:
@@ -415,11 +460,14 @@ class GroupService:
         student = await self.student_repo.set_role(student, role)
 
         await self.audit_repo.log(
-            action="role_changed",
+            action=self._audit_action("role_changed", by_moderator),
             user_id=admin_id,
             resource="student",
             resource_id=str(student.id),
         )
         await self.session.commit()
+        # updated_at обновляет база: без refresh pydantic лезет за ним лениво и
+        # падает на MissingGreenlet — «Подтвердить» отвечал 500 (#150)
+        await self.session.refresh(student)
 
         return StudentResponse.model_validate(student)
