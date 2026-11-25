@@ -26,7 +26,7 @@ flowchart LR
 |---|---|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, Zustand, TanStack Query, dnd-kit, date-fns; pnpm-монорепо: `shared`, `desktop` (сайт), `miniapp` (Telegram Mini App) |
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.0 async, Alembic, PostgreSQL 16, Redis 7, aiogram 3 (бот), APScheduler (уведомления) |
-| Инфраструктура | Cloudflare → Kubernetes; образы в ghcr.io, автообновление через Keel; фронт отдаёт nginx |
+| Инфраструктура | Cloudflare → Kubernetes; образы в ghcr.io, выкатка через пин в manifests и ArgoCD; фронт отдаёт nginx |
 
 Подробная документация бэкенда: [backend/docs/api.md](../backend/docs/api.md), [backend/docs/architecture.md](../backend/docs/architecture.md), [backend/docs/database.md](../backend/docs/database.md).
 
@@ -34,8 +34,8 @@ flowchart LR
 
 | Компонент | Образ | Как обновляется |
 |---|---|---|
-| Backend | `ghcr.io/klimsani4/nexora-backend:latest` | Push в `main` → GitHub Actions собирает образ → Keel подтягивает `latest` |
-| Frontend | `ghcr.io/klimsani4/nexora-frontend:latest` | То же; манифесты — `frontend/k8s/`, домен `nexora.digitaldrugs.tech` |
+| Backend | `ghcr.io/klimsani4/nexora-backend:<коммит>@sha256:…` | Push в `main` → GitHub Actions собирает образ и публикует дайджест статусом коммита → manifests мержит PR с пином → ArgoCD |
+| Frontend | `ghcr.io/klimsani4/nexora-frontend:<коммит>@sha256:…` | То же; манифесты — `frontend/k8s/`, домен `nexora.digitaldrugs.tech` |
 
 Сейчас образы собираются из старых репозиториев — см. [deploy-migration.md](deploy-migration.md).
 
