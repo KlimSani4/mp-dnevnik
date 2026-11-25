@@ -257,23 +257,10 @@ class ScheduleOverrideRepository(BaseRepository[ScheduleOverride]):
             (ScheduleOverride.date == target_date) | (ScheduleOverride.date.is_(None)),
         ]
 
-        scope_conditions = [ScheduleOverride.scope == OverrideScope.GROUP]
-        if author_id is not None:
-            scope_conditions.append(
-                (ScheduleOverride.scope == OverrideScope.PERSONAL)
-                & (ScheduleOverride.author_id == author_id)
-            )
-
-        from sqlalchemy import or_
-
         stmt = (
             select(ScheduleOverride)
             .join(ScheduleEntry)
-            .where(
-                ScheduleEntry.group_id == group_id,
-                *conditions,
-                or_(*scope_conditions),
-            )
+            .where(*conditions, _visible_add(group_id, author_id))
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -345,24 +332,34 @@ class ScheduleOverrideRepository(BaseRepository[ScheduleOverride]):
         author_id: uuid.UUID | None = None,
     ) -> list[ScheduleOverride]:
         """Аналогичен предыдущему методу, но под под персональные событя пользователей"""
-        scope_conditions = [ScheduleOverride.scope == OverrideScope.GROUP]
-        if author_id is not None:
-            scope_conditions.append(
-                (ScheduleOverride.scope == OverrideScope.PERSONAL)
-                & (ScheduleOverride.author_id == author_id)
-            )
-
-        from sqlalchemy import or_
-
         stmt = (
             select(ScheduleOverride)
             .join(ScheduleEntry)
             .where(
-                ScheduleEntry.group_id == group_id,
                 ScheduleOverride.override_type == OverrideType.ADD,
                 ScheduleOverride.date.between(start, end) | ScheduleOverride.date.is_(None),
-                or_(*scope_conditions),
+                _visible_add(group_id, author_id),
             )
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+
+def _visible_add(group_id: uuid.UUID, author_id: uuid.UUID | None) -> ColumnElement[bool]:
+    """Какие ADD-события видны: групповые — этой группы, личные — автора, где бы ни
+    лежала их привязка. Личное событие принадлежит человеку, а не группе: после смены
+    группы оно остаётся в его расписании (#162)."""
+    visible = [
+        and_(
+            ScheduleOverride.scope == OverrideScope.GROUP,
+            ScheduleEntry.group_id == group_id,
+        )
+    ]
+    if author_id is not None:
+        visible.append(
+            and_(
+                ScheduleOverride.scope == OverrideScope.PERSONAL,
+                ScheduleOverride.author_id == author_id,
+            )
+        )
+    return or_(*visible)

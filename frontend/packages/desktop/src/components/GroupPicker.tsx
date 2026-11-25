@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import { ApiClientError, useCreateGroup, useJoinGroup, useMyGroups, useSearchGroups } from '@nexora/shared'
-import { Button, Input } from './ui'
+import { Button, Input, Modal } from './ui'
 import { useT } from '../i18n'
 
 type Mode = 'join' | 'create'
@@ -42,6 +42,9 @@ export function GroupPicker({ onDone }: GroupPickerProps) {
   const join = useJoinGroup()
   const create = useCreateGroup()
   const busy = join.isPending || create.isPending
+  // Человек состоит максимум в одной группе (#162): вступление в другую — это смена
+  const [switching, setSwitching] = useState<{ kind: Mode; code: string } | null>(null)
+  const currentCode = myGroups[0]?.group.code
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
@@ -57,13 +60,21 @@ export function GroupPicker({ onDone }: GroupPickerProps) {
     setMessage(null)
   }
 
-  const doJoin = async (code: string) => {
+  const inOtherGroup = (e: unknown) => e instanceof ApiClientError && e.code === 'ALREADY_IN_GROUP'
+
+  const doJoin = async (code: string, switchGroup = false) => {
     setMessage(null)
     try {
-      await join.mutateAsync(code)
-      setMessage({ kind: 'ok', text: t('groupPicker.joined', { code }) })
+      await join.mutateAsync({ code, switchGroup })
+      setSwitching(null)
+      setMessage({ kind: 'ok', text: t(switchGroup ? 'groupPicker.switchedJoin' : 'groupPicker.joined', { code }) })
       onDone?.({ code, created: false })
     } catch (e) {
+      if (inOtherGroup(e)) {
+        setSwitching({ kind: 'join', code })
+        return
+      }
+      setSwitching(null)
       const status = e instanceof ApiClientError ? e.status : 0
       setMessage({
         kind: 'error',
@@ -72,15 +83,21 @@ export function GroupPicker({ onDone }: GroupPickerProps) {
     }
   }
 
-  const doCreate = async () => {
+  const doCreate = async (switchGroup = false) => {
     const code = query.trim()
     if (!code) return
     setMessage(null)
     try {
-      const group = await create.mutateAsync({ code })
+      const group = await create.mutateAsync({ code, switchGroup })
+      setSwitching(null)
       setMessage({ kind: 'ok', text: t('groupPicker.created', { code: group.code }) })
       onDone?.({ code: group.code, created: true })
     } catch (e) {
+      if (inOtherGroup(e)) {
+        setSwitching({ kind: 'create', code })
+        return
+      }
+      setSwitching(null)
       const status = e instanceof ApiClientError ? e.status : 0
       if (status === 409) {
         setMessage({ kind: 'error', text: t('groupPicker.exists', { code }), offerJoin: code })
@@ -99,6 +116,31 @@ export function GroupPicker({ onDone }: GroupPickerProps) {
 
   return (
     <div>
+      <Modal open={!!switching} onClose={() => setSwitching(null)} title={t('groupSwitch.title', { code: switching?.code ?? '' })}>
+        <p className="text-sm text-surface-700 dark:text-surface-200">
+          {t('groupSwitch.only', { current: currentCode ?? '' })}
+        </p>
+        <ul className="mt-3 space-y-1.5 text-sm text-surface-600 dark:text-surface-300">
+          <li>• {t('groupSwitch.schedule', { code: switching?.code ?? '' })}</li>
+          <li>• {t('groupSwitch.personal')}</li>
+          <li>• {t('groupSwitch.lost', { current: currentCode ?? '' })}</li>
+          {switching?.kind === 'join' && <li>• {t('groupSwitch.request')}</li>}
+          {myGroups[0]?.role === 'starosta' && <li>• {t('groupSwitch.starosta')}</li>}
+        </ul>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setSwitching(null)}>{t('groupLeave.cancel')}</Button>
+          <Button
+            disabled={busy}
+            onClick={() => {
+              if (!switching) return
+              if (switching.kind === 'join') void doJoin(switching.code, true)
+              else void doCreate(true)
+            }}
+          >
+            {t('groupSwitch.confirm', { code: switching?.code ?? '' })}
+          </Button>
+        </div>
+      </Modal>
       <div role="tablist" className="inline-flex w-full rounded-lg bg-surface-100 p-1 dark:bg-surface-700 sm:w-auto">
         {(['join', 'create'] as Mode[]).map((m) => (
           <button
@@ -175,7 +217,7 @@ export function GroupPicker({ onDone }: GroupPickerProps) {
                   <div key={group.id} className="flex items-center justify-between border-b border-surface-100 px-4 py-3 last:border-0 dark:border-surface-700">
                     <div className="text-sm font-medium text-surface-900 dark:text-surface-50">{group.code}</div>
                     <Button variant="secondary" size="sm" disabled={member || busy} onClick={() => void doJoin(group.code)}>
-                      {member ? t('settings.inGroup') : t('settings.join')}
+                      {member ? t('settings.inGroup') : currentCode ? t('groupSwitch.button') : t('settings.join')}
                     </Button>
                   </div>
                 )

@@ -41,14 +41,16 @@ async def create_group(
     data: GroupCreate,
     user: CurrentUser,
     db: DBSession,
+    switch: bool = Query(False, description="Выйти из текущей группы (#162)"),
 ) -> GroupResponse:
     """Создать группу из расписания rasp (#146). Создатель — староста.
 
     404 — такой группы нет на rasp.dmami.ru, 409 — группа уже есть (надо вступить),
-    502/503 — rasp недоступен.
+    502/503 — rasp недоступен. Человек состоит максимум в одной группе (#162): если он
+    уже в группе — 409 с code=ALREADY_IN_GROUP и current_group; switch=true — сменить.
     """
     group_service = GroupService(db)
-    return await group_service.create_group(data, user.id)
+    return await group_service.create_group(data, user.id, switch=switch)
 
 
 @router.get("/my", response_model=list[StudentWithGroup])
@@ -89,10 +91,14 @@ async def join_group(
     code: str,
     user: CurrentUser,
     db: DBSession,
+    switch: bool = Query(False, description="Выйти из текущей группы (#162)"),
 ) -> StudentResponse:
-    """Вступить в существующую группу: заявка ждёт старосту. Группу не создаёт (#146)."""
+    """Вступить в существующую группу: заявка ждёт старосту. Группу не создаёт (#146).
+
+    Уже в другой группе — 409 ALREADY_IN_GROUP; switch=true — выйти из неё и вступить.
+    """
     group_service = GroupService(db)
-    return await group_service.join_group(code, user.id)
+    return await group_service.join_group(code, user.id, switch=switch)
 
 
 @router.delete("/{code}/membership", status_code=204)

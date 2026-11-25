@@ -152,21 +152,19 @@ class ScheduleService:
         except ValueError:
             return None
 
-        # Derive pair_number from start time (best-effort)
-        pair_number = 9  # default: after all regular pairs
-        pair_start_map = {
-            "09:00": 1,
-            "10:40": 2,
-            "12:20": 3,
-            "14:30": 4,
-            "16:10": 5,
-            "17:50": 6,
-            "19:30": 7,
-        }
-        for ts, pn in pair_start_map.items():
-            if start_str.startswith(ts):
-                pair_number = pn
-                break
+        # Номер пары по времени начала: последняя пара, начавшаяся не позже события.
+        # Раньше событие не ко времени пары («встретить маму» в 18:00) получало номер 9,
+        # схема разрешает 1–7 — и весь день расписания падал с ошибкой (#162).
+        pair_starts = [
+            time(9, 0),
+            time(10, 40),
+            time(12, 20),
+            time(14, 30),
+            time(16, 10),
+            time(17, 50),
+            time(19, 30),
+        ]
+        pair_number = max(1, sum(1 for ps in pair_starts if ps <= start))
 
         subject = SubjectResponse(
             id=override.id,

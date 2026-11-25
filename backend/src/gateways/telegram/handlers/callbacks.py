@@ -43,11 +43,89 @@ async def cancel_group_input(message: Message, state: FSMContext) -> None:
     await message.answer("Ок, группу не меняем. Настройки — /settings")
 
 
+async def _join(
+    tg_id: int, group_code: str, *, switch: bool = False
+) -> tuple[str, InlineKeyboardMarkup | None, bool]:
+    """Вступить/создать/сменить группу. (текст, кнопки, сбросить ли ожидание ввода)."""
+    from src.core.models.group import Group
+    from src.shared.exceptions import ConflictError, ExternalServiceError, NotFoundError
+
+    try:
+        async with get_session() as session:
+            student = await GroupService(session).join_group_by_telegram(
+                telegram_id=str(tg_id), group_code=group_code, switch=switch
+            )
+            group = await session.get(Group, student.group_id)
+            code = group.code if group else group_code
+    except ConflictError as e:
+        if e.extra.get("code") != "ALREADY_IN_GROUP":
+            raise
+        current = str(e.extra.get("current_group", ""))
+        target = group_code.strip()
+        text = (
+            f"Вы уже в группе <b>{escape(current)}</b>. В Nexora можно состоять только "
+            "в одной группе.\n\n"
+            f"Сменить на <b>{escape(target)}</b>? Расписание станет расписанием новой группы, "
+            "ваши личные события останутся. Отметки заданий и прогресс по предметам "
+            f"в {escape(current)} пропадут."
+        )
+        markup = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=f"🔁 Сменить на {target}", callback_data=f"group:switch:{target}"
+                    ),
+                    InlineKeyboardButton(text="Оставить", callback_data="settings:menu"),
+                ]
+            ]
+        )
+        return text, markup, True
+    except NotFoundError as e:
+        if "/start" in e.detail:
+            return "Сначала войдите в Nexora: /start", None, True
+        return (
+            f"❌ Группы <b>{escape(group_code)}</b> нет в расписании Политеха.\n\n"
+            "Проверьте номер на rasp.dmami.ru и напишите ещё раз. Передумали — /cancel",
+            None,
+            False,
+        )
+    except ExternalServiceError:
+        return (
+            "Расписание Политеха сейчас не отвечает, не можем проверить номер. "
+            "Попробуйте через пару минут.",
+            None,
+            False,
+        )
+
+    moved = "\n\nВаши личные события переехали вместе с вами." if switch else ""
+    if student.role == "starosta" and student.verified:
+        text = (
+            f"🎉 Группа <b>{escape(code)}</b> создана, вы — староста.\n\n"
+            "Что дальше:\n"
+            "1. Позовите одногруппников: пусть напишут боту номер группы.\n"
+            "2. Их заявки придут вам — подтвердите на сайте в Настройках → Группа "
+            "(видно, кто это в Telegram).\n"
+            "3. Расписание уже подтянулось: /schedule"
+            f"{moved}\n\nПодробнее — /guide"
+        )
+    elif student.verified:
+        text = f"Вы уже в группе <b>{escape(code)}</b>. Расписание — /schedule"
+    else:
+        text = (
+            f"✅ Заявка в группу <b>{escape(code)}</b> отправлена старосте.\n\n"
+            "Расписание уже доступно: /schedule. Остальное откроется, когда староста "
+            f"подтвердит заявку.{moved}\n\n"
+            "Как всё устроено — /guide"
+        )
+    return text, None, True
+
+
 @router.message(GroupSelection.waiting_for_group)
 async def process_group_input(message: Message, state: FSMContext) -> None:
-    """Вступить в группу или создать её (#146), с подсказкой, что дальше (#158)."""
-    from src.shared.exceptions import ExternalServiceError, NotFoundError
+    """Вступить в группу или создать её (#146), с подсказкой, что дальше (#158).
 
+    Уже в другой группе — предложить сменить (#162).
+    """
     tg_user = message.from_user
     if not tg_user or not message.text:
         await message.answer("Напишите номер группы текстом, например <code>241-327</code>.")
@@ -61,57 +139,29 @@ async def process_group_input(message: Message, state: FSMContext) -> None:
         return
 
     try:
-        async with get_session() as session:
-            student = await GroupService(session).join_group_by_telegram(
-                telegram_id=str(tg_user.id),
-                group_code=group_code,
-            )
-            from src.core.models.group import Group
-
-            group = await session.get(Group, student.group_id)
-            code = group.code if group else group_code
-    except NotFoundError as e:
-        if "/start" in e.detail:
-            await message.answer("Сначала войдите в Nexora: /start")
-            await state.clear()
-            return
-        await message.answer(
-            f"❌ Группы <b>{escape(group_code)}</b> нет в расписании Политеха.\n\n"
-            "Проверьте номер на rasp.dmami.ru и напишите ещё раз. Передумали — /cancel"
-        )
-        return
-    except ExternalServiceError:
-        await message.answer(
-            "Расписание Политеха сейчас не отвечает, не можем проверить номер. "
-            "Попробуйте через пару минут."
-        )
-        return
+        text, markup, done = await _join(tg_user.id, group_code)
     except Exception:
         logger.exception("Failed to join group")
         await message.answer("❌ Не получилось. Попробуйте ещё раз или напишите в поддержку.")
         return
+    if done:
+        await state.clear()
+    await message.answer(text, reply_markup=markup)
 
-    await state.clear()
-    if student.role == "starosta" and student.verified:
-        text = (
-            f"🎉 Группа <b>{escape(code)}</b> создана, вы — староста.\n\n"
-            "Что дальше:\n"
-            "1. Позовите одногруппников: пусть напишут боту номер группы.\n"
-            "2. Их заявки придут вам — подтвердите на сайте в Настройках → Группа "
-            "(видно, кто это в Telegram).\n"
-            "3. Расписание уже подтянулось: /schedule\n\n"
-            "Подробнее — /guide"
-        )
-    elif student.verified:
-        text = f"Вы уже в группе <b>{escape(code)}</b>. Расписание — /schedule"
-    else:
-        text = (
-            f"✅ Заявка в группу <b>{escape(code)}</b> отправлена старосте.\n\n"
-            "Расписание уже доступно: /schedule. Остальное откроется, когда староста "
-            "подтвердит заявку.\n\n"
-            "Как всё устроено — /guide"
-        )
-    await message.answer(text)
+
+@router.callback_query(F.data.startswith("group:switch:"))
+async def callback_switch_group(callback: CallbackQuery) -> None:
+    """Подтверждение смены группы (#162)."""
+    code = (callback.data or "").split(":", 2)[2]
+    try:
+        text, markup, _ = await _join(callback.from_user.id, code, switch=True)
+    except Exception:
+        logger.exception("Failed to switch group")
+        await callback.answer("Не получилось. Попробуйте ещё раз.", show_alert=True)
+        return
+    await callback.answer()
+    if isinstance(callback.message, Message):
+        await callback.message.edit_text(text, reply_markup=markup)
 
 
 async def _reminder_state(tg_user_id: int) -> tuple[bool, int] | None:

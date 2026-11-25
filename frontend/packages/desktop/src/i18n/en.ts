@@ -575,7 +575,7 @@ export const en: Messages = {
   'groupPicker.later': 'I’ll choose a group later',
   'groupLeave.button': 'Leave',
   'groupLeave.title': 'Leave group {code}?',
-  'groupLeave.body': 'Your task marks, subject progress and personal schedule changes in this group will be removed. You can come back, but through a new request to the group head.',
+  'groupLeave.body': 'Your task marks, subject progress and class edits in this group will be removed. Personal events are kept. You can come back, but through a new request to the group head.',
   'groupLeave.starosta': 'You are the group head. The role goes to the deputy if there is one; otherwise a moderator will appoint a new head.',
   'groupLeave.confirm': 'Leave group',
   'groupLeave.cancel': 'Cancel',
@@ -592,4 +592,17 @@ export const en: Messages = {
   'noGroup.home.text': 'Schedule, tasks and deadlines in Nexora are shared by the group. Join yours, or create it if you are the first.',
   'noGroup.schedule.title': 'The schedule appears once you choose a group',
   'noGroup.schedule.text': 'Pick your group — the schedule is imported from rasp.dmami.ru automatically.',
+
+  // One group per person (#162)
+  'groupPicker.switchedJoin': 'You left your previous group; your request to join {code} was sent to the group head. Personal events are kept.',
+  'groupSwitch.title': 'Switch to group {code}?',
+  'groupSwitch.only': 'You can be in only one group in Nexora. You are in {current} now.',
+  'groupSwitch.schedule': 'Your schedule becomes the schedule of {code}.',
+  'groupSwitch.personal': 'Your personal events (like “meet mom”) are kept.',
+  'groupSwitch.lost': 'Task marks, subject progress and class edits of {current} will be removed.',
+  'groupSwitch.request': 'A join request goes to the new group — some features stay locked until the head approves it.',
+  'groupSwitch.starosta': 'You are the group head: the role goes to the deputy if there is one.',
+  'groupSwitch.confirm': 'Switch to {code}',
+  'groupSwitch.button': 'Switch',
+  'groupSwitch.tooMany': 'You are in several groups, but only one is allowed. Leave the extra one — your personal events are kept.',
 }

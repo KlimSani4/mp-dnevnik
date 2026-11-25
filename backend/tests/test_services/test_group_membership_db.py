@@ -165,8 +165,14 @@ async def test_bot_creates_or_joins(ctx: Ctx) -> None:
     async with maker() as s:
         again = await GroupService(s).join_group_by_telegram("777", "241-3211")
     assert again.id == created.id
+    # Вторая группа — только сменой (#162)
+    from src.shared.exceptions import ConflictError
+
+    with pytest.raises(ConflictError):
+        async with maker() as s:
+            await GroupService(s).join_group_by_telegram("777", "241-327")
     async with maker() as s:
-        joined = await GroupService(s).join_group_by_telegram("777", "241-327")
+        joined = await GroupService(s).join_group_by_telegram("777", "241-327", switch=True)
     assert joined.role == StudentRole.STUDENT and not joined.verified
 
 
@@ -253,3 +259,171 @@ async def test_moderator_revives_group_without_starosta(ctx: Ctx) -> None:
     async with maker() as s:
         group = (await s.execute(select(Group).where(Group.code == "241-327"))).scalar_one()
     assert group.owner_id == ids["student"]
+
+
+# ─── #162: одна группа на человека, личные события при смене ───
+
+
+async def _add_schedule(maker: async_sessionmaker[AsyncSession], code: str) -> Any:
+    """Одна пара по средам в группе; вернуть её id."""
+    from datetime import time
+
+    from src.core.models.schedule import ScheduleEntry, Subject
+
+    async with maker() as s:
+        group = (await s.execute(select(Group).where(Group.code == code))).scalar_one()
+        subject = Subject(name=f"Предмет {code}", group_id=group.id, is_custom=False)
+        s.add(subject)
+        await s.flush()
+        entry = ScheduleEntry(
+            group_id=group.id,
+            subject_id=subject.id,
+            weekday=3,
+            pair_number=1,
+            start_time=time(9, 0),
+            end_time=time(10, 30),
+        )
+        s.add(entry)
+        await s.commit()
+        return entry.id
+
+
+async def test_second_group_is_refused_then_switch(ctx: Ctx) -> None:
+    c, ids, maker = ctx
+    me = _auth(ids["student"])
+    async with maker() as s:
+        s.add(Group(code="241-3211", name="241-3211", owner_id=ids["newbie"]))
+        await s.commit()
+
+    r = await c.post("/groups/241-3211/join", headers=me)
+    assert r.status_code == 409
+    assert r.json()["code"] == "ALREADY_IN_GROUP"
+    assert r.json()["current_group"] == "241-327"
+
+    r = await c.post("/groups/241-3211/join?switch=true", headers=me)
+    assert r.status_code == 201
+    groups = (await c.get("/groups/my", headers=me)).json()
+    assert [g["group"]["code"] for g in groups] == ["241-3211"]
+
+
+async def test_create_needs_switch_when_in_group(ctx: Ctx) -> None:
+    c, ids, _ = ctx
+    me = _auth(ids["student"])
+    r = await c.post("/groups", json={"code": "241-3211"}, headers=me)
+    assert r.status_code == 409 and r.json()["code"] == "ALREADY_IN_GROUP"
+    r = await c.post("/groups?switch=true", json={"code": "241-3211"}, headers=me)
+    assert r.status_code == 201
+    groups = (await c.get("/groups/my", headers=me)).json()
+    assert [(g["group"]["code"], g["role"]) for g in groups] == [("241-3211", "starosta")]
+
+
+async def test_personal_events_move_with_the_person(ctx: Ctx) -> None:
+    """«Встретить маму» остаётся после смены группы; скрытая пара старой группы — нет."""
+    import json
+    from datetime import date
+
+    from src.core.models.schedule import (
+        OverrideScope,
+        OverrideType,
+        ScheduleOverride,
+    )
+
+    c, ids, maker = ctx
+    me = _auth(ids["student"])
+    old_entry = await _add_schedule(maker, "241-327")
+    async with maker() as s:
+        s.add(Group(code="241-3211", name="241-3211", owner_id=ids["newbie"]))
+        await s.commit()
+    new_entry = await _add_schedule(maker, "241-3211")
+    wednesday = date(2026, 12, 2)
+
+    async with maker() as s:
+        student = (
+            await s.execute(select(Student).where(Student.user_id == ids["student"]))
+        ).scalar_one()
+        event = {"subject": "Встретить маму", "start_time": "18:00", "end_time": "19:00"}
+        s.add_all(
+            [
+                ScheduleOverride(
+                    entry_id=old_entry,
+                    scope=OverrideScope.PERSONAL,
+                    override_type=OverrideType.ADD,
+                    value=json.dumps(event, ensure_ascii=False),
+                    date=wednesday,
+                    author_id=ids["student"],
+                    student_id=student.id,
+                ),
+                ScheduleOverride(
+                    entry_id=old_entry,
+                    scope=OverrideScope.PERSONAL,
+                    override_type=OverrideType.SKIP,
+                    date=wednesday,
+                    author_id=ids["student"],
+                    student_id=student.id,
+                ),
+            ]
+        )
+        await s.commit()
+
+    r = await c.post("/groups/241-3211/join?switch=true", headers=me)
+    assert r.status_code == 201
+
+    async with maker() as s:
+        rows = (await s.execute(select(ScheduleOverride))).scalars().all()
+    assert [(o.override_type, o.entry_id) for o in rows] == [(OverrideType.ADD, new_entry)]
+    assert rows[0].student_id is not None
+
+    r = await c.get(f"/schedule/241-3211/day/{wednesday.isoformat()}", headers=me)
+    if r.status_code == 404:  # путь API расписания в этом проекте другой — читаем сервисом
+        from src.core.services.schedule import ScheduleService
+
+        async with maker() as s:
+            day = await ScheduleService(s).get_day_schedule(
+                "241-3211", wednesday, user_id=ids["student"], auto_import=False
+            )
+        names = [e.subject.name for e in day.entries if e.subject]
+    else:
+        names = [e["subject"]["name"] for e in r.json()["entries"] if e.get("subject")]
+    assert "Встретить маму" in names
+    assert "Предмет 241-3211" in names
+    assert "Предмет 241-327" not in names
+
+
+async def test_personal_events_survive_plain_leave(ctx: Ctx) -> None:
+    import json
+    from datetime import date
+
+    from src.core.models.schedule import OverrideScope, OverrideType, ScheduleOverride
+
+    c, ids, maker = ctx
+    entry = await _add_schedule(maker, "241-327")
+    async with maker() as s:
+        s.add(
+            ScheduleOverride(
+                entry_id=entry,
+                scope=OverrideScope.PERSONAL,
+                override_type=OverrideType.ADD,
+                value=json.dumps(
+                    {"subject": "Спортзал", "start_time": "20:00", "end_time": "21:00"}
+                ),
+                date=date(2026, 12, 2),
+                author_id=ids["student"],
+            )
+        )
+        await s.commit()
+    assert (
+        await c.delete("/groups/241-327/membership", headers=_auth(ids["student"]))
+    ).status_code == 204
+    async with maker() as s:
+        assert len((await s.execute(select(ScheduleOverride))).scalars().all()) == 1
+
+    # Вступил в новую группу — событие перевязалось на её пару и видно в расписании
+    new_entry = None
+    async with maker() as s:
+        s.add(Group(code="241-3211", name="241-3211", owner_id=ids["newbie"]))
+        await s.commit()
+    new_entry = await _add_schedule(maker, "241-3211")
+    assert (await c.post("/groups/241-3211/join", headers=_auth(ids["student"]))).status_code == 201
+    async with maker() as s:
+        o = (await s.execute(select(ScheduleOverride))).scalar_one()
+    assert o.entry_id == new_entry

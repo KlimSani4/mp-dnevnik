@@ -100,8 +100,9 @@ export function createGroupsApi(client: ApiClient) {
     list(params?: GroupSearchParams) {
       return client.get<Group[]>('/groups', params)
     },
-    create(data: GroupCreateRequest) {
-      return client.post<Group>('/groups', data)
+    /** switch — выйти из текущей группы: человек состоит максимум в одной (#162) */
+    create(data: GroupCreateRequest, switchGroup = false) {
+      return client.post<Group>(switchGroup ? '/groups?switch=true' : '/groups', data)
     },
     getMy() {
       return client.get<GroupMembership[]>('/groups/my')
@@ -112,8 +113,10 @@ export function createGroupsApi(client: ApiClient) {
     update(code: string, data: GroupUpdateRequest) {
       return client.patch<Group>(`/groups/${code}`, data)
     },
-    join(code: string) {
-      return client.post<GroupMembership>(`/groups/${encodeURIComponent(code)}/join`)
+    join(code: string, switchGroup = false) {
+      return client.post<GroupMembership>(
+        `/groups/${encodeURIComponent(code)}/join${switchGroup ? '?switch=true' : ''}`,
+      )
     },
     /** Выйти из группы (#157) */
     leave(code: string) {

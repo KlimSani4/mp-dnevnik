@@ -176,3 +176,33 @@ async def test_start_and_guide() -> None:
     m = _message(2)
     await start.cmd_help(m)
     assert "/guide" in m.answer.call_args.args[0]
+
+
+async def test_bot_switches_group_with_confirmation(
+    maker: async_sessionmaker[AsyncSession],
+) -> None:
+    """Вторая группа — только сменой с подтверждением (#162)."""
+    await callbacks.process_group_input(_message(2, "241-327"), _state())
+
+    m, st = _message(2, "241-3211"), _state()
+    await callbacks.process_group_input(m, st)
+    assert "только в одной группе" in m.answer.call_args.args[0]
+    switch = _buttons(m.answer.call_args.kwargs["reply_markup"])["🔁 Сменить на 241-3211"]
+
+    cb = _callback(2, switch)
+    await callbacks.callback_switch_group(cb)
+    assert "вы — староста" in cb.message.edit_text.call_args.args[0]
+    async with maker() as s:
+        codes = (
+            (
+                await s.execute(
+                    select(Group.code)
+                    .join(Student, Student.group_id == Group.id)
+                    .join(Identity, Identity.user_id == Student.user_id)
+                    .where(Identity.external_id == "2")
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert codes == ["241-3211"]

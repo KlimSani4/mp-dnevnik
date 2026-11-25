@@ -60,6 +60,9 @@ def _make_service(session: MagicMock) -> GroupService:
     # По умолчанию пользователь — не модератор платформы (#150)
     svc.user_repo.get = AsyncMock(return_value=MagicMock(is_moderator=False))
     svc.audit_repo = AsyncMock()
+    # Одна группа на человека и перенос личных событий (#162) проверяются на PostgreSQL
+    svc._make_room = AsyncMock()  # type: ignore[method-assign]
+    svc._adopt_personal_events = AsyncMock(return_value=0)  # type: ignore[method-assign]
     return svc
 
 
