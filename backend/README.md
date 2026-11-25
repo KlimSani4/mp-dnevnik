@@ -35,6 +35,6 @@ See `.env.example` or `docker-compose.yml` for required variables.
 ## CI/CD
 - **Test**: pytest with PostgreSQL + Redis services
 - **Lint**: ruff check + ruff format + mypy --strict  
-- **Deploy**: GitHub Actions → ghcr.io → Keel auto-deploy on K8s
+- **Deploy**: GitHub Actions → ghcr.io → pin-bump PR in digitaldrugstech/manifests → ArgoCD
 
 [![codecov](https://codecov.io/gh/KlimSani4/Nexora/branch/main/graph/badge.svg)](https://codecov.io/gh/KlimSani4/Nexora)

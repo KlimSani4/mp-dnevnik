@@ -85,7 +85,7 @@ pnpm --filter @nexora/desktop dev   # http://localhost:5173
 | CI → backend | изменения в `backend/` | ruff, mypy, bandit, тесты с PostgreSQL и Redis, сборка Docker-образа |
 | CI → frontend | изменения в `frontend/` | typecheck, сборка, сборка Docker-образа |
 | CI passed | всегда | итоговая проверка: зелёная, если всё нужное прошло. Обязательна для merge в `main` |
-| Deploy | merge в `main` с изменениями в `backend/` или `frontend/` | сборка и публикация образа в ghcr.io; Keel обновляет поды, миграции применяются при старте бэкенда |
+| Deploy | merge в `main` с изменениями в `backend/` или `frontend/` | сборка образа в ghcr.io; через ~5 минут manifests сам мержит PR с новым пином, ArgoCD обновляет поды; миграции применяются при старте бэкенда |
 
 Подробнее о деплое — [docs/deploy-migration.md](docs/deploy-migration.md).
 

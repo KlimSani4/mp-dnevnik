@@ -7,4 +7,4 @@
 | Локальная инфраструктура бэкенда | [backend/docker-compose.yml](../backend/docker-compose.yml) |
 | Переключение деплоя на этот репозиторий | [docs/deploy-migration.md](../docs/deploy-migration.md) |
 
-Production: https://nexora.digitaldrugs.tech (Cloudflare → Kubernetes, образы в ghcr.io, автообновление через Keel).
+Production: https://nexora.digitaldrugs.tech (Cloudflare → Kubernetes, образы в ghcr.io, выкатка через PR с пином в digitaldrugstech/manifests и ArgoCD).

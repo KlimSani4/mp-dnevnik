@@ -10,15 +10,16 @@
 ## Как устроен деплой
 
 ```
-merge в main → Deploy (.github/workflows/deploy.yml) → ghcr.io/klimsani4/nexora-{backend,frontend}:latest
-             → Keel в кластере опрашивает latest раз в минуту → перезапуск подов
+merge в main → Deploy (.github/workflows/deploy.yml) → ghcr.io/klimsani4/nexora-{backend,frontend}:<коммит>
+             → дайджест образа публикуется статусом коммита (image/nexora-backend, image/nexora-frontend)
+             → digitaldrugstech/manifests раз в 5 минут открывает и мержит PR с пином <коммит>@sha256:…
+             → ArgoCD перезапускает поды
              → бэкенд при старте выполняет alembic upgrade head (backend/entrypoint.sh)
 ```
 
 - Собирается только изменённая часть: `backend/**` → образ бэкенда, `frontend/**` → образ фронтенда.
-- Теги: `latest` и SHA коммита. Откат — поменять образ в деплойменте на нужный SHA.
+- Теги: `latest` и SHA коммита, прод закреплён по дайджесту. Откат — PR в manifests со старым пином и `"paused": true` для nexora в `.github/tracked-images.json`, иначе следующий запуск снова поднимет версию.
 - Ручной запуск: Actions → Deploy → Run workflow → `all` / `backend` / `frontend`.
-- Имена образов прежние, поэтому Keel перенастраивать не нужно.
 
 ## Что осталось сделать вручную
 
