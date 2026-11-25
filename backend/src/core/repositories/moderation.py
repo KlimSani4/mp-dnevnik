@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
 
-from src.core.models.assignment import Assignment
+from src.core.models.assignment import Assignment, TaskState, TaskStatus
 from src.core.models.group import Group, Student, StudentRole
 from src.core.models.moderation import (
     ApplicationStatus,
@@ -130,6 +130,121 @@ class ModerationStatsRepository:
         return await self._count(
             select(func.count()).select_from(Notification).where(Notification.created_at >= since)
         )
+
+    async def users_between(self, start: datetime, end: datetime) -> int:
+        return await self._count(
+            select(func.count())
+            .select_from(User)
+            .where(User.created_at >= start, User.created_at < end)
+        )
+
+    async def assignments_between(self, start: datetime, end: datetime) -> int:
+        return await self._count(
+            select(func.count())
+            .select_from(Assignment)
+            .where(Assignment.created_at >= start, Assignment.created_at < end)
+        )
+
+    async def users_with_student(self, *, verified_only: bool) -> int:
+        """Сколько разных пользователей подали заявку хоть в одну группу / подтверждены."""
+        stmt = select(func.count(func.distinct(Student.user_id)))
+        if verified_only:
+            stmt = stmt.where(Student.verified.is_(True))
+        return await self._count(stmt)
+
+    async def groups_active(self) -> int:
+        """Группы, где есть хотя бы один подтверждённый участник."""
+        return await self._count(
+            select(func.count(func.distinct(Student.group_id))).where(Student.verified.is_(True))
+        )
+
+    async def groups_with_starosta(self) -> int:
+        return await self._count(
+            select(func.count(func.distinct(Student.group_id))).where(
+                Student.role == StudentRole.STAROSTA
+            )
+        )
+
+    async def join_requests_pending(self) -> int:
+        return await self._count(
+            select(func.count()).select_from(Student).where(Student.verified.is_(False))
+        )
+
+    async def assignments_personal(self) -> int:
+        return await self._count(
+            select(func.count()).select_from(Assignment).where(Assignment.is_personal.is_(True))
+        )
+
+    async def assignments_by_day(self, since: datetime) -> dict[date, int]:
+        day = cast(Assignment.created_at, Date)
+        stmt = select(day, func.count()).where(Assignment.created_at >= since).group_by(day)
+        return {d: int(n) for d, n in (await self.session.execute(stmt)).all()}
+
+    async def tasks_by_state(self) -> dict[str, int]:
+        stmt = select(TaskStatus.state, func.count()).group_by(TaskStatus.state)
+        return {
+            str(st.value if hasattr(st, "value") else st): int(n)
+            for st, n in (await self.session.execute(stmt)).all()
+        }
+
+    async def tasks_done_since(self, since: datetime) -> int:
+        return await self._count(
+            select(func.count())
+            .select_from(TaskStatus)
+            .where(TaskStatus.state == TaskState.DONE, TaskStatus.updated_at >= since)
+        )
+
+    async def notifications_by_type(self, since: datetime) -> dict[str, int]:
+        stmt = (
+            select(Notification.type, func.count())
+            .where(Notification.created_at >= since)
+            .group_by(Notification.type)
+        )
+        return {
+            str(t.value if hasattr(t, "value") else t): int(n)
+            for t, n in (await self.session.execute(stmt)).all()
+        }
+
+    async def support_by_status(self) -> dict[str, int]:
+        stmt = select(SupportRequest.status, func.count()).group_by(SupportRequest.status)
+        return {
+            str(st.value if hasattr(st, "value") else st): int(n)
+            for st, n in (await self.session.execute(stmt)).all()
+        }
+
+    async def support_reply_hours(self, since: datetime) -> list[float]:
+        """Сколько часов прошло от обращения до ответа — для медианы."""
+        stmt = select(SupportRequest.created_at, SupportRequest.replied_at).where(
+            SupportRequest.replied_at.is_not(None), SupportRequest.created_at >= since
+        )
+        return [
+            (replied - created).total_seconds() / 3600
+            for created, replied in (await self.session.execute(stmt)).all()
+            if replied is not None
+        ]
+
+    async def top_groups(self, since: datetime, limit: int = 5) -> list[tuple[str, int, int]]:
+        """Самые большие группы: код, подтверждённые участники, задания за период."""
+        members = (
+            select(func.count(Student.id))
+            .where(Student.group_id == Group.id, Student.verified.is_(True))
+            .correlate(Group)
+            .scalar_subquery()
+        )
+        recent = (
+            select(func.count(Assignment.id))
+            .where(Assignment.group_id == Group.id, Assignment.created_at >= since)
+            .correlate(Group)
+            .scalar_subquery()
+        )
+        stmt = (
+            select(Group.code, members, recent)
+            .order_by(members.desc(), recent.desc(), Group.code)
+            .limit(limit)
+        )
+        return [
+            (c, int(m or 0), int(r or 0)) for c, m, r in (await self.session.execute(stmt)).all()
+        ]
 
     async def new_users_by_day(self, since: datetime) -> dict[date, int]:
         day = cast(User.created_at, Date)

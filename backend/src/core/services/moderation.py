@@ -40,10 +40,12 @@ from src.core.schemas.moderation import (
     AuditEntryResponse,
     DayPoint,
     GroupOverview,
+    KeyValue,
     ModerationStats,
     ModeratorResponse,
     SupportRequestUpdate,
     TeacherApplicationCreate,
+    TopGroup,
 )
 from src.shared.exceptions import ConflictError, NotFoundError, ValidationError
 
@@ -85,6 +87,13 @@ async def telegram_notify(session: AsyncSession, user_id: uuid.UUID, text: str) 
         logger.warning("Failed to notify user", extra={"user_id": str(user_id)}, exc_info=True)
 
 
+def _kv(counts: dict[str, int], order: list[str] | None = None) -> list[KeyValue]:
+    """Счётчики по ключам: в заданном порядке (с нулями), иначе по убыванию."""
+    if order:
+        return [KeyValue(key=k, value=counts.get(k, 0)) for k in order]
+    return [KeyValue(key=k, value=v) for k, v in sorted(counts.items(), key=lambda x: -x[1])]
+
+
 def _now() -> datetime:
     return datetime.now(tz=UTC)
 
@@ -116,28 +125,64 @@ class ModerationService:
         since = datetime.combine(today - timedelta(days=days - 1), datetime.min.time(), tzinfo=UTC)
 
         if self.redis is not None:
+            active_1d = await activity.count_active(self.redis, today, 1)
             active_7d = await activity.count_active(self.redis, today, 7)
             active_30d = await activity.count_active(self.redis, today, 30)
             active_by_day = await activity.daily_active(self.redis, today, days)
         else:
-            active_7d = active_30d = 0
+            active_1d = active_7d = active_30d = 0
             active_by_day = [(today - timedelta(days=i), 0) for i in reversed(range(days))]
 
-        new_by_day = await self.stats_repo.new_users_by_day(since)
+        repo = self.stats_repo
+        now = _now()
+        two_weeks_ago = now - timedelta(days=14)
+        new_by_day = await repo.new_users_by_day(since)
+        assignments_by_day = await repo.assignments_by_day(since)
+        days_axis = [d for d, _ in active_by_day]
+        reply_hours = sorted(await repo.support_reply_hours(now - timedelta(days=30)))
+        median = None
+        if reply_hours:
+            mid = len(reply_hours) // 2
+            median = (
+                reply_hours[mid]
+                if len(reply_hours) % 2
+                else (reply_hours[mid - 1] + reply_hours[mid]) / 2
+            )
+        groups_total = await repo.groups_total()
+
         return ModerationStats(
-            users_total=await self.stats_repo.users_total(),
-            users_new_7d=await self.stats_repo.users_since(week_ago),
+            users_total=await repo.users_total(),
+            users_new_7d=await repo.users_since(week_ago),
             active_7d=active_7d,
             active_30d=active_30d,
-            groups_total=await self.stats_repo.groups_total(),
-            assignments_total=await self.stats_repo.assignments_total(),
-            assignments_new_7d=await self.stats_repo.assignments_since(week_ago),
-            notifications_7d=await self.stats_repo.notifications_since(week_ago),
+            groups_total=groups_total,
+            assignments_total=await repo.assignments_total(),
+            assignments_new_7d=await repo.assignments_since(week_ago),
+            notifications_7d=await repo.notifications_since(week_ago),
             support_open=await self.support_repo.count_open(),
             teacher_pending=await self.app_repo.count_pending(),
             active_by_day=[DayPoint(day=d, value=v) for d, v in active_by_day],
-            new_users_by_day=[
-                DayPoint(day=d, value=new_by_day.get(d, 0)) for d, _ in active_by_day
+            new_users_by_day=[DayPoint(day=d, value=new_by_day.get(d, 0)) for d in days_axis],
+            active_1d=active_1d,
+            users_new_prev_7d=await repo.users_between(two_weeks_ago, week_ago),
+            assignments_new_prev_7d=await repo.assignments_between(two_weeks_ago, week_ago),
+            users_requested_group=await repo.users_with_student(verified_only=False),
+            users_in_group=await repo.users_with_student(verified_only=True),
+            groups_active=await repo.groups_active(),
+            groups_without_starosta=groups_total - await repo.groups_with_starosta(),
+            join_requests_pending=await repo.join_requests_pending(),
+            assignments_personal=await repo.assignments_personal(),
+            assignments_by_day=[
+                DayPoint(day=d, value=assignments_by_day.get(d, 0)) for d in days_axis
+            ],
+            tasks_by_state=_kv(await repo.tasks_by_state(), ["todo", "doing", "review", "done"]),
+            tasks_done_7d=await repo.tasks_done_since(week_ago),
+            notifications_by_type_7d=_kv(await repo.notifications_by_type(week_ago)),
+            support_by_status=_kv(await repo.support_by_status(), ["new", "in_progress", "closed"]),
+            support_median_reply_hours=round(median, 1) if median is not None else None,
+            top_groups=[
+                TopGroup(code=c, members=m, assignments_30d=a)
+                for c, m, a in await repo.top_groups(since)
             ],
         )
 
