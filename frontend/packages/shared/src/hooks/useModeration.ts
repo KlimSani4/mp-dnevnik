@@ -47,6 +47,16 @@ export function useModerators() {
   return useQuery({ queryKey: ['moderation', 'moderators'], queryFn: () => api.moderation.getModerators() })
 }
 
+/** Все группы платформы для модератора (#150) */
+export function useModerationGroups(q: string) {
+  const api = useApi()
+  return useQuery({
+    queryKey: ['moderation', 'groups', q],
+    queryFn: () => api.moderation.getGroups(q || undefined),
+    placeholderData: (prev) => prev,
+  })
+}
+
 export function useModerationAudit() {
   const api = useApi()
   return useQuery({ queryKey: ['moderation', 'audit'], queryFn: () => api.moderation.getAudit() })

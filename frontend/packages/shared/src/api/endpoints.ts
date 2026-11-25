@@ -47,6 +47,7 @@ import type {
   TeacherApplicationCreate,
   Moderator,
   AuditEntry,
+  GroupOverview,
 } from '../types'
 
 export function createAuthApi(client: ApiClient) {
@@ -254,6 +255,9 @@ export function createModerationApi(client: ApiClient) {
     },
     getAudit() {
       return client.get<AuditEntry[]>('/moderation/audit')
+    },
+    getGroups(q?: string) {
+      return client.get<GroupOverview[]>('/moderation/groups', q ? { q } : undefined)
     },
   }
 }

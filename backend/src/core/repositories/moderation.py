@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
 
 from src.core.models.assignment import Assignment
-from src.core.models.group import Group
+from src.core.models.group import Group, Student, StudentRole
 from src.core.models.moderation import (
     ApplicationStatus,
     SupportRequest,
@@ -170,3 +170,42 @@ class ModeratorRepository:
         stmt = stmt.order_by(AuditLog.created_at.desc()).limit(limit)
         rows = (await self.session.execute(stmt)).all()
         return [(a, n) for a, n in rows]
+
+
+class GroupOverviewRepository:
+    """Все группы с числом участников и заявок — для модератора (#150)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_groups(
+        self, query: str | None = None, limit: int = 200
+    ) -> list[tuple[Group, int, int, str | None]]:
+        members = (
+            select(func.count(Student.id))
+            .where(Student.group_id == Group.id, Student.verified.is_(True))
+            .correlate(Group)
+            .scalar_subquery()
+        )
+        pending = (
+            select(func.count(Student.id))
+            .where(Student.group_id == Group.id, Student.verified.is_(False))
+            .correlate(Group)
+            .scalar_subquery()
+        )
+        starosta = (
+            select(User.display_name)
+            .join(Student, Student.user_id == User.id)
+            .where(Student.group_id == Group.id, Student.role == StudentRole.STAROSTA)
+            .order_by(Student.created_at)
+            .limit(1)
+            .correlate(Group)
+            .scalar_subquery()
+        )
+        stmt = select(Group, members, pending, starosta)
+        if query:
+            stmt = stmt.where(Group.code.ilike(f"%{query.strip()}%"))
+        # Сначала группы с заявками, затем по коду
+        stmt = stmt.order_by(pending.desc(), Group.code).limit(limit)
+        result = await self.session.execute(stmt)
+        return [(g, int(m or 0), int(p or 0), st) for g, m, p, st in result.all()]

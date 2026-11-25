@@ -85,3 +85,13 @@ export interface ModerationStats {
   active_by_day: DayPoint[]
   new_users_by_day: DayPoint[]
 }
+
+/** Группа в списке модератора платформы (#150) */
+export interface GroupOverview {
+  code: string
+  name: string | null
+  members: number
+  pending: number
+  starosta_name: string | null
+  created_at: string
+}

@@ -129,3 +129,14 @@ class ModerationStats(BaseModel):
     teacher_pending: int
     active_by_day: list[DayPoint]
     new_users_by_day: list[DayPoint]
+
+
+class GroupOverview(BaseModel):
+    """Группа в списке модератора (#150)."""
+
+    code: str
+    name: str | None = None
+    members: int
+    pending: int
+    starosta_name: str | None = None
+    created_at: datetime

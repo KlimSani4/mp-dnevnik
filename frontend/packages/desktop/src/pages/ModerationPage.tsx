@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
-import { Badge, Button, Card } from '../components/ui'
+import { Badge, Button, Card, Icon, SearchInput } from '../components/ui'
+import { GroupMembers } from '../components/GroupMembers'
 import { APPLICATION_STATUS, SUPPORT_STATUS } from '../components/SupportSection'
 import {
   useCurrentUser,
   useModerationAudit,
+  useModerationGroups,
   useModerationStats,
   useModerators,
   useReviewTeacherApplication,
@@ -16,12 +18,13 @@ import {
 import type { DayPoint, SupportRequest, SupportStatus } from '@nexora/shared'
 import { useT, type MessageKey } from '../i18n'
 
-type Tab = 'stats' | 'support' | 'teachers' | 'moderators' | 'audit'
+type Tab = 'stats' | 'support' | 'teachers' | 'groups' | 'moderators' | 'audit'
 
 const TABS: { id: Tab; label: MessageKey }[] = [
   { id: 'stats', label: 'mod.tab.stats' },
   { id: 'support', label: 'mod.tab.support' },
   { id: 'teachers', label: 'mod.tab.teachers' },
+  { id: 'groups', label: 'mod.tab.groups' },
   { id: 'moderators', label: 'mod.tab.moderators' },
   { id: 'audit', label: 'mod.tab.audit' },
 ]
@@ -63,6 +66,7 @@ export function ModerationPage() {
       {user && tab === 'stats' && <StatsTab />}
       {user && tab === 'support' && <SupportTab />}
       {user && tab === 'teachers' && <TeachersTab />}
+      {user && tab === 'groups' && <GroupsTab />}
       {user && tab === 'moderators' && <ModeratorsTab />}
       {user && tab === 'audit' && <AuditTab />}
     </div>
@@ -270,6 +274,71 @@ function TeachersTab() {
   )
 }
 
+/* ─── Группы (#150) ─── */
+
+/**
+ * Все группы платформы. Модератор открывает любую и работает с участниками как
+ * староста: подтверждает и отклоняет заявки, назначает помощника. Всё — в журнал.
+ */
+function GroupsTab() {
+  const { t } = useT()
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState<string | null>(null)
+  const { data, isLoading } = useModerationGroups(q.trim())
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-surface-500 dark:text-surface-400">{t('mod.groups.hint')}</p>
+        <div className="sm:w-64">
+          <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('mod.groups.search')} />
+        </div>
+      </div>
+      {isLoading ? (
+        <p className="text-sm text-surface-400">{t('common.loading')}</p>
+      ) : !data?.length ? (
+        <p className="py-10 text-center text-sm text-surface-400">{t('mod.groups.empty')}</p>
+      ) : (
+        data.map((g) => {
+          const isOpen = open === g.code
+          return (
+            <Card key={g.code} padding="none" className="overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : g.code)}
+                aria-expanded={isOpen}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-50 dark:hover:bg-surface-700/40"
+              >
+                <span className="font-semibold text-surface-900 dark:text-surface-50">{g.code}</span>
+                <span className="flex-1 truncate text-sm text-surface-500 dark:text-surface-400">
+                  {g.starosta_name ? t('mod.groups.starosta', { name: g.starosta_name }) : t('mod.groups.noStarosta')}
+                </span>
+                <span className="hidden text-xs text-surface-400 sm:inline">{t('mod.groups.members', { n: g.members })}</span>
+                {g.pending > 0 && (
+                  <Badge variant="high" size="sm">
+                    {t('mod.groups.pending', { n: g.pending })}
+                  </Badge>
+                )}
+                <Icon
+                  name="chevron-down"
+                  size={16}
+                  className={clsx('text-surface-400 transition-transform', isOpen && 'rotate-180')}
+                />
+              </button>
+              {isOpen && (
+                <div className="border-t border-surface-100 px-4 py-3 dark:border-surface-700">
+                  <p className="mb-3 text-xs text-warning-600 dark:text-warning-500">{t('mod.groups.actingAs')}</p>
+                  <GroupMembers code={g.code} canReview canManageRoles />
+                </div>
+              )}
+            </Card>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
 /* ─── Модераторы (только просмотр) ─── */
 
 function ModeratorsTab() {
@@ -305,6 +374,9 @@ const ACTION_LABELS: Record<string, MessageKey> = {
   support_status_changed: 'mod.audit.support_status_changed',
   teacher_approved: 'mod.audit.teacher_approved',
   teacher_rejected: 'mod.audit.teacher_rejected',
+  student_verified_by_moderator: 'mod.audit.student_verified_by_moderator',
+  student_rejected_by_moderator: 'mod.audit.student_rejected_by_moderator',
+  role_changed_by_moderator: 'mod.audit.role_changed_by_moderator',
 }
 
 function AuditTab() {

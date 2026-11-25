@@ -143,13 +143,24 @@ class RequireGroupRole:
             raise AuthorizationError("Group not found")
 
         student = await student_repo.get_by_user_and_group(user.id, group.id)
+        has_role = student is not None and (not self.roles or student.role in self.roles)
+        if has_role:
+            assert student is not None
+            return student
+
+        # Модератор платформы в любой группе — как староста (#150). Возвращаем
+        # несохранённую запись: в сессию она не добавляется и в базу не попадает.
+        if user.is_moderator:
+            return Student(
+                user_id=user.id,
+                group_id=group.id,
+                role=StudentRole.STAROSTA,
+                verified=True,
+            )
+
         if not student:
             raise AuthorizationError("Not a member of this group")
-
-        if self.roles and student.role not in self.roles:
-            raise AuthorizationError("Insufficient permissions")
-
-        return student
+        raise AuthorizationError("Insufficient permissions")
 
 
 require_starosta = RequireGroupRole(StudentRole.STAROSTA, StudentRole.DEPUTY)
