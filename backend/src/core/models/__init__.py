@@ -10,6 +10,15 @@ from src.core.models.moderation import (
     TeacherApplication,
 )
 from src.core.models.notification import Notification, NotificationPreference, NotificationType
+from src.core.models.queue import (
+    LabQueue,
+    LabQueueEntry,
+    LabQueueSwap,
+    QueueEntryStatus,
+    QueueMode,
+    QueueStatus,
+    SwapStatus,
+)
 from src.core.models.schedule import (
     OverrideScope,
     OverrideType,
@@ -59,4 +68,12 @@ __all__ = [
     "Notification",
     "NotificationPreference",
     "NotificationType",
+    # Lab queue (#62)
+    "LabQueue",
+    "LabQueueEntry",
+    "LabQueueSwap",
+    "QueueMode",
+    "QueueStatus",
+    "QueueEntryStatus",
+    "SwapStatus",
 ]

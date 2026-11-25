@@ -12,6 +12,7 @@ import {
   createNotificationsApi,
   createModerationApi,
   createSupportApi,
+  createQueuesApi,
 } from '../api/endpoints'
 import { useAuthStore } from '../stores/auth'
 
@@ -45,6 +46,7 @@ export function useApi() {
       notifications: createNotificationsApi(client),
       moderation: createModerationApi(client),
       support: createSupportApi(client),
+      queues: createQueuesApi(client),
     }),
     [client]
   )

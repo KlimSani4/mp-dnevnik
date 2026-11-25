@@ -173,6 +173,15 @@ export function SettingsPage() {
         {t('nav.settings')}
       </h1>
 
+      {/* На телефоне «Очередей» нет в нижнем меню — ссылка здесь (#62) */}
+      <Link
+        to="/queues"
+        className="md:hidden mb-2 flex items-center justify-between rounded-lg bg-surface-100 px-4 py-3 text-sm font-medium text-surface-800 dark:bg-surface-800 dark:text-surface-100"
+      >
+        {t('nav.queues')}
+        <span aria-hidden>→</span>
+      </Link>
+
       {/* На телефоне пункта «Модерация» нет в нижнем меню — ссылка здесь (#99) */}
       {user?.is_moderator && (
         <Link
