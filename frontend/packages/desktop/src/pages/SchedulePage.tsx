@@ -8,6 +8,7 @@ import {
   parse,
 } from 'date-fns'
 import { dateLocale, translate, useT, type MessageKey } from '../i18n'
+import { NoGroupState } from '../components/NoGroupState'
 import {
   useWeekSchedule,
   useDaySchedule,
@@ -1357,7 +1358,7 @@ export function SchedulePage() {
     setViewMode(isMobile ? 'daily' : 'weekly')
   }, [isMobile])
 
-  const { groupCode } = useGroupContext()
+  const { groupCode, isLoading: groupLoading } = useGroupContext()
   const weekScheduleQuery = useWeekSchedule(groupCode ?? undefined, weekOffset)
   const dailyDate = format(addDays(new Date(), dayOffset), 'yyyy-MM-dd')
   const dailyGroupCode = isMobile || viewMode === 'daily' ? groupCode : undefined
@@ -1374,15 +1375,8 @@ export function SchedulePage() {
 
   return (
     <div>
-      {!groupCode ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <p className="text-surface-500 dark:text-surface-400 font-medium">
-            {t('schedule.notLoaded')}
-          </p>
-          <p className="text-sm text-surface-400 dark:text-surface-500 mt-1">
-            {t('schedule.chooseGroup')}
-          </p>
-        </div>
+      {!groupCode && !groupLoading ? (
+        <NoGroupState title="noGroup.schedule.title" text="noGroup.schedule.text" />
       ) : isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />

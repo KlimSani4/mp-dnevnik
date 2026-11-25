@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { Button, Card, Input } from '../components/ui'
-import { useSearchGroups, useJoinGroup, useAuthStore, useDevLogin, useTelegramBotAuth, useTelegramBotPoll, useTodaySchedule } from '@nexora/shared'
-import type { GroupMembership } from '@nexora/shared'
+import { Button, Card } from '../components/ui'
+import { GroupPicker } from '../components/GroupPicker'
+import { useAuthStore, useDevLogin, useTelegramBotAuth, useTelegramBotPoll, useTodaySchedule } from '@nexora/shared'
 import { useT } from '../i18n'
 
 type Step = 'welcome' | 'group' | 'preview' | 'done'
@@ -23,7 +23,8 @@ export function OnboardingPage() {
   const [groupCode, setGroupCode] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
-  const [joinResult, setJoinResult] = useState<GroupMembership | null>(null)
+  // Чем кончился выбор группы: создали (вы староста) или подали заявку (#146)
+  const [joinResult, setJoinResult] = useState<'created' | 'joined' | null>(null)
   const [previewConfirmed, setPreviewConfirmed] = useState(false)
 
   // Bot-based auth state
@@ -33,10 +34,6 @@ export function OnboardingPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const botAuthMutation = useTelegramBotAuth()
   const devLoginMutation = useDevLogin()
-  const searchGroupsQuery = useSearchGroups(
-    groupCode.length >= 2 ? { search: groupCode } : undefined
-  )
-  const joinGroupMutation = useJoinGroup()
   const effectiveGroupCode = selectedGroup || groupCode.trim()
   const scheduleQuery = useTodaySchedule(step === 'preview' ? effectiveGroupCode : undefined)
 
@@ -46,8 +43,6 @@ export function OnboardingPage() {
       navigate('/', { replace: true })
     }
   }, [isAuthenticated, step, navigate])
-
-  const displayedGroups = searchGroupsQuery.data?.map((g) => g.code) ?? []
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const telegramContainerRef = useRef<HTMLDivElement>(null)
@@ -82,18 +77,6 @@ export function OnboardingPage() {
 
   useTelegramBotPoll(pollToken, handlePollSuccess)
 
-  const isValidGroup = /^\d{2,3}-\d{2,3}$/.test(effectiveGroupCode)
-
-  const handleGroupInput = useCallback((value: string) => {
-    setGroupCode(value)
-    setSelectedGroup('')
-  }, [])
-
-  const selectGroup = (code: string) => {
-    setSelectedGroup(code)
-    setGroupCode(code)
-  }
-
   const STEPS: Step[] = ['welcome', 'group', 'preview', 'done']
 
   const goNext = () => {
@@ -104,20 +87,6 @@ export function OnboardingPage() {
   const goBack = () => {
     const idx = STEPS.indexOf(step)
     if (idx > 0) setStep(STEPS[idx - 1])
-  }
-
-  const handleGroupContinue = async () => {
-    if (!isValidGroup) return
-    try {
-      const result = await joinGroupMutation.mutateAsync(effectiveGroupCode)
-      setJoinResult(result)
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status
-      if (status !== 409) {
-        console.warn('joinGroup error:', err)
-      }
-    }
-    goNext()
   }
 
   const finish = () => {
@@ -251,48 +220,22 @@ export function OnboardingPage() {
               {t('onb.groupHint')}
             </p>
 
-            <div className="relative">
-              <Input
-                value={groupCode}
-                onChange={(e) => handleGroupInput(e.target.value)}
-                placeholder={t('onb.groupPlaceholder')}
-                className="text-lg"
-              />
+            <GroupPicker
+              onDone={({ code, created }) => {
+                setJoinResult(created ? 'created' : 'joined')
+                setSelectedGroup(code)
+                setGroupCode(code)
+                goNext()
+              }}
+            />
 
-              {displayedGroups.length > 0 && !selectedGroup && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                  {displayedGroups.map((g) => (
-                    <button
-                      key={g}
-                      onClick={() => selectGroup(g)}
-                      className="w-full text-left px-4 py-3 hover:bg-surface-50 dark:hover:bg-surface-700 text-sm text-surface-900 dark:text-surface-50 transition-colors"
-                    >
-                      {g}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Button
-              variant="primary"
-              size="lg"
-              className="w-full mt-6"
-              onClick={handleGroupContinue}
-              disabled={!isValidGroup || joinGroupMutation.isPending}
+            <button
+              type="button"
+              onClick={finish}
+              className="mt-6 w-full text-center text-sm text-surface-500 hover:text-surface-700 dark:text-surface-400 dark:hover:text-surface-200"
             >
-              {joinGroupMutation.isPending ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  {t('common.loading')}
-                </span>
-              ) : (
-                t('common.continue')
-              )}
-            </Button>
+              {t('groupPicker.later')}
+            </button>
           </div>
         )}
 
@@ -310,13 +253,13 @@ export function OnboardingPage() {
             </button>
 
             {/* Join status banner */}
-            {joinResult?.role === 'starosta' ? (
+            {joinResult === 'created' ? (
               <div className="mb-5 rounded-xl bg-warning-50 dark:bg-warning-500/10 border border-warning-200 dark:border-warning-500/30 px-4 py-3">
                 <p className="text-sm font-medium text-warning-700 dark:text-warning-400">
                   {t('onb.firstInGroup')}
                 </p>
               </div>
-            ) : joinResult && !joinResult.verified ? (
+            ) : joinResult === 'joined' ? (
               <div className="mb-5 rounded-xl bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 px-4 py-3">
                 <p className="text-sm font-medium text-surface-700 dark:text-surface-300">
                   {t('onb.requestSent')}
@@ -411,7 +354,7 @@ export function OnboardingPage() {
             <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-50 mb-3">
               {t('onb.doneTitle')}
             </h2>
-            {joinResult?.role === 'starosta' ? (
+            {joinResult === 'created' ? (
               <p className="text-surface-500 dark:text-surface-400 mb-2">
                 {t('onb.inGroup')} <span className="font-semibold text-surface-900 dark:text-surface-50">{effectiveGroupCode}</span> {t('onb.as')} <span className="font-semibold text-warning-600 dark:text-warning-400">{t('roles.starosta')}</span>
               </p>

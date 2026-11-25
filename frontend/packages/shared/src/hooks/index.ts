@@ -26,6 +26,7 @@ export {
   useGroupSubjects,
   useCreateGroup,
   useJoinGroup,
+  useLeaveGroup,
   useUpdateGroup,
   useGroupStudents,
   useVerifyStudent,

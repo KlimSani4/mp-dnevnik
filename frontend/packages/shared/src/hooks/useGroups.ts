@@ -1,3 +1,4 @@
+import { useAuthStore } from '../stores/auth'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
 import type { Group, GroupCreateRequest, GroupRole, GroupSearchParams, GroupUpdateRequest, Subject } from '../types'
@@ -40,6 +41,22 @@ export function useCreateGroup() {
     mutationFn: (data: GroupCreateRequest) => api.groups.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] })
+    },
+  })
+}
+
+/** Выйти из группы (#157): сбрасывает выбранную группу, если вышли из неё */
+export function useLeaveGroup() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (code: string) => api.groups.leave(code),
+    onSuccess: (_data, code) => {
+      if (useAuthStore.getState().selectedGroupCode === code) {
+        useAuthStore.setState({ selectedGroupId: null, selectedGroupCode: null })
+      }
+      queryClient.invalidateQueries()
     },
   })
 }

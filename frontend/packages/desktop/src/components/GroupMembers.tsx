@@ -6,7 +6,8 @@ import {
   useVerifyStudent,
 } from '@nexora/shared'
 import type { GroupRole, GroupStudent } from '@nexora/shared'
-import { Avatar, Button, Icon } from './ui'
+import { useState } from 'react'
+import { Avatar, Button, Dropdown, Icon, Modal } from './ui'
 import { useT, type MessageKey } from '../i18n'
 
 interface GroupMembersProps {
@@ -15,13 +16,23 @@ interface GroupMembersProps {
   canReview: boolean
   /** Назначать помощника: староста и модератор платформы */
   canManageRoles: boolean
+  /** Любая роль, включая старосту: только модератор платформы (#159) */
+  canAppointStarosta?: boolean
+}
+
+const ROLES: GroupRole[] = ['student', 'assistant', 'deputy', 'starosta']
+const ROLE_KEY: Record<GroupRole, MessageKey> = {
+  student: 'roles.student',
+  assistant: 'roles.assistant',
+  deputy: 'roles.deputy',
+  starosta: 'roles.starosta',
 }
 
 /**
  * Участники и заявки группы (#148). Используется в Настройках у старосты и на странице
  * модерации, где модератор платформы работает с любой группой как староста (#150).
  */
-export function GroupMembers({ code, canReview, canManageRoles }: GroupMembersProps) {
+export function GroupMembers({ code, canReview, canManageRoles, canAppointStarosta = false }: GroupMembersProps) {
   const { t, locale } = useT()
   const studentsQuery = useGroupStudents(code)
   const verifyStudentMutation = useVerifyStudent()
@@ -32,9 +43,41 @@ export function GroupMembers({ code, canReview, canManageRoles }: GroupMembersPr
   const handleReject = (userId: string) => rejectStudentMutation.mutate({ code, userId })
   const handleChangeRole = (userId: string, role: GroupRole) =>
     changeRoleMutation.mutate({ code, userId, role })
+  // Назначение старосты меняет и прежнего старосту — сначала подтверждение
+  const [appoint, setAppoint] = useState<GroupStudent | null>(null)
+  const currentStarosta = studentsQuery.data?.find((s) => s.role === 'starosta' && s.id !== appoint?.id)
+  const nameOf = (s: GroupStudent) => s.user.display_name || t('common.student')
 
   return (
     <>
+      <Modal open={!!appoint} onClose={() => setAppoint(null)} title={t('mod.appoint.title')}>
+        {appoint && (
+          <>
+            <p className="text-sm text-surface-700 dark:text-surface-200">
+              {t('mod.appoint.body', { name: nameOf(appoint), code })}
+            </p>
+            <ul className="mt-3 space-y-1 text-sm text-surface-600 dark:text-surface-300">
+              {!appoint.verified && <li>• {t('mod.appoint.verify')}</li>}
+              <li>• {currentStarosta ? t('mod.appoint.demote', { name: nameOf(currentStarosta) }) : t('mod.appoint.none')}</li>
+              <li>• {t('mod.appoint.audit')}</li>
+            </ul>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAppoint(null)}>{t('groupLeave.cancel')}</Button>
+              <Button
+                disabled={changeRoleMutation.isPending}
+                onClick={() =>
+                  changeRoleMutation.mutate(
+                    { code, userId: appoint.user_id, role: 'starosta' },
+                    { onSuccess: () => setAppoint(null) },
+                  )
+                }
+              >
+                {t('mod.appoint.confirm')}
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
       {studentsQuery.isLoading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
@@ -106,7 +149,25 @@ export function GroupMembers({ code, canReview, canManageRoles }: GroupMembersPr
                       </Button>
                     </>
                   )}
-                  {canManageRoles && student.role === 'student' && student.verified && (
+                  {canAppointStarosta && student.verified && (
+                    <Dropdown
+                      className="w-48"
+                      options={ROLES.map((r) => ({ value: r, label: t(ROLE_KEY[r]) }))}
+                      value={student.role}
+                      onChange={(v) => {
+                        const role = v as GroupRole
+                        if (role === student.role) return
+                        if (role === 'starosta') setAppoint(student)
+                        else handleChangeRole(student.user_id, role)
+                      }}
+                    />
+                  )}
+                  {canAppointStarosta && !student.verified && (
+                    <Button variant="ghost" size="sm" disabled={isPending} onClick={() => setAppoint(student)}>
+                      {t('mod.appoint.button')}
+                    </Button>
+                  )}
+                  {!canAppointStarosta && canManageRoles && student.role === 'student' && student.verified && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -116,7 +177,7 @@ export function GroupMembers({ code, canReview, canManageRoles }: GroupMembersPr
                       {t('settings.makeAssistant')}
                     </Button>
                   )}
-                  {canManageRoles && student.role === 'assistant' && (
+                  {!canAppointStarosta && canManageRoles && student.role === 'assistant' && (
                     <Button
                       variant="ghost"
                       size="sm"

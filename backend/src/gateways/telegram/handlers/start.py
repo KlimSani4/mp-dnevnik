@@ -2,17 +2,30 @@
 
 import logging
 import re
+from html import escape
 
 import httpx
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.core.services.auth import AuthService
 from src.gateways.telegram.deps import get_session
 
 logger = logging.getLogger(__name__)
 router = Router(name="start")
+
+SITE_URL = "https://nexora.digitaldrugs.tech"
+
+# Команды в меню бота (set_my_commands при старте) и в /help (#158)
+COMMANDS: list[tuple[str, str]] = [
+    ("schedule", "расписание на сегодня"),
+    ("deadlines", "ближайшие дедлайны"),
+    ("queue", "очередь на сдачу лабораторных"),
+    ("settings", "группа и уведомления"),
+    ("guide", "как работает Nexora"),
+    ("help", "список команд"),
+]
 
 # Auth tokens are URL-safe base64 strings (no special chars except - and _)
 _AUTH_TOKEN_RE = re.compile(r"^[A-Za-z0-9_\-]{16,}$")
@@ -84,35 +97,55 @@ async def cmd_start(message: Message) -> None:
         await message.answer(f"Ошибка регистрации: {e}")
         return
 
-    welcome_text = (
-        f"Привет, {tg_user.first_name}!\n\n"
-        "Я бот платформы <b>Nexora</b> для студентов Московского Политеха.\n\n"
-        "Что я умею:\n"
-        "• /schedule — расписание на сегодня\n"
-        "• /deadlines — ближайшие дедлайны\n"
-        "• /settings — настройки\n"
-        "• /help — справка\n\n"
-        "Для начала укажи свою группу в /settings."
-    )
+    from src.gateways.telegram.handlers.settings import _my_groups
 
-    await message.answer(welcome_text, parse_mode="HTML")
+    groups = await _my_groups(tg_user.id) or []
+    if groups:
+        welcome_text = (
+            f"С возвращением, {escape(tg_user.first_name)}!\n\n"
+            "• /schedule — пары на сегодня\n"
+            "• /deadlines — что скоро сдавать\n"
+            "• /queue — очередь на сдачу лабораторных\n"
+            "• /settings — группа и уведомления\n"
+            "• /guide — как всё устроено"
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🌐 Открыть сайт", url=SITE_URL)],
+                [InlineKeyboardButton(text="❓ Как это работает", callback_data="guide:menu")],
+            ]
+        )
+    else:
+        welcome_text = (
+            f"Привет, {escape(tg_user.first_name)}! Я бот <b>Nexora</b> — расписание, задания "
+            "и дедлайны группы Московского Политеха в одном месте.\n\n"
+            "<b>Как начать</b>\n"
+            "1. Укажите группу — расписание подтянется само.\n"
+            "2. Староста подтвердит, что вы из группы. Если вы первый — станете старостой.\n"
+            "3. Дальше бот сам напомнит о парах и дедлайнах.\n\n"
+            "Начнём с группы 👇"
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="📚 Указать группу", callback_data="settings:group")],
+                [InlineKeyboardButton(text="❓ Как это работает", callback_data="guide:menu")],
+            ]
+        )
+
+    await message.answer(welcome_text, parse_mode="HTML", reply_markup=keyboard)
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    """Handle /help command."""
-    help_text = (
-        "<b>Справка по командам</b>\n\n"
-        "/start — начало работы\n"
-        "/schedule — расписание на сегодня\n"
-        "/deadlines — ближайшие дедлайны\n"
-        "/settings — настройки (группа, уведомления)\n"
-        "/help — эта справка\n\n"
-        "<b>Как это работает</b>\n"
-        "1. Укажи группу в настройках\n"
-        "2. Получай расписание и дедлайны\n"
-        "3. Отмечай выполнение заданий\n\n"
-        "Вопросы? Пиши в поддержку."
+    """/help — команды и куда идти дальше."""
+    await message.answer(
+        "<b>Команды</b>\n\n"
+        + "\n".join(f"/{c} — {d}" for c, d in COMMANDS)
+        + "\n\nНе понятно, как всё устроено? /guide — коротко по темам.\n"
+        "Вопрос или ошибка — Настройки → «Поддержка» на сайте.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="❓ Как это работает", callback_data="guide:menu")]
+            ]
+        ),
     )
-
-    await message.answer(help_text)

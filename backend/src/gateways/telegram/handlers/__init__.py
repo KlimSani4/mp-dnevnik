@@ -1,6 +1,6 @@
 """Telegram bot handlers."""
 
-from src.gateways.telegram.handlers import callbacks, forward, schedule, settings, start
+from src.gateways.telegram.handlers import callbacks, forward, guide, schedule, settings, start
 
 __all__ = [
     "start",
@@ -8,4 +8,5 @@ __all__ = [
     "settings",
     "callbacks",
     "forward",
+    "guide",
 ]

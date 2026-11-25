@@ -19,7 +19,13 @@ from src.core.schemas.group import (
 )
 from src.core.schemas.schedule import SubjectCreate, SubjectRequirementsUpdate, SubjectResponse
 from src.core.telegram_contact import telegram_contact
-from src.shared.exceptions import AuthorizationError, ConflictError, NotFoundError
+from src.integrations.rasp_groups import resolve_group_code
+from src.shared.exceptions import (
+    AuthorizationError,
+    ConflictError,
+    ExternalServiceError,
+    NotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +57,10 @@ class GroupService:
         действует в любой группе как староста, чтобы проверять и тестировать (#150).
         Такие действия пишутся в журнал с суффиксом _by_moderator.
         """
-        if allow_owner and group.owner_id == user_id:
-            return False
         student = await self.student_repo.get_by_user_and_group(user_id, group.id)
+        # Владелец считается, только пока он в группе: после выхода (#157) он чужой
+        if allow_owner and student and group.owner_id == user_id:
+            return False
         if student and student.role in roles:
             return False
         user = await self.user_repo.get(user_id)
@@ -65,31 +72,43 @@ class GroupService:
     def _audit_action(action: str, by_moderator: bool) -> str:
         return f"{action}_by_moderator" if by_moderator else action
 
-    async def create_group(
-        self,
-        data: GroupCreate,
-        owner_id: uuid.UUID,
-    ) -> GroupResponse:
-        """Create new group."""
-        # Check if group code already exists
-        existing = await self.group_repo.get_by_code(data.code)
-        if existing:
-            raise ConflictError(f"Group {data.code} already exists")
-
-        group = await self.group_repo.create(
-            code=data.code,
-            name=data.name,
-            owner_id=owner_id,
+    async def _find_group(self, group_code: str) -> Group | None:
+        """Группа по коду; «24a-431» находит «24А-431» через список rasp (#146)."""
+        code = group_code.strip()
+        group = await self.group_repo.get_by_code(code) or await self.group_repo.get_by_code(
+            code.upper()
         )
+        if group:
+            return group
+        try:
+            canonical = await resolve_group_code(code)
+        except ExternalServiceError:
+            return None
+        return await self.group_repo.get_by_code(canonical) if canonical else None
 
-        # Creator becomes starosta
+    async def _create_group(
+        self, group_code: str, name: str | None, owner_id: uuid.UUID, joined_via: str
+    ) -> Group:
+        """Создать группу с кодом из расписания rasp; создатель — подтверждённый староста.
+
+        Код проверяется по списку групп rasp.dmami.ru: занять чужой или несуществующий
+        код нельзя (#112, #146). Расписание подтягивается сразу; если rasp не ответил,
+        оно подтянется автоматически при первом открытии.
+        """
+        code = await resolve_group_code(group_code)
+        if not code:
+            raise NotFoundError(f"Group {group_code.strip()} is not in the university schedule")
+        if await self.group_repo.get_by_code(code):
+            raise ConflictError(f"Group {code} already exists")
+
+        group = await self.group_repo.create(code=code, name=name or code, owner_id=owner_id)
         await self.student_repo.create(
             user_id=owner_id,
             group_id=group.id,
             role=StudentRole.STAROSTA,
             verified=True,
+            joined_via=joined_via,
         )
-
         await self.audit_repo.log(
             action="group_created",
             user_id=owner_id,
@@ -97,12 +116,28 @@ class GroupService:
             resource_id=str(group.id),
         )
         await self.session.commit()
+        logger.info("Group created", extra={"group_id": str(group.id), "code": code})
 
-        logger.info(
-            "Group created",
-            extra={"group_id": str(group.id), "code": data.code},
-        )
+        try:
+            from src.core.services.schedule import ScheduleService
+            from src.integrations.rasp_parser import fetch_group_schedule
 
+            schedule_data = await fetch_group_schedule(code)
+            if schedule_data:
+                count = await ScheduleService(self.session).import_schedule(code, schedule_data)
+                logger.info("Schedule imported", extra={"group_code": code, "entries": count})
+        except Exception as e:  # noqa: BLE001 — группа уже создана, расписание догрузится
+            await self.session.rollback()
+            logger.warning("Failed to import schedule", extra={"group_code": code, "error": str(e)})
+        return group
+
+    async def create_group(
+        self,
+        data: GroupCreate,
+        owner_id: uuid.UUID,
+    ) -> GroupResponse:
+        """Создать группу на сайте (#146). Создатель — староста."""
+        group = await self._create_group(data.code, data.name, owner_id, "site")
         return GroupResponse.model_validate(group)
 
     async def get_group(self, group_code: str) -> GroupResponse:
@@ -157,11 +192,13 @@ class GroupService:
         group_code: str,
         user_id: uuid.UUID,
     ) -> StudentResponse:
-        """Join a group."""
-        group = await self.group_repo.get_by_code(group_code)
+        """Вступить в существующую группу: заявка ждёт старосту.
+
+        Группу больше не создаёт молча (#146): для этого есть create_group.
+        """
+        group = await self._find_group(group_code)
         if not group:
-            # Auto-create group on first join
-            group = await self.group_repo.create(code=group_code, name=group_code, owner_id=user_id)
+            raise NotFoundError(f"Group {group_code} not found")
 
         # Check if already member
         existing = await self.student_repo.get_by_user_and_group(user_id, group.id)
@@ -360,78 +397,104 @@ class GroupService:
         telegram_id: str,
         group_code: str,
     ) -> StudentResponse:
-        """Join group by Telegram ID. Creates group if not exists."""
+        """Вступить в группу из бота; если группы ещё нет — создать её (создатель — староста).
+
+        Создать можно только группу из расписания rasp (#146). Повторный ввод своей
+        группы ничего не меняет.
+        """
         from src.core.repositories.user import IdentityRepository
-        from src.core.services.schedule import ScheduleService
-        from src.integrations.rasp_parser import fetch_group_schedule
 
-        identity_repo = IdentityRepository(self.session)
-
-        # Find user by telegram identity
-        identity = await identity_repo.get_by_external("telegram", telegram_id)
+        identity = await IdentityRepository(self.session).get_by_external("telegram", telegram_id)
         if not identity:
             raise NotFoundError("User not registered. Use /start first.")
 
-        # Get or create group
-        group = await self.group_repo.get_by_code(group_code)
-        need_import = False
-
+        group = await self._find_group(group_code)
         if not group:
-            # Create group with this user as owner
-            group = await self.group_repo.create(
-                code=group_code,
-                name=None,
-                owner_id=identity.user_id,
-            )
-            # Creator becomes starosta
-            student = await self.student_repo.create(
-                user_id=identity.user_id,
-                group_id=group.id,
-                role=StudentRole.STAROSTA,
-                verified=True,
-            )
-            need_import = True
-            logger.info(
-                "Group created via Telegram",
-                extra={"group_code": group_code, "telegram_id": telegram_id},
-            )
-        else:
-            # Check if already member
-            existing = await self.student_repo.get_by_user_and_group(identity.user_id, group.id)
-            if existing:
-                return StudentResponse.model_validate(existing)
+            group = await self._create_group(group_code, None, identity.user_id, "bot")
+            student = await self.student_repo.get_by_user_and_group(identity.user_id, group.id)
+            assert student is not None
+            await self.session.refresh(student)
+            return StudentResponse.model_validate(student)
 
-            # Join as student
-            student = await self.student_repo.create(
-                user_id=identity.user_id,
-                group_id=group.id,
-                role=StudentRole.STUDENT,
-                verified=False,
-                joined_via="bot",
-            )
-            logger.info(
-                "User joined group via Telegram",
-                extra={"group_code": group_code, "telegram_id": telegram_id},
-            )
+        existing = await self.student_repo.get_by_user_and_group(identity.user_id, group.id)
+        if existing:
+            return StudentResponse.model_validate(existing)
 
-        # Import schedule for new group
-        if need_import:
-            try:
-                schedule_data = await fetch_group_schedule(group_code)
-                if schedule_data:
-                    schedule_service = ScheduleService(self.session)
-                    count = await schedule_service.import_schedule(group_code, schedule_data)
-                    logger.info(
-                        "Schedule imported",
-                        extra={"group_code": group_code, "entries": count},
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to import schedule",
-                    extra={"group_code": group_code, "error": str(e)},
-                )
-
+        student = await self.student_repo.create(
+            user_id=identity.user_id,
+            group_id=group.id,
+            role=StudentRole.STUDENT,
+            verified=False,
+            joined_via="bot",
+        )
+        await self.audit_repo.log(
+            action="group_joined",
+            user_id=identity.user_id,
+            resource="group",
+            resource_id=str(group.id),
+        )
+        await self.session.commit()
+        await self.session.refresh(student)
+        logger.info("User joined group via Telegram", extra={"group_code": group.code})
         return StudentResponse.model_validate(student)
+
+    async def leave_group(self, group_code: str, user_id: uuid.UUID) -> None:
+        """Выйти из группы (#157).
+
+        Удаляются данные участника в этой группе: статусы заданий и прогресс по
+        предметам (каскадом), свои отметки в расписании. Если уходит последний староста,
+        старостой становится заместитель (самый давний); если заместителя нет, группа
+        остаётся без старосты — назначить его может модератор (#159).
+        """
+        from sqlalchemy import delete, select
+
+        from src.core.models.group import Student
+        from src.core.models.schedule import ScheduleOverride
+
+        group = await self._find_group(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+        student = await self.student_repo.get_by_user_and_group(user_id, group.id)
+        if not student:
+            raise NotFoundError("You are not a member of this group")
+
+        was_starosta = student.role == StudentRole.STAROSTA
+        await self.session.execute(
+            delete(ScheduleOverride).where(ScheduleOverride.student_id == student.id)
+        )
+        await self.student_repo.delete(student)
+
+        successor: Student | None = None
+        if was_starosta:
+            others = (
+                (
+                    await self.session.execute(
+                        select(Student)
+                        .where(Student.group_id == group.id, Student.verified.is_(True))
+                        .order_by(Student.created_at)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if not any(o.role == StudentRole.STAROSTA for o in others):
+                successor = next((o for o in others if o.role == StudentRole.DEPUTY), None)
+                if successor:
+                    successor.role = StudentRole.STAROSTA
+        if group.owner_id == user_id and successor:
+            group.owner_id = successor.user_id
+
+        await self.audit_repo.log(
+            action="group_left",
+            user_id=user_id,
+            resource="group",
+            resource_id=str(group.id),
+        )
+        await self.session.commit()
+        logger.info(
+            "User left group",
+            extra={"group_code": group.code, "new_starosta": bool(successor)},
+        )
 
     async def set_student_role(
         self,
@@ -456,6 +519,23 @@ class GroupService:
         student = await self.student_repo.get_by_user_and_group(target_user_id, group.id)
         if not student:
             raise NotFoundError("Student not found in this group")
+
+        if role == StudentRole.STAROSTA:
+            # Старосту назначает только модератор платформы (#159). Староста в группе
+            # один: прежний становится заместителем. Неподтверждённый — подтверждается.
+            admin = await self.user_repo.get(admin_id)
+            if not (admin and admin.is_moderator):
+                raise AuthorizationError("Only a platform moderator can appoint a starosta")
+            by_moderator = True
+            for other in await self.student_repo.get_group_students_with_users(group.id):
+                if other.id != student.id and other.role == StudentRole.STAROSTA:
+                    other.role = StudentRole.DEPUTY
+            student.verified = True
+            # Владелец без членства в группе (вышел, #157) передаёт права новому старосте
+            if not await self.student_repo.get_by_user_and_group(group.owner_id, group.id):
+                group.owner_id = student.user_id
+        elif not student.verified:
+            raise ConflictError("Verify the student before changing the role")
 
         student = await self.student_repo.set_role(student, role)
 

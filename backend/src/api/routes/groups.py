@@ -42,7 +42,11 @@ async def create_group(
     user: CurrentUser,
     db: DBSession,
 ) -> GroupResponse:
-    """Create new group. Creator becomes starosta."""
+    """Создать группу из расписания rasp (#146). Создатель — староста.
+
+    404 — такой группы нет на rasp.dmami.ru, 409 — группа уже есть (надо вступить),
+    502/503 — rasp недоступен.
+    """
     group_service = GroupService(db)
     return await group_service.create_group(data, user.id)
 
@@ -86,9 +90,19 @@ async def join_group(
     user: CurrentUser,
     db: DBSession,
 ) -> StudentResponse:
-    """Join a group as unverified student."""
+    """Вступить в существующую группу: заявка ждёт старосту. Группу не создаёт (#146)."""
     group_service = GroupService(db)
     return await group_service.join_group(code, user.id)
+
+
+@router.delete("/{code}/membership", status_code=204)
+async def leave_group(
+    code: str,
+    user: CurrentUser,
+    db: DBSession,
+) -> None:
+    """Выйти из группы (#157). Последнего старосту сменяет заместитель, если он есть."""
+    await GroupService(db).leave_group(code, user.id)
 
 
 @router.get("/{code}/subjects", response_model=list[SubjectResponse])
@@ -152,7 +166,7 @@ async def change_student_role(
     db: DBSession,
     _moderator: object = Depends(require_group_moderator),
 ) -> StudentResponse:
-    """Change a student's role (moderator only)."""
+    """Сменить роль участника. Старосту назначает только модератор платформы (#159)."""
     group_service = GroupService(db)
     return await group_service.set_student_role(code, user_id, data.role, user.id)
 

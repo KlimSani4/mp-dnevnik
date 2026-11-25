@@ -7,7 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from src.config import settings
-from src.gateways.telegram.handlers import callbacks, forward, schedule, start
+from src.gateways.telegram.handlers import callbacks, forward, guide, schedule, start
 from src.gateways.telegram.handlers import settings as settings_handler
 
 logger = logging.getLogger(__name__)
@@ -50,10 +50,24 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(queue_handlers.router)
     dp.include_router(schedule.router)
     dp.include_router(settings_handler.router)
+    dp.include_router(guide.router)
     dp.include_router(callbacks.router)
     dp.include_router(forward.router)
 
+    dp.startup.register(set_commands)
     return dp
+
+
+async def set_commands(bot: Bot) -> None:
+    """Команды в меню Telegram (#158). Ошибка не мешает боту стартовать."""
+    from aiogram.types import BotCommand
+
+    from src.gateways.telegram.handlers.start import COMMANDS
+
+    try:
+        await bot.set_my_commands([BotCommand(command=c, description=d) for c, d in COMMANDS])
+    except Exception:  # noqa: BLE001
+        logger.warning("set_my_commands failed", exc_info=True)
 
 
 async def setup_webhook(bot: Bot, webhook_url: str) -> None:
