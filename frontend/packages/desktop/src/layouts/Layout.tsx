@@ -13,6 +13,7 @@ const mainNav = [
   { to: '/schedule', label: 'nav.schedule' as MessageKey, icon: CalendarIcon },
   { to: '/assignments', label: 'nav.assignments' as MessageKey, icon: ClipboardIcon },
   { to: '/subjects', label: 'nav.subjects' as MessageKey, icon: BookIcon },
+  { to: '/queues', label: 'nav.queues' as MessageKey, icon: QueueIcon },
 ]
 
 const secondaryNav = [
@@ -250,6 +251,15 @@ function ClipboardIcon({ className }: { className?: string }) {
 
 function BookIcon({ className }: { className?: string }) {
   return <Icon name="files" className={className} />
+}
+
+// Очередь на сдачу ЛР (#62): нумерованный список
+function QueueIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6h10M10 12h10M10 18h10M4 5h1v3M4 8h2M4 15.5a1 1 0 0 1 2 0c0 .8-2 1.5-2 2.5h2" />
+    </svg>
+  )
 }
 
 function SettingsIcon({ className }: { className?: string }) {

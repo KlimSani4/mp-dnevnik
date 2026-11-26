@@ -19,6 +19,7 @@ from src.api.routes import (
     internal,
     moderation,
     notifications,
+    queues,
     schedule,
     semesters,
     support,
@@ -144,6 +145,7 @@ def create_app() -> FastAPI:
     app.include_router(semesters.router, prefix="/api/v1/subjects", tags=["semesters"])
     app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
     app.include_router(internal.router, prefix="/api/v1/internal", tags=["internal"])
+    app.include_router(queues.router, prefix="/api/v1/queues", tags=["queues"])
     app.include_router(support.router, prefix="/api/v1/support", tags=["support"])
     app.include_router(moderation.router, prefix="/api/v1/moderation", tags=["moderation"])
 

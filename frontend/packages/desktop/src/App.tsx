@@ -7,6 +7,7 @@ import { SchedulePage } from './pages/SchedulePage'
 import { AssignmentsPage } from './pages/AssignmentsPage'
 import { SubjectsPage } from './pages/SubjectsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { QueuesPage } from './pages/QueuesPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { ModerationPage } from './pages/ModerationPage'
@@ -33,6 +34,8 @@ export function App() {
               <Route path="/assignments" element={<AssignmentsPage />} />
               <Route path="/subjects" element={<SubjectsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/queues" element={<QueuesPage />} />
+              <Route path="/queues/:id" element={<QueuesPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/moderation" element={<ModerationPage />} />
             </Route>

@@ -48,6 +48,11 @@ import type {
   Moderator,
   AuditEntry,
   GroupOverview,
+  QueueCreateRequest,
+  QueueDetail,
+  QueueLessonOption,
+  QueueResult,
+  QueueSummary,
 } from '../types'
 
 export function createAuthApi(client: ApiClient) {
@@ -276,6 +281,51 @@ export function createSupportApi(client: ApiClient) {
     },
     applyTeacher(data: TeacherApplicationCreate) {
       return client.post<MyTeacherApplication>('/users/me/teacher-application', data)
+    },
+  }
+}
+
+/** Очередь на сдачу лабораторных (#62). Основной канал — бот, сайт работает с теми же данными. */
+export function createQueuesApi(client: ApiClient) {
+  return {
+    list(group: string) {
+      return client.get<QueueSummary[]>('/queues', { group })
+    },
+    lessons(group: string, date: string) {
+      return client.get<QueueLessonOption[]>('/queues/lessons', { group, date })
+    },
+    open(data: QueueCreateRequest) {
+      return client.post<QueueDetail>('/queues', data)
+    },
+    get(id: string) {
+      return client.get<QueueDetail>(`/queues/${id}`)
+    },
+    join(id: string, labs: number[]) {
+      return client.post<QueueDetail>(`/queues/${id}/join`, { labs })
+    },
+    updateLabs(id: string, labs: number[]) {
+      return client.patch<QueueDetail>(`/queues/${id}/me`, { labs })
+    },
+    leave(id: string) {
+      return client.delete<QueueDetail>(`/queues/${id}/me`)
+    },
+    skip(id: string, toEnd: boolean) {
+      return client.post<QueueDetail>(`/queues/${id}/skip`, { to_end: toEnd })
+    },
+    start(id: string) {
+      return client.post<QueueDetail>(`/queues/${id}/start`)
+    },
+    close(id: string) {
+      return client.post<QueueDetail>(`/queues/${id}/close`)
+    },
+    result(id: string, entryId: string, result: QueueResult) {
+      return client.post<QueueDetail>(`/queues/${id}/entries/${entryId}/result`, { result })
+    },
+    requestSwap(id: string, targetEntryId: string) {
+      return client.post<QueueDetail>(`/queues/${id}/swaps`, { target_entry_id: targetEntryId })
+    },
+    respondSwap(swapId: string, accept: boolean) {
+      return client.post<QueueDetail>(`/queues/swaps/${swapId}/${accept ? 'accept' : 'decline'}`)
     },
   }
 }

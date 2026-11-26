@@ -44,6 +44,10 @@ def create_dispatcher() -> Dispatcher:
 
     # Include routers
     dp.include_router(start.router)
+    # Очередь на сдачу ЛР (#62)
+    from src.gateways.telegram.handlers import queue as queue_handlers
+
+    dp.include_router(queue_handlers.router)
     dp.include_router(schedule.router)
     dp.include_router(settings_handler.router)
     dp.include_router(callbacks.router)
