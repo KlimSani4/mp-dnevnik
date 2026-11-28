@@ -107,8 +107,7 @@ def test_all_jobs_are_single_instance() -> None:
     """Каждая задача планировщика обёрнута блокировкой."""
     for job in (
         sch.send_upcoming_class_notifications,
-        sch.send_evening_digest,
-        sch.send_morning_schedule,
+        *sch.DIGEST_JOBS.values(),
         sch.send_deadline_reminders,
         sch.sync_all_schedules,
     ):

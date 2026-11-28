@@ -17,6 +17,7 @@ from src.core.schemas.notification import (
     NotificationResponse,
     NotificationSettingsUpdate,
 )
+from src.core.services import notify_prefs
 from src.shared.exceptions import AuthorizationError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -93,10 +94,9 @@ class NotificationService:
         # Построить маппинг существующих настроек
         pref_map = {p.type: p.enabled for p in prefs}
 
-        # Вернуть все типы с дефолтным значением True
         all_prefs = []
         for notification_type in NotificationType:
-            enabled = pref_map.get(notification_type, True)
+            enabled = notify_prefs.is_enabled(pref_map, notification_type)
             all_prefs.append(
                 NotificationPreferenceResponse(
                     type=notification_type,
@@ -133,7 +133,7 @@ class NotificationService:
         """Создать уведомление (для внутреннего использования сервисами)."""
         # Проверить настройки пользователя
         pref = await self.preference_repo.get_preference(user_id, notification_type)
-        if pref and not pref.enabled:
+        if not (pref.enabled if pref else notify_prefs.DEFAULTS[notification_type]):
             logger.debug(
                 "Notification suppressed by user preference",
                 extra={"user_id": str(user_id), "type": notification_type.value},
