@@ -55,6 +55,10 @@ import type {
   QueueLessonOption,
   QueueResult,
   QueueSummary,
+  SubjectDetail,
+  SubjectList,
+  SubjectMaterialInput,
+  SubjectWorkInput,
 } from '../types'
 
 export function createAuthApi(client: ApiClient) {
@@ -354,6 +358,49 @@ export function createQueuesApi(client: ApiClient) {
     },
     respondSwap(swapId: string, accept: boolean) {
       return client.post<QueueDetail>(`/queues/swaps/${swapId}/${accept ? 'accept' : 'decline'}`)
+    },
+  }
+}
+
+/** Раздел «Предметы» (#165) */
+export function createSubjectsApi(client: ApiClient) {
+  const s = (semester: number | null | undefined) => (semester ? { semester: String(semester) } : undefined)
+  return {
+    list(group: string, semester: number | 'all' | null) {
+      const params: Record<string, string> = { group }
+      if (semester === 'all') params.all = 'true'
+      else if (semester) params.semester = String(semester)
+      return client.get<SubjectList>('/subjects', params)
+    },
+    get(id: string, semester?: number | null) {
+      return client.get<SubjectDetail>(`/subjects/${id}`, s(semester))
+    },
+    addWork(id: string, data: SubjectWorkInput) {
+      return client.post<SubjectDetail>(`/subjects/${id}/works`, data)
+    },
+    updateWork(workId: string, data: Partial<SubjectWorkInput>) {
+      return client.patch<SubjectDetail>(`/subjects/works/${workId}`, data)
+    },
+    deleteWork(workId: string) {
+      return client.delete<SubjectDetail>(`/subjects/works/${workId}`)
+    },
+    approveWork(workId: string) {
+      return client.post<SubjectDetail>(`/subjects/works/${workId}/approve`)
+    },
+    setProgress(workId: string, passed: boolean, points: number | null) {
+      return client.put<SubjectDetail>(`/subjects/works/${workId}/progress`, { passed, points })
+    },
+    addMaterial(id: string, data: SubjectMaterialInput) {
+      return client.post<SubjectDetail>(`/subjects/${id}/materials`, data)
+    },
+    updateMaterial(materialId: string, data: Partial<SubjectMaterialInput>) {
+      return client.patch<SubjectDetail>(`/subjects/materials/${materialId}`, data)
+    },
+    deleteMaterial(materialId: string) {
+      return client.delete<SubjectDetail>(`/subjects/materials/${materialId}`)
+    },
+    approveMaterial(materialId: string) {
+      return client.post<SubjectDetail>(`/subjects/materials/${materialId}/approve`)
     },
   }
 }

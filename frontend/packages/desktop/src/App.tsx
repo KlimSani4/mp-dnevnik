@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage'
 import { SchedulePage } from './pages/SchedulePage'
 import { AssignmentsPage } from './pages/AssignmentsPage'
 import { SubjectsPage } from './pages/SubjectsPage'
+import { SubjectPage } from './pages/SubjectPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { QueuesPage } from './pages/QueuesPage'
 import { NotificationsPage } from './pages/NotificationsPage'
@@ -35,6 +36,7 @@ export function App() {
               <Route path="/schedule" element={<SchedulePage />} />
               <Route path="/assignments" element={<AssignmentsPage />} />
               <Route path="/subjects" element={<SubjectsPage />} />
+              <Route path="/subjects/:id" element={<SubjectPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/queues" element={<QueuesPage />} />
               <Route path="/queues/:id" element={<QueuesPage />} />

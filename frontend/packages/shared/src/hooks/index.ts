@@ -65,3 +65,5 @@ export {
 } from './useModeration'
 export { useGroupQueues, useQueue, useQueueLessons, useOpenQueue, useQueueAction } from './useQueues'
 export type { QueueAction } from './useQueues'
+export { useSubjectList, useSubject, useSubjectAction } from './useSubjects'
+export type { SubjectAction } from './useSubjects'

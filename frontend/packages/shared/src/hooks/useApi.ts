@@ -13,6 +13,7 @@ import {
   createModerationApi,
   createSupportApi,
   createQueuesApi,
+  createSubjectsApi,
 } from '../api/endpoints'
 import { useAuthStore } from '../stores/auth'
 
@@ -47,6 +48,7 @@ export function useApi() {
       moderation: createModerationApi(client),
       support: createSupportApi(client),
       queues: createQueuesApi(client),
+      subjects: createSubjectsApi(client),
     }),
     [client]
   )

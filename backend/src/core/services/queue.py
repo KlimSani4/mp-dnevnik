@@ -463,9 +463,15 @@ class LabQueueService:
         return await self.detail(queue.id, user)
 
     async def _count_passed(self, queue: LabQueue, entry: LabQueueEntry) -> None:
-        """«Сдал» прибавляет сданные лабы в «Предметах» за текущий семестр."""
+        """«Сдал» прибавляет сданные лабы в «Предметах» за текущий семестр.
+
+        И отмечает «сдал» у лаб с этими номерами в карточке предмета (#165).
+        """
         if not queue.subject_id:
             return
+        from src.core.services.subject import mark_labs_passed
+
+        await mark_labs_passed(self.session, queue.subject_id, entry.user_id, entry.labs or [])
         semester = (
             await self.session.execute(select(Semester).where(Semester.is_current.is_(True)))
         ).scalar_one_or_none()
