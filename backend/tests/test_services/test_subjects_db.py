@@ -344,3 +344,19 @@ async def test_tags(ctx: Ctx) -> None:
     # Чужая группа — нельзя
     r = await c.post(f"/subjects/{nets}/tags", json={"tags": ["x"]}, headers=_auth(ids["outsider"]))
     assert r.status_code == 403
+
+
+def test_schema_outdated_detection() -> None:
+    """Неприменённая миграция узнаётся по ошибке Postgres (#165)."""
+    from src.api.app import is_schema_outdated
+
+    class UndefinedColumnError(Exception):
+        pass
+
+    class DBAPIError(Exception):
+        def __init__(self, orig: Exception) -> None:
+            self.orig = orig
+
+    assert is_schema_outdated(DBAPIError(UndefinedColumnError()))
+    assert not is_schema_outdated(DBAPIError(ValueError()))
+    assert not is_schema_outdated(RuntimeError("x"))

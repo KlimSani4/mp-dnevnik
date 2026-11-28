@@ -449,7 +449,8 @@ export const ru = {
   'subjects.err.notMember': 'Вы не состоите в этой группе. Выберите группу в Настройках.',
   'subjects.err.notFound': 'Группа или предмет не найдены.',
   'subjects.err.server': 'Сервер ответил ошибкой. Попробуйте позже — если повторяется, напишите в поддержку.',
-  'subjects.err.devMigrations': 'Локально: похоже, не применены миграции — выполните в backend «alembic upgrade head» и перезапустите uvicorn.',
+  'subjects.err.devMigrations': 'Локально: проверьте, что uvicorn запущен и в логе нет ошибок; после обновления ветки — «alembic upgrade head» и перезапуск.',
+  'subjects.err.schema': 'База данных сервера не обновлена: не применены миграции. Нужно выполнить «alembic upgrade head» в backend.',
   'subjects.err.retry': 'Попробовать ещё раз',
 
   // roles

@@ -307,15 +307,16 @@ export function ReadOnlyNote() {
 export function LoadError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
   const { t } = useT()
   const e = error instanceof ApiClientError ? error : null
-  let text = t('subjects.err.network')
-  if (e?.code === 'NOT_MEMBER') text = t('subjects.err.notMember')
+  // fetch бросает TypeError только когда ответа нет вовсе: сервер выключен или CORS
+  let text = error instanceof TypeError ? t('subjects.err.network') : t('subjects.err.generic')
+  if (e?.code === 'DB_SCHEMA_OUTDATED') text = t('subjects.err.schema')
+  else if (e?.code === 'NOT_MEMBER') text = t('subjects.err.notMember')
   else if (e?.status === 404) text = t('subjects.err.notFound')
   else if (e && e.status >= 500) text = t('subjects.err.server')
-  else if (e) text = t('subjects.err.generic')
   return (
     <Card className="py-10 text-center">
       <p className="text-sm text-surface-600 dark:text-surface-300">{text}</p>
-      {import.meta.env.DEV && e && e.status >= 500 && (
+      {import.meta.env.DEV && (error instanceof TypeError || (e && e.status >= 500 && e.code !== 'DB_SCHEMA_OUTDATED')) && (
         <p className="mt-2 text-xs text-surface-400">{t('subjects.err.devMigrations')}</p>
       )}
       {e?.code !== 'NOT_MEMBER' && (

@@ -450,7 +450,8 @@ export const en: Messages = {
   'subjects.err.notMember': 'You are not a member of this group. Choose a group in Settings.',
   'subjects.err.notFound': 'Group or subject not found.',
   'subjects.err.server': 'The server returned an error. Try again later — contact support if it keeps happening.',
-  'subjects.err.devMigrations': 'Locally: migrations are probably not applied — run “alembic upgrade head” in backend and restart uvicorn.',
+  'subjects.err.devMigrations': 'Locally: check that uvicorn is running and its log has no errors; after pulling — “alembic upgrade head” and restart.',
+  'subjects.err.schema': 'The server database is outdated: migrations are not applied. Run “alembic upgrade head” in backend.',
   'subjects.err.retry': 'Try again',
 
   // roles
