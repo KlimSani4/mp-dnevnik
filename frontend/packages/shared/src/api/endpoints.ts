@@ -113,7 +113,11 @@ export function createGroupsApi(client: ApiClient) {
       return client.patch<Group>(`/groups/${code}`, data)
     },
     join(code: string) {
-      return client.post<GroupMembership>(`/groups/${code}/join`)
+      return client.post<GroupMembership>(`/groups/${encodeURIComponent(code)}/join`)
+    },
+    /** Выйти из группы (#157) */
+    leave(code: string) {
+      return client.delete<void>(`/groups/${encodeURIComponent(code)}/membership`)
     },
     verify(code: string, userId: string) {
       return client.post<void>(`/groups/${code}/verify/${userId}`)

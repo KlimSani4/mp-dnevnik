@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { format, formatDistanceToNow, differenceInMinutes, isBefore } from 'date-fns'
 import { dateLocale, translate, translatePlural, useT, type MessageKey } from '../i18n'
+import { NoGroupState } from '../components/NoGroupState'
 import clsx from 'clsx'
 import { Card, Badge, ProgressBar, Button, Icon, Avatar } from '../components/ui'
 import { useCurrentUser, useTodaySchedule, useTasks, useUpdateTask, useGroupContext, useDashboard } from '@nexora/shared'
@@ -455,7 +456,7 @@ function TaskList({
 export function HomePage() {
   const { t } = useT()
   // ── API hooks ──
-  const { groupId, groupCode } = useGroupContext()
+  const { groupId, groupCode, isLoading: groupLoading } = useGroupContext()
   const currentUserQuery = useCurrentUser()
   const todayScheduleQuery = useTodaySchedule(groupCode ?? undefined)
   const tasksQuery = useTasks({ group_id: groupId ?? '' })
@@ -553,6 +554,17 @@ export function HomePage() {
   const completionPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
   const todayFormatted = format(new Date(), "d MMMM, EEEE", { locale: dateLocale() })
+
+  if (!groupCode && !groupLoading) {
+    return (
+      <div>
+        <h1 className="text-xl md:text-2xl font-semibold text-surface-900 dark:text-surface-50">
+          {greeting}, {userName}!
+        </h1>
+        <NoGroupState title="noGroup.home.title" text="noGroup.home.text" />
+      </div>
+    )
+  }
 
   if (isApiLoading) {
     return (

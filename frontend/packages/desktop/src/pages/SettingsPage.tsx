@@ -1,19 +1,19 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { clsx } from 'clsx'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Button, Card, Input, Avatar, Icon } from '../components/ui'
+import { Button, Card, Input, Avatar, Icon, Modal } from '../components/ui'
 import {
   useCurrentUser,
   useLogout,
   useMyGroups,
   useApi,
-  useSearchGroups,
-  useJoinGroup,
+  useLeaveGroup,
   useNotificationPreferences,
   useUpdateNotificationPreferences,
 } from '@nexora/shared'
 import type { NotificationPreferenceType } from '@nexora/shared'
 import { GroupMembers } from '../components/GroupMembers'
+import { GroupPicker } from '../components/GroupPicker'
 import { SupportSection } from '../components/SupportSection'
 import { LANGUAGES, useLangStore, useT, type MessageKey } from '../i18n'
 
@@ -38,11 +38,13 @@ export function SettingsPage() {
   const currentUserQuery = useCurrentUser()
   const logoutMutation = useLogout()
   const myGroupsQuery = useMyGroups()
-  const joinGroupMutation = useJoinGroup()
   const api = useApi()
 
   const user = currentUserQuery.data
   const memberships = myGroupsQuery.data ?? []
+
+  const leaveMutation = useLeaveGroup()
+  const [leaving, setLeaving] = useState<{ code: string; role: string } | null>(null)
 
   const [displayName, setDisplayName] = useState('')
   const [savePending, setSavePending] = useState(false)
@@ -53,43 +55,6 @@ export function SettingsPage() {
       setDisplayName(user.display_name)
     }
   }, [user?.display_name])
-
-  // Group search state
-  const [groupSearch, setGroupSearch] = useState('')
-  const [debouncedGroupSearch, setDebouncedGroupSearch] = useState('')
-  const [joinError, setJoinError] = useState<string | null>(null)
-  const [joinSuccess, setJoinSuccess] = useState<string | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const handleGroupSearchChange = (value: string) => {
-    setGroupSearch(value)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setDebouncedGroupSearch(value)
-    }, 400)
-  }
-
-  const searchGroupsQuery = useSearchGroups(
-    debouncedGroupSearch.length >= 2 ? { search: debouncedGroupSearch } : undefined
-  )
-
-  const handleJoinGroup = async (code: string) => {
-    setJoinError(null)
-    setJoinSuccess(null)
-    try {
-      await joinGroupMutation.mutateAsync(code)
-      setJoinSuccess(t('settings.joined', { code }))
-      setGroupSearch('')
-      setDebouncedGroupSearch('')
-    } catch (err: unknown) {
-      const error = err as { status?: number; message?: string }
-      if (error?.status === 409) {
-        setJoinError(t('settings.alreadyMember'))
-      } else {
-        setJoinError(t('settings.joinError'))
-      }
-    }
-  }
 
   type Section = 'profile' | 'notifications' | 'group' | 'support' | 'about'
   const SECTIONS: Section[] = ['profile', 'notifications', 'group', 'support', 'about']
@@ -370,6 +335,29 @@ export function SettingsPage() {
           {/* Group */}
           {activeSection === 'group' && (
             <Card padding="lg">
+              <Modal open={!!leaving} onClose={() => { setLeaving(null); leaveMutation.reset() }} title={t('groupLeave.title', { code: leaving?.code ?? '' })}>
+                <p className="text-sm text-surface-600 dark:text-surface-300">{t('groupLeave.body')}</p>
+                {leaving?.role === 'starosta' && (
+                  <p className="mt-3 rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
+                    {t('groupLeave.starosta')}
+                  </p>
+                )}
+                {leaveMutation.isError && (
+                  <p role="alert" className="mt-3 text-sm text-danger-600">{t('groupLeave.error')}</p>
+                )}
+                <div className="mt-5 flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => setLeaving(null)}>{t('groupLeave.cancel')}</Button>
+                  <Button
+                    variant="danger"
+                    disabled={leaveMutation.isPending}
+                    onClick={() =>
+                      leaving && leaveMutation.mutate(leaving.code, { onSuccess: () => setLeaving(null) })
+                    }
+                  >
+                    {t('groupLeave.confirm')}
+                  </Button>
+                </div>
+              </Modal>
               <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50 mb-6">
                 {t('settings.group')}
               </h2>
@@ -419,10 +407,18 @@ export function SettingsPage() {
                             </span>
                           )}
                           {!membership.verified && (
-                            <span className="text-xs px-2 py-0.5 bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-400 rounded-full font-medium">
+                            <span className="text-xs px-2 py-0.5 bg-warning-100 text-warning-600 dark:bg-warning-500/20 dark:text-warning-500 rounded-full font-medium">
                               {t('settings.pending')}
                             </span>
                           )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger-600 dark:text-danger-500"
+                            onClick={() => setLeaving({ code: membership.group.code, role: membership.role })}
+                          >
+                            {t('groupLeave.button')}
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -430,67 +426,12 @@ export function SettingsPage() {
                 )}
               </div>
 
-              {/* Join group */}
+              {/* Вступить или создать (#146) */}
               <div className="pt-4 border-t border-surface-200 dark:border-surface-700">
                 <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-3">
-                  {memberships.length > 0 ? t('settings.joinOther') : t('settings.findGroup')}
+                  {memberships.length > 0 ? t('groupPicker.anotherTitle') : t('groupPicker.title')}
                 </p>
-
-                <Input
-                  placeholder={t('settings.groupPlaceholder')}
-                  value={groupSearch}
-                  onChange={(e) => handleGroupSearchChange(e.target.value)}
-                />
-
-                {joinError && (
-                  <p className="mt-2 text-sm text-danger-500">{joinError}</p>
-                )}
-                {joinSuccess && (
-                  <p className="mt-2 text-sm text-success-600 dark:text-success-400">{joinSuccess}</p>
-                )}
-
-                {debouncedGroupSearch.length >= 2 && (
-                  <div className="mt-2 border border-surface-200 dark:border-surface-700 rounded-lg overflow-hidden">
-                    {searchGroupsQuery.isLoading ? (
-                      <div className="px-4 py-3 text-sm text-surface-500 dark:text-surface-400">
-                        {t('settings.searching')}
-                      </div>
-                    ) : !searchGroupsQuery.data || searchGroupsQuery.data.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-surface-500 dark:text-surface-400">
-                        {t('settings.groupsNotFound')}
-                      </div>
-                    ) : (
-                      searchGroupsQuery.data.map((group) => {
-                        const alreadyMember = memberships.some((m) => m.group.code === group.code)
-                        return (
-                          <div
-                            key={group.id}
-                            className="flex items-center justify-between px-4 py-3 border-b border-surface-100 dark:border-surface-700 last:border-0 hover:bg-surface-50 dark:hover:bg-surface-700/50 transition-colors"
-                          >
-                            <div>
-                              <div className="text-sm font-medium text-surface-900 dark:text-surface-50">
-                                {group.code}
-                              </div>
-                              {group.name && (
-                                <div className="text-xs text-surface-500 dark:text-surface-400">
-                                  {group.name}
-                                </div>
-                              )}
-                            </div>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={alreadyMember || joinGroupMutation.isPending}
-                              onClick={() => handleJoinGroup(group.code)}
-                            >
-                              {alreadyMember ? t('settings.inGroup') : t('settings.join')}
-                            </Button>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                )}
+                <GroupPicker />
               </div>
 
               {/* Управление участниками: староста, заместитель, помощник */}

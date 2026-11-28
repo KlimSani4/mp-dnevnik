@@ -21,7 +21,7 @@ export interface GroupMembership {
 
 export interface GroupCreateRequest {
   code: string
-  name: string
+  name?: string
 }
 
 export interface GroupUpdateRequest {

@@ -1,9 +1,10 @@
 """Callback query handlers."""
 
 import logging
-import re
+from html import escape
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -23,52 +24,94 @@ class GroupSelection(StatesGroup):
 
 @router.callback_query(F.data == "settings:group")
 async def callback_settings_group(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle group selection callback."""
+    """Попросить номер группы."""
     await callback.answer()
     await state.set_state(GroupSelection.waiting_for_group)
     await callback.message.answer(  # type: ignore[union-attr]
-        "📚 <b>Выбор группы</b>\n\nВведите номер группы (например, 231-329):"
+        "📚 <b>Ваша группа</b>\n\n"
+        "Напишите номер, как в расписании Политеха: например, <code>241-327</code> "
+        "или <code>24А-431</code>.\n\n"
+        "• Если группа уже есть в Nexora — отправим заявку старосте.\n"
+        "• Если вы первый из группы — создадим её, а вы станете старостой.\n\n"
+        "Передумали — /cancel"
     )
+
+
+@router.message(GroupSelection.waiting_for_group, Command("cancel"))
+async def cancel_group_input(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Ок, группу не меняем. Настройки — /settings")
 
 
 @router.message(GroupSelection.waiting_for_group)
 async def process_group_input(message: Message, state: FSMContext) -> None:
-    """Process group code input."""
+    """Вступить в группу или создать её (#146), с подсказкой, что дальше (#158)."""
+    from src.shared.exceptions import ExternalServiceError, NotFoundError
+
     tg_user = message.from_user
     if not tg_user or not message.text:
-        await message.answer("Пожалуйста, введите номер группы текстом.")
+        await message.answer("Напишите номер группы текстом, например <code>241-327</code>.")
         return
 
-    group_code = message.text.strip().upper()
-
-    # Validate group code format (e.g., 231-329, 241-1234)
-    if not re.match(r"^\d{3}-\d{3,4}$", group_code):
+    group_code = message.text.strip()
+    if len(group_code) > 16 or group_code.startswith("/"):
         await message.answer(
-            "❌ Неверный формат группы.\n\nВведите номер в формате XXX-XXX или XXX-XXXX:"
+            "Это не похоже на номер группы. Пример: <code>241-327</code>. Передумали — /cancel"
         )
         return
 
-    # Save group to database
     try:
         async with get_session() as session:
-            group_service = GroupService(session)
-            student = await group_service.join_group_by_telegram(
+            student = await GroupService(session).join_group_by_telegram(
                 telegram_id=str(tg_user.id),
                 group_code=group_code,
             )
-            await session.commit()
-            logger.info(f"Group joined: {group_code}, student: {student.id}")
-    except Exception as e:
-        logger.exception(f"Failed to join group: {e}")
-        await message.answer(f"❌ Ошибка: {e}")
+            from src.core.models.group import Group
+
+            group = await session.get(Group, student.group_id)
+            code = group.code if group else group_code
+    except NotFoundError as e:
+        if "/start" in e.detail:
+            await message.answer("Сначала войдите в Nexora: /start")
+            await state.clear()
+            return
+        await message.answer(
+            f"❌ Группы <b>{escape(group_code)}</b> нет в расписании Политеха.\n\n"
+            "Проверьте номер на rasp.dmami.ru и напишите ещё раз. Передумали — /cancel"
+        )
+        return
+    except ExternalServiceError:
+        await message.answer(
+            "Расписание Политеха сейчас не отвечает, не можем проверить номер. "
+            "Попробуйте через пару минут."
+        )
+        return
+    except Exception:
+        logger.exception("Failed to join group")
+        await message.answer("❌ Не получилось. Попробуйте ещё раз или напишите в поддержку.")
         return
 
-    # Clear state
     await state.clear()
-
-    await message.answer(
-        f"✅ Группа <b>{group_code}</b> сохранена!\n\nТеперь можно посмотреть расписание: /schedule"
-    )
+    if student.role == "starosta" and student.verified:
+        text = (
+            f"🎉 Группа <b>{escape(code)}</b> создана, вы — староста.\n\n"
+            "Что дальше:\n"
+            "1. Позовите одногруппников: пусть напишут боту номер группы.\n"
+            "2. Их заявки придут вам — подтвердите на сайте в Настройках → Группа "
+            "(видно, кто это в Telegram).\n"
+            "3. Расписание уже подтянулось: /schedule\n\n"
+            "Подробнее — /guide"
+        )
+    elif student.verified:
+        text = f"Вы уже в группе <b>{escape(code)}</b>. Расписание — /schedule"
+    else:
+        text = (
+            f"✅ Заявка в группу <b>{escape(code)}</b> отправлена старосте.\n\n"
+            "Расписание уже доступно: /schedule. Остальное откроется, когда староста "
+            "подтвердит заявку.\n\n"
+            "Как всё устроено — /guide"
+        )
+    await message.answer(text)
 
 
 async def _reminder_state(tg_user_id: int) -> tuple[bool, int] | None:

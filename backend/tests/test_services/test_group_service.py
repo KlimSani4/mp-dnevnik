@@ -63,6 +63,20 @@ def _make_service(session: MagicMock) -> GroupService:
     return svc
 
 
+@pytest.fixture(autouse=True)
+def _rasp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Без сети: любой код «есть на rasp», расписание пустое (#146)."""
+
+    async def resolve(code: str) -> str:
+        return code.strip()
+
+    async def no_schedule(code: str) -> list[object]:
+        return []
+
+    monkeypatch.setattr("src.core.services.group.resolve_group_code", resolve)
+    monkeypatch.setattr("src.integrations.rasp_parser.fetch_group_schedule", no_schedule)
+
+
 # ---------------------------------------------------------------------------
 # join_group
 # ---------------------------------------------------------------------------
@@ -94,29 +108,16 @@ class TestJoinGroup:
         session.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_auto_creates_group_when_not_found(self) -> None:
+    async def test_does_not_create_missing_group(self) -> None:
+        """Вступление больше не создаёт группу молча (#146)."""
         session = MagicMock()
-        session.commit = AsyncMock()
         svc = _make_service(session)
-
-        user_id = _uuid()
-        new_group = _make_group(owner_id=user_id)
-        student = _make_student(user_id, new_group.id)
-
         svc.group_repo.get_by_code = AsyncMock(return_value=None)
-        svc.group_repo.create = AsyncMock(return_value=new_group)
-        svc.student_repo.get_by_user_and_group = AsyncMock(return_value=None)
-        svc.student_repo.create = AsyncMock(return_value=student)
-        svc.audit_repo.log = AsyncMock()
+        svc.group_repo.create = AsyncMock()
 
-        with __import__("unittest.mock", fromlist=["patch"]).patch(
-            "src.core.services.group.StudentResponse.model_validate",
-            side_effect=lambda x: x,
-        ):
-            result = await svc.join_group("NEW-123", user_id)
-
-        svc.group_repo.create.assert_awaited_once()
-        assert result is student
+        with pytest.raises(NotFoundError):
+            await svc.join_group("NEW-123", _uuid())
+        svc.group_repo.create.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_raises_if_already_member(self) -> None:
@@ -143,6 +144,7 @@ class TestCreateGroup:
     async def test_creates_group_and_starosta(self) -> None:
         session = MagicMock()
         session.commit = AsyncMock()
+        session.rollback = AsyncMock()
         svc = _make_service(session)
 
         owner_id = _uuid()
@@ -168,6 +170,7 @@ class TestCreateGroup:
             group_id=group.id,
             role=StudentRole.STAROSTA,
             verified=True,
+            joined_via="site",
         )
 
     @pytest.mark.asyncio
@@ -182,6 +185,20 @@ class TestCreateGroup:
 
         with pytest.raises(ConflictError):
             await svc.create_group(data, _uuid())
+
+    @pytest.mark.asyncio
+    async def test_code_not_on_rasp_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Код, которого нет в расписании Политеха, занять нельзя (#112, #146)."""
+
+        async def missing(code: str) -> None:
+            return None
+
+        monkeypatch.setattr("src.core.services.group.resolve_group_code", missing)
+        svc = _make_service(MagicMock())
+        svc.group_repo.create = AsyncMock()
+        with pytest.raises(NotFoundError):
+            await svc.create_group(GroupCreate(code="999-999"), _uuid())
+        svc.group_repo.create.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
