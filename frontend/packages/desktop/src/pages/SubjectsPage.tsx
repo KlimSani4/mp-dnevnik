@@ -35,6 +35,10 @@ export function SubjectsPage() {
     setParams(next, { replace: true })
   }
 
+  // Хуки — до раннего return: иначе при загрузке группы React падает на смене числа хуков
+  const filters = readFilters(params)
+  const shown = useMemo(() => applyFilters(data?.subjects ?? [], filters), [data, params]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!groupCode && !groupLoading) {
     return (
       <div>
@@ -46,8 +50,6 @@ export function SubjectsPage() {
 
   const selected: number | 'all' | null = requested === 'all' ? 'all' : (data?.selected_semester ?? null)
   const semesters = data?.semesters ?? []
-  const filters = readFilters(params)
-  const shown = useMemo(() => applyFilters(data?.subjects ?? [], filters), [data, params]) // eslint-disable-line react-hooks/exhaustive-deps
   const setFilters = (next: Partial<Filters>) => {
     const p = new URLSearchParams(params)
     const merged = { ...filters, ...next }
@@ -318,6 +320,12 @@ export function LoadError({ error, onRetry }: { error: unknown; onRetry: () => v
       <p className="text-sm text-surface-600 dark:text-surface-300">{text}</p>
       {import.meta.env.DEV && (error instanceof TypeError || (e && e.status >= 500 && e.code !== 'DB_SCHEMA_OUTDATED')) && (
         <p className="mt-2 text-xs text-surface-400">{t('subjects.err.devMigrations')}</p>
+      )}
+      {import.meta.env.DEV && (
+        // Локально показываем саму ошибку: по скриншоту сразу видно причину
+        <p className="mt-1 font-mono text-xs text-surface-400">
+          {e ? `${e.status} ${e.code}: ${e.message}` : String(error)}
+        </p>
       )}
       {e?.code !== 'NOT_MEMBER' && (
         <button type="button" onClick={onRetry} className="mt-3 text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">
