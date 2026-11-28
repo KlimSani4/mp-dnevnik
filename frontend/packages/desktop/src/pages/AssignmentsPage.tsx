@@ -384,6 +384,7 @@ interface CreateAssignmentModalProps {
     teacher_contact?: string
     submission_link?: string
     is_personal: boolean
+    max_points: number | null
   }) => void
 }
 
@@ -400,6 +401,7 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
   const [teacherContact, setTeacherContact] = useState('')
   const [submissionLink, setSubmissionLink] = useState('')
   const [isPersonal, setIsPersonal] = useState(false)
+  const [maxPoints, setMaxPoints] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Custom subject inline input
@@ -416,6 +418,7 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
     setTeacherContact('')
     setSubmissionLink('')
     setIsPersonal(false)
+    setMaxPoints('')
     setErrors({})
     setShowCustomSubjectInput(false)
     setCustomSubjectName('')
@@ -449,10 +452,11 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
         teacher_contact: teacherContact.trim() || undefined,
         submission_link: submissionLink.trim() || undefined,
         is_personal: isPersonal,
+        max_points: maxPoints.trim() === '' ? null : Math.max(0, Number(maxPoints.replace(',', '.')) || 0),
       })
       resetForm()
     },
-    [subjectId, title, description, deadline, priority, link, teacherContact, submissionLink, isPersonal, validate, onSubmit, resetForm],
+    [subjectId, title, description, deadline, priority, link, teacherContact, submissionLink, isPersonal, maxPoints, validate, onSubmit, resetForm],
   )
 
   const handleCreateCustomSubject = useCallback(() => {
@@ -588,10 +592,11 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
                 placeholder={t('assign.descriptionPlaceholder')}
                 rows={8}
                 className={clsx(
-                  'input resize-none',
+                  'input resize-y font-mono text-[13px]',
                   errors.description && 'border-danger-500 focus:ring-danger-500/20 focus:border-danger-500',
                 )}
               />
+              <p className="text-xs text-surface-400">{t('assign.markdownHint')}</p>
               {errors.description && (
                 <p className="text-xs text-danger-500">{errors.description}</p>
               )}
@@ -624,10 +629,18 @@ function CreateAssignmentModal({ open, onClose, subjects, groupCode, onSubmit }:
               label={t('assign.deadline')}
               value={deadline}
               onChange={setDeadline}
-              min={today()}
               error={errors.deadline}
             />
             <PriorityDropdown value={priority} onChange={setPriority} />
+            <Input
+              label={t('assign.maxPoints')}
+              type="number"
+              min={0}
+              step="any"
+              value={maxPoints}
+              onChange={(e) => setMaxPoints(e.target.value)}
+              placeholder={t('assign.maxPointsPlaceholder')}
+            />
               </section>
 
               {/* Personal toggle */}
@@ -705,7 +718,14 @@ export function AssignmentsPage() {
   const [userVotes, setUserVotes] = useState<Record<string, 'up' | 'down' | null>>({})
 
   // Detail modal
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Карточку берём из свежего списка по id задания: после смены статуса или балла
+  // она не устаревает (id задачи без статуса генерируется заново на каждый запрос)
+  const selectedTask = useMemo<Task | null>(() => {
+    const found = selectedId ? tasks.find((x) => x.assignment.id === selectedId) : undefined
+    return found ?? null
+  }, [tasks, selectedId])
+  const setSelectedTask = useCallback((task: Task | null) => setSelectedId(task?.assignment.id ?? null), [])
 
   // DnD state
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -800,6 +820,7 @@ export function AssignmentsPage() {
       teacher_contact?: string
       submission_link?: string
       is_personal: boolean
+      max_points: number | null
     }) => {
       const extras: string[] = []
       if (data.teacher_contact) extras.push(`Преподаватель: ${data.teacher_contact}`)
@@ -817,6 +838,7 @@ export function AssignmentsPage() {
         priority: data.priority,
         link: data.link || undefined,
         is_personal: data.is_personal,
+        max_points: data.max_points,
       })
       setCreateModalOpen(false)
     },
@@ -1090,8 +1112,8 @@ export function AssignmentsPage() {
         task={selectedTask}
         onClose={() => setSelectedTask(null)}
         onStateChange={(taskId, newState) => {
+          // Не закрываем: после «Сдал» / «Зачтено» сразу можно вписать балл (#165)
           moveTask(taskId, newState)
-          setSelectedTask(null)
         }}
         onVote={(assignmentId, vote) => {
           toggleVote(assignmentId, vote === 1 ? 'up' : 'down')

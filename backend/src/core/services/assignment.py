@@ -68,6 +68,7 @@ class AssignmentService:
             link=data.link,
             author_id=author_id,
             is_personal=data.is_personal,
+            max_points=data.max_points,
         )
 
         await self.audit_repo.log(
@@ -281,8 +282,14 @@ class AssignmentService:
         user_id: uuid.UUID,
         assignment_id: uuid.UUID,
         state: TaskState,
+        points: float | None = None,
+        *,
+        set_points: bool = False,
     ) -> TaskStatusResponse:
-        """Update user's task status."""
+        """Update user's task status.
+
+        set_points: менять ли полученный балл (points=None при этом стирает его, #165).
+        """
         assignment = await self.assignment_repo.get(assignment_id)
         if not assignment:
             raise NotFoundError("Assignment not found")
@@ -293,13 +300,18 @@ class AssignmentService:
 
         task = await self.task_repo.get_or_create(student.id, assignment_id)
         task = await self.task_repo.update_state(task, state)
+        if set_points:
+            task.points = points
         await self.session.commit()
+        # updated_at обновляет БД: после UPDATE атрибут истёк, без refresh — MissingGreenlet
+        await self.session.refresh(task)
 
         return TaskStatusResponse(
             id=task.id,
             student_id=task.student_id,
             assignment_id=task.assignment_id,
             state=task.state,
+            points=task.points,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -323,6 +335,7 @@ class AssignmentService:
 
             task = await self.task_repo.get_or_create(student.id, item.assignment_id)
             task = await self.task_repo.update_state(task, item.state)
+            await self.session.refresh(task)  # updated_at истёк после UPDATE
             results.append(TaskStatusResponse.model_validate(task))
 
         await self.session.commit()

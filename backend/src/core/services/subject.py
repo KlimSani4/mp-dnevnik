@@ -22,7 +22,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.academic import course_of, is_autumn, term_for
-from src.core.models.assignment import Assignment
+from src.core.models.assignment import Assignment, TaskStatus
 from src.core.models.group import Group, Student, StudentRole
 from src.core.models.schedule import ScheduleEntry, Subject
 from src.core.models.subject_content import (
@@ -333,6 +333,28 @@ class SubjectService:
             .scalars()
             .all()
         )
+        # Баллы за задания с максимумом: в сумму баллов предмета (#165)
+        my_students = select(Student.id).where(Student.user_id == viewer.user.id)
+        scored: dict[uuid.UUID, list[tuple[float, float | None]]] = defaultdict(list)
+        for subject_id, max_points, got in (
+            await self.session.execute(
+                select(Assignment.subject_id, Assignment.max_points, TaskStatus.points)
+                .outerjoin(
+                    TaskStatus,
+                    (TaskStatus.assignment_id == Assignment.id)
+                    & TaskStatus.student_id.in_(my_students),
+                )
+                .where(
+                    Assignment.subject_id.in_(subject_ids),
+                    Assignment.max_points.is_not(None),
+                    or_(
+                        Assignment.is_personal.is_(False),
+                        Assignment.author_id == viewer.user.id,
+                    ),
+                )
+            )
+        ).all():
+            scored[subject_id].append((max_points, got))
         authors: dict[uuid.UUID, str] = {}
         author_ids: set[uuid.UUID] = {w.author_id for w in works if w.author_id} | {
             m.author_id for m in materials if m.author_id
@@ -369,6 +391,7 @@ class SubjectService:
             "progress": progress,
             "entries": by_subject(list(entries)),
             "assignments": by_subject(list(assignments)),
+            "scored": scored,
             "authors": authors,
         }
 
@@ -409,6 +432,7 @@ class SubjectService:
             for x in [*data["works"].get(subject.id, []), *data["materials"].get(subject.id, [])]
             if x.status == ContentStatus.PENDING
         )
+        scored = data.get("scored", {}).get(subject.id, [])
         deadlines = self._deadlines(subject.id, data)
         return SubjectSummary(
             id=subject.id,
@@ -428,8 +452,8 @@ class SubjectService:
             last_semester=subject.last_semester,
             works_total=len(works),
             works_passed=len(passed),
-            points=round(points, 2),
-            max_points=round(sum(w.max_points or 0 for w in works), 2),
+            points=round(points + sum(got or 0 for _, got in scored), 2),
+            max_points=round(sum(w.max_points or 0 for w in works) + sum(m for m, _ in scored), 2),
             required=self._required(viewer, subject.id),
             materials=sum(
                 1

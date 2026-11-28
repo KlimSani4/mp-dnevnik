@@ -11,6 +11,7 @@ import type { Task } from '@nexora/shared'
 import { Badge, Card, Icon } from './ui'
 import { AssignmentDetailModal } from './AssignmentDetailModal'
 import { useT, type MessageKey } from '../i18n'
+import { fmt } from '../pages/SubjectsPage'
 import { formatDeadline, isOverdue, PRIORITY_BADGE_VARIANT, PRIORITY_LABELS } from '../types/assignments'
 
 const STATE_LABEL: Record<string, MessageKey> = {
@@ -48,7 +49,8 @@ export function SubjectAssignments({ subjectId }: { subjectId: string }) {
     [tasksQuery.data, subjectId],
   )
   // Берём задание из свежих данных: после смены статуса карточка не устаревает
-  const selected = tasks.find((x) => x.id === openId) ?? null
+  // id задачи без статуса генерируется заново на каждый запрос — держимся за id задания
+  const selected = tasks.find((x) => x.assignment.id === openId) ?? null
   const left = tasks.filter((x) => x.state !== 'done').length
 
   return (
@@ -76,10 +78,10 @@ export function SubjectAssignments({ subjectId }: { subjectId: string }) {
             const done = task.state === 'done'
             const overdue = !done && isOverdue(a.deadline)
             return (
-              <li key={task.id}>
+              <li key={a.id}>
                 <button
                   type="button"
-                  onClick={() => setOpenId(task.id)}
+                  onClick={() => setOpenId(a.id)}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-50 dark:hover:bg-surface-800/60"
                 >
                   <span className={clsx('h-2 w-2 shrink-0 rounded-full', STATE_DOT[task.state] ?? STATE_DOT.todo)} title={t(STATE_LABEL[task.state] ?? 'assign.col.todo')} />
@@ -94,6 +96,11 @@ export function SubjectAssignments({ subjectId }: { subjectId: string }) {
                   </span>
                   {a.priority !== 'normal' && a.priority !== 'low' && (
                     <Badge variant={PRIORITY_BADGE_VARIANT[a.priority]}>{t(PRIORITY_LABELS[a.priority])}</Badge>
+                  )}
+                  {a.max_points != null && (
+                    <span className={clsx('shrink-0 text-xs tabular-nums', task.points != null ? 'font-medium text-surface-700 dark:text-surface-200' : 'text-surface-400')}>
+                      {t('subjects.assignmentPoints', { got: task.points != null ? fmt(task.points) : '—', max: fmt(a.max_points) })}
+                    </span>
                   )}
                   {a.link && <Icon name="link" size={14} className="shrink-0 text-surface-400" />}
                   <span className={clsx('shrink-0 text-xs tabular-nums', overdue ? 'font-semibold text-danger-600 dark:text-danger-500' : 'text-surface-500 dark:text-surface-400')}>
@@ -110,8 +117,8 @@ export function SubjectAssignments({ subjectId }: { subjectId: string }) {
         task={selected}
         onClose={() => setOpenId(null)}
         onStateChange={(_, state) => {
+          // Модалку не закрываем: после «Сдал» сразу можно вписать балл
           if (selected) updateTask.mutate({ assignmentId: selected.assignment.id, data: { state } })
-          setOpenId(null)
         }}
         onVote={(assignmentId, v) => vote.mutate({ id: assignmentId, data: { vote: v } })}
       />

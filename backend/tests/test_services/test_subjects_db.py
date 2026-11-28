@@ -346,6 +346,59 @@ async def test_tags(ctx: Ctx) -> None:
     assert r.status_code == 403
 
 
+async def test_assignment_points(ctx: Ctx) -> None:
+    """Максимальный балл задания и полученный балл идут в баллы предмета (#165)."""
+    c, ids, maker = ctx
+    async with maker() as s:
+        gid = (await s.execute(select(Group.id).where(Group.code == CODE))).scalar_one()
+    base = {"group_id": str(gid), "subject_id": str(ids["nets"]), "description": "**жирный**"}
+    # Дедлайн в прошлом разрешён
+    r = await c.post(
+        "/assignments",
+        json=base | {"title": "ДЗ 1", "deadline": "2020-01-01T10:00:00Z", "max_points": 10},
+        headers=_auth(ids["head"]),
+    )
+    assert r.status_code == 201, r.text
+    hw = r.json()["id"]
+    assert r.json()["max_points"] == 10
+    r = await c.post(
+        "/assignments", json=base | {"title": "Без баллов"}, headers=_auth(ids["head"])
+    )
+    assert r.status_code == 201 and r.json()["max_points"] is None
+
+    async def nets(uid: Any) -> dict[str, Any]:
+        r = await c.get(f"/subjects?group={CODE}", headers=_auth(uid))
+        return next(x for x in r.json()["subjects"] if x["name"] == "Сети ЭВМ")
+
+    assert (await nets(ids["anna"]))["max_points"] == 10
+    assert (await nets(ids["anna"]))["points"] == 0
+
+    r = await c.patch(
+        f"/tasks/{hw}", json={"state": "done", "points": 8.5}, headers=_auth(ids["anna"])
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["points"] == 8.5
+    assert (await nets(ids["anna"]))["points"] == 8.5
+    assert (await nets(ids["boris"]))["points"] == 0  # балл личный
+
+    # Смена статуса без points балл не трогает, points=null — стирает
+    r = await c.patch(f"/tasks/{hw}", json={"state": "review"}, headers=_auth(ids["anna"]))
+    assert r.json()["points"] == 8.5
+    tasks = (await c.get(f"/tasks?group_id={gid}", headers=_auth(ids["anna"]))).json()
+    assert next(t for t in tasks if t["assignment"]["id"] == hw)["points"] == 8.5
+    r = await c.patch(
+        f"/tasks/{hw}", json={"state": "done", "points": None}, headers=_auth(ids["anna"])
+    )
+    assert r.json()["points"] is None
+
+    r = await c.patch(f"/assignments/{hw}", json={"max_points": 20}, headers=_auth(ids["head"]))
+    assert r.status_code == 200 and r.json()["max_points"] == 20
+    r = await c.patch(
+        f"/tasks/{hw}", json={"state": "done", "points": -1}, headers=_auth(ids["anna"])
+    )
+    assert r.status_code == 422
+
+
 def test_schema_outdated_detection() -> None:
     """Неприменённая миграция узнаётся по ошибке Postgres (#165)."""
     from src.api.app import is_schema_outdated

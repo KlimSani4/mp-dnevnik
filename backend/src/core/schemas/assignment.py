@@ -17,6 +17,7 @@ class AssignmentBase(BaseModel):
     deadline: datetime | None = None
     priority: str = Field("normal", pattern="^(low|normal|high|urgent)$")
     link: str | None = Field(None, max_length=512)
+    max_points: float | None = Field(None, ge=0, le=1000)
 
 
 class AssignmentCreate(AssignmentBase):
@@ -36,6 +37,7 @@ class AssignmentUpdate(BaseModel):
     priority: str | None = Field(None, pattern="^(low|normal|high|urgent)$")
     link: str | None = None
     is_personal: bool | None = None
+    max_points: float | None = Field(None, ge=0, le=1000)
 
 
 class AssignmentResponse(AssignmentBase):
@@ -82,12 +84,17 @@ class TaskStatusBase(BaseModel):
     """Base task status schema."""
 
     state: TaskState = TaskState.TODO
+    points: float | None = None
 
 
 class TaskStatusUpdate(BaseModel):
-    """Task status update schema."""
+    """Task status update schema.
+
+    points: полученный балл. Не передан — не трогаем, null — стереть (#165).
+    """
 
     state: TaskState
+    points: float | None = Field(None, ge=0, le=1000)
 
 
 class TaskStatusResponse(TaskStatusBase):

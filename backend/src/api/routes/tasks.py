@@ -49,4 +49,10 @@ async def update_task_status(
 ) -> TaskStatusResponse:
     """Update task status for an assignment."""
     assignment_service = AssignmentService(db)
-    return await assignment_service.update_task_status(user.id, assignment_id, data.state)
+    return await assignment_service.update_task_status(
+        user.id,
+        assignment_id,
+        data.state,
+        data.points,
+        set_points="points" in data.model_fields_set,
+    )

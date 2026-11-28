@@ -22,6 +22,8 @@ export interface Assignment {
   votes_down: number
   is_verified: boolean
   author_id: string
+  /** Максимальный балл; null — без баллов (#165) */
+  max_points?: number | null
   subject: Subject
   created_at: string
 }
@@ -29,6 +31,8 @@ export interface Assignment {
 export interface Task {
   id: string
   state: TaskState
+  /** Полученный балл (#165) */
+  points?: number | null
   assignment: Assignment
   updated_at: string
 }
