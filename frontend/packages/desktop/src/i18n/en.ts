@@ -454,6 +454,10 @@ export const en: Messages = {
   'subjects.err.schema': 'The server database is outdated: migrations are not applied. Run “alembic upgrade head” in backend.',
   'subjects.err.retry': 'Try again',
 
+  'subjects.assignments': 'Assignments',
+  'subjects.assignmentsLeft': '{n} of {total} left',
+  'subjects.assignmentsAll': 'All assignments',
+  'subjects.assignmentsEmpty': 'No assignments for this subject yet. Add them in Assignments.',
   // roles
   'roles.deputy': 'Deputy',
   'roles.starosta': 'Group head',

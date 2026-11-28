@@ -9,7 +9,7 @@ import {
   useCreateCustomSubject,
 } from '@nexora/shared'
 import clsx from 'clsx'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { startOfDay, addDays, isBefore } from 'date-fns'
 import {
   DndContext,
@@ -690,7 +690,9 @@ export function AssignmentsPage() {
 
   // Filters
   const [search, setSearch] = useState('')
-  const [subjectFilter, setSubjectFilter] = useState('')
+  // ?subject=<id> — переход со страницы предмета сразу с фильтром (#165)
+  const [searchParams] = useSearchParams()
+  const [subjectFilter, setSubjectFilter] = useState(() => searchParams.get('subject') ?? '')
   const [deadlineFilter, setDeadlineFilter] = useState('')
 
   // Mobile column selector

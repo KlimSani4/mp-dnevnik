@@ -20,6 +20,7 @@ import type {
 } from '@nexora/shared'
 import { Button, Card, Icon, Input, Modal, Skeleton } from '../components/ui'
 import { DeadlineChip, fmt, LoadError, ReadOnlyNote } from './SubjectsPage'
+import { SubjectAssignments } from '../components/SubjectAssignments'
 import { useT, type MessageKey } from '../i18n'
 
 const WEEKDAYS: MessageKey[] = ['wd.mon', 'wd.tue', 'wd.wed', 'wd.thu', 'wd.fri', 'wd.sat', 'wd.sun' as MessageKey]
@@ -106,6 +107,9 @@ export function SubjectPage() {
           hint={s.next_deadline?.title}
         />
       </div>
+
+      {/* Задания из раздела «Задания» по этому предмету */}
+      <SubjectAssignments subjectId={s.id} />
 
       {/* Работы */}
       <Section

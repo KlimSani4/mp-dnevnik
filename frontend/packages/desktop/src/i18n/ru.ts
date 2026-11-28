@@ -453,6 +453,10 @@ export const ru = {
   'subjects.err.schema': 'База данных сервера не обновлена: не применены миграции. Нужно выполнить «alembic upgrade head» в backend.',
   'subjects.err.retry': 'Попробовать ещё раз',
 
+  'subjects.assignments': 'Задания',
+  'subjects.assignmentsLeft': 'осталось {n} из {total}',
+  'subjects.assignmentsAll': 'Все задания',
+  'subjects.assignmentsEmpty': 'По этому предмету заданий пока нет. Их добавляют в разделе «Задания».',
   // roles
   'roles.deputy': 'Зам',
   'roles.starosta': 'Староста',
