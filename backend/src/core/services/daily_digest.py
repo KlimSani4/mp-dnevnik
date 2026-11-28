@@ -1,4 +1,4 @@
-"""Тексты утреннего сообщения бота: пары на сегодня и ближайшие дедлайны (#135).
+"""Тексты ежедневной сводки бота: пары на день и ближайшие дедлайны (#135, #32).
 
 Только форматирование, без базы и Telegram, чтобы текст можно было проверить тестами.
 """
@@ -79,6 +79,38 @@ def format_morning(
     today: date,
 ) -> str:
     """Утреннее сообщение (HTML для Telegram)."""
+    return _format_day(
+        lessons,
+        deadlines,
+        today,
+        header="☀️ <b>Доброе утро!</b> Сегодня",
+        empty="☀️ <b>Доброе утро!</b> Сегодня пар нет",
+    )
+
+
+def format_evening(
+    lessons: Sequence[DigestLesson],
+    deadlines: Sequence[DigestDeadline],
+    today: date,
+) -> str:
+    """Вечерняя сводка на завтра (HTML для Telegram). today — сегодняшний день."""
+    return _format_day(
+        lessons,
+        deadlines,
+        today,
+        header="🌙 <b>Завтра</b>",
+        empty="🌙 <b>Завтра пар нет</b>",
+    )
+
+
+def _format_day(
+    lessons: Sequence[DigestLesson],
+    deadlines: Sequence[DigestDeadline],
+    today: date,
+    *,
+    header: str,
+    empty: str,
+) -> str:
     lessons = unique_lessons(lessons)
     lines: list[str] = []
 
@@ -88,9 +120,7 @@ def format_morning(
         span = first.start.strftime("%H:%M")
         if last.end:
             span += f"–{last.end.strftime('%H:%M')}"
-        lines.append(
-            f"☀️ <b>Доброе утро!</b> Сегодня {n} {plural(n, 'пара', 'пары', 'пар')}, {span}"
-        )
+        lines.append(f"{header} {n} {plural(n, 'пара', 'пары', 'пар')}, {span}")
         lines.append("")
         for lesson in lessons:
             details = [escape(shorten(lesson.subject))]
@@ -100,7 +130,7 @@ def format_morning(
                 details.append(escape(lesson.place))
             lines.append(f"<b>{lesson.start.strftime('%H:%M')}</b>  " + " · ".join(details))
     else:
-        lines.append("☀️ <b>Доброе утро!</b> Сегодня пар нет")
+        lines.append(empty)
 
     if deadlines:
         shown = sorted(deadlines, key=lambda d: d.deadline)[:DEADLINE_MAX]

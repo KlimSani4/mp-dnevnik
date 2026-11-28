@@ -11,6 +11,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from src.core.services.auth import AuthService
 from src.gateways.telegram.deps import get_session
+from src.gateways.telegram.handlers.notify import wizard_button
 
 logger = logging.getLogger(__name__)
 router = Router(name="start")
@@ -22,7 +23,8 @@ COMMANDS: list[tuple[str, str]] = [
     ("schedule", "расписание на сегодня"),
     ("deadlines", "ближайшие дедлайны"),
     ("queue", "очередь на сдачу лабораторных"),
-    ("settings", "группа и уведомления"),
+    ("notify", "что и когда присылать"),
+    ("settings", "группа и аккаунт"),
     ("guide", "как работает Nexora"),
     ("help", "список команд"),
 ]
@@ -113,11 +115,14 @@ async def cmd_start(message: Message) -> None:
             "• /schedule — пары на сегодня\n"
             "• /deadlines — что скоро сдавать\n"
             "• /queue — очередь на сдачу лабораторных\n"
-            "• /settings — группа и уведомления\n"
+            "• /notify — что и когда присылать\n"
+            "• /settings — группа и аккаунт\n"
             "• /guide — как всё устроено"
         )
+        setup = [] if await _setup_done(tg_user.id) else [[wizard_button()]]
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
+                *setup,
                 [InlineKeyboardButton(text="🌐 Открыть сайт", url=SITE_URL)],
                 [InlineKeyboardButton(text="❓ Как это работает", callback_data="guide:menu")],
             ]
@@ -129,7 +134,7 @@ async def cmd_start(message: Message) -> None:
             "<b>Как начать</b>\n"
             "1. Укажите группу — расписание подтянется само.\n"
             "2. Староста подтвердит, что вы из группы. Если вы первый — станете старостой.\n"
-            "3. Дальше бот сам напомнит о парах и дедлайнах.\n\n"
+            "3. Дальше бот пишет только по делу: напомнит о дедлайнах. Остальное — по запросу.\n\n"
             "Начнём с группы 👇"
         )
         keyboard = InlineKeyboardMarkup(
@@ -166,6 +171,14 @@ async def _join_by_invite(message: Message, token: str) -> None:
         return
     text, markup, _ = await _join(tg_user.id, code, joined_via="invite")
     await message.answer(text, reply_markup=markup)
+
+
+async def _setup_done(tg_id: int) -> bool:
+    from src.core.services.notify_prefs import is_setup_done
+    from src.gateways.telegram.handlers.notify import load_prefs
+
+    p = await load_prefs(tg_id)
+    return p is None or is_setup_done(p.settings)
 
 
 @router.message(Command("help"))
