@@ -106,6 +106,8 @@ export interface SubjectScheduleSlot {
   /** Период, в который идут пары (YYYY-MM-DD) */
   date_from?: string | null
   date_to?: string | null
+  /** odd / even — пара через неделю */
+  week_parity?: 'odd' | 'even' | null
 }
 
 export interface SubjectLectureLink {

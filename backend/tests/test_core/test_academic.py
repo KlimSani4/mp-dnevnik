@@ -34,3 +34,30 @@ def test_unknown_or_future_codes() -> None:
 def test_helpers() -> None:
     assert [course_of(n) for n in (1, 2, 3, 4, 5)] == [1, 1, 2, 2, 3]
     assert is_autumn(5) and not is_autumn(6)
+
+
+def test_first_last_lesson_snap_to_weekday() -> None:
+    """Период из расписания — по неделям; показываем даты реальных пар (#165)."""
+    from datetime import date
+    from types import SimpleNamespace
+
+    from src.core.services.subject import _first_lesson, _last_lesson
+
+    # Вт, период 02.11 (пн) — 27.12 (вс) → 03.11 — 22.12
+    e = SimpleNamespace(
+        weekday=2, date_from=date(2026, 11, 2), date_to=date(2026, 12, 27), week_parity=None
+    )
+    assert (_first_lesson(e), _last_lesson(e)) == (date(2026, 11, 3), date(2026, 12, 22))  # type: ignore[arg-type]
+    # Сб, 01.09 — 13.09 → 05.09 — 12.09
+    e = SimpleNamespace(
+        weekday=6, date_from=date(2026, 9, 1), date_to=date(2026, 9, 13), week_parity=None
+    )
+    assert (_first_lesson(e), _last_lesson(e)) == (date(2026, 9, 5), date(2026, 9, 12))  # type: ignore[arg-type]
+    # Только чётные недели: 03.11 — 45-я (нечёт) → первая 10.11
+    e = SimpleNamespace(
+        weekday=2, date_from=date(2026, 11, 2), date_to=date(2026, 12, 27), week_parity="even"
+    )
+    assert _first_lesson(e) == date(2026, 11, 10)  # type: ignore[arg-type]
+    # Без дат — как есть
+    e = SimpleNamespace(weekday=2, date_from=None, date_to=None, week_parity=None)
+    assert (_first_lesson(e), _last_lesson(e)) == (None, None)  # type: ignore[arg-type]

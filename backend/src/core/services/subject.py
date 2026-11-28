@@ -35,6 +35,7 @@ from src.core.models.subject_content import (
     WorkKind,
 )
 from src.core.models.user import User
+from src.core.repositories.schedule import entry_applies_on
 from src.core.schemas.subject import (
     DeadlineView,
     LectureLink,
@@ -512,7 +513,14 @@ class SubjectService:
         entries = data["entries"].get(subject.id, [])
         slots = sorted(
             {
-                (e.weekday, e.pair_number, e.date_from, e.date_to, e.lesson_type): ScheduleSlot(
+                (
+                    e.weekday,
+                    e.pair_number,
+                    e.date_from,
+                    e.date_to,
+                    e.week_parity,
+                    e.lesson_type,
+                ): ScheduleSlot(
                     weekday=e.weekday,
                     pair_number=e.pair_number,
                     start_time=e.start_time,
@@ -522,8 +530,9 @@ class SubjectService:
                     location=e.location,
                     teacher=e.teacher,
                     link=e.external_link,
-                    date_from=e.date_from,
-                    date_to=e.date_to,
+                    date_from=_first_lesson(e),
+                    date_to=_last_lesson(e),
+                    week_parity=e.week_parity if e.week_parity in ("odd", "even") else None,
                 )
                 for e in entries
                 if e.weekday
@@ -842,3 +851,30 @@ async def mark_labs_passed(
 
 
 __all__ = ["SubjectService", "mark_labs_passed"]
+
+
+def _first_lesson(entry: ScheduleEntry) -> date | None:
+    """Первая реальная пара. В расписании период задан неделями (02.11 — понедельник),
+    а пара во вторник: первая будет 03.11. Учитываем и чётность недели."""
+    if entry.date_from is None:
+        return None
+    for shift in range(15):
+        day = entry.date_from + timedelta(days=shift)
+        if entry.date_to and day > entry.date_to:
+            break
+        if entry_applies_on(entry, day):
+            return day
+    return entry.date_from
+
+
+def _last_lesson(entry: ScheduleEntry) -> date | None:
+    """Последняя реальная пара (см. _first_lesson)."""
+    if entry.date_to is None:
+        return None
+    for shift in range(15):
+        day = entry.date_to - timedelta(days=shift)
+        if entry.date_from and day < entry.date_from:
+            break
+        if entry_applies_on(entry, day):
+            return day
+    return entry.date_to

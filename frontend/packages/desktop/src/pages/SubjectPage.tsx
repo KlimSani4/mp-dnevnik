@@ -85,7 +85,6 @@ export function SubjectPage() {
           )}
         </div>
         <TagEditor detail={s} semester={semester} busy={action.isPending} run={run} readOnly={!s.can_write} />
-        <GradesLink url={s.grades_url ?? null} canEdit={s.can_moderate || s.is_custom} busy={action.isPending} run={run} />
       </div>
 
       {!s.can_write && <ReadOnlyNote />}
@@ -97,7 +96,7 @@ export function SubjectPage() {
       )}
 
       {/* Сводка */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Stat label={t('subjects.stat.works')} value={s.works_total ? `${s.works_passed} / ${s.works_total}` : '—'} />
         <Stat label={t('subjects.stat.points')} value={s.max_points ? `${fmt(s.points)} / ${fmt(s.max_points)}` : '—'} />
         <Stat
@@ -111,6 +110,7 @@ export function SubjectPage() {
           value={s.next_deadline ? format(parseISO(s.next_deadline.date), 'dd.MM') : '—'}
           hint={s.next_deadline?.title}
         />
+        <GradesStat url={s.grades_url ?? null} canEdit={s.can_moderate || s.is_custom} busy={action.isPending} run={run} />
       </div>
 
       {/* Задания из раздела «Задания» по этому предмету */}
@@ -215,11 +215,14 @@ export function SubjectPage() {
                     <span className={clsx('block truncate', phase === 'past' ? 'text-surface-500 line-through decoration-surface-300' : 'text-surface-700 dark:text-surface-200')}>
                       {[slot.lesson_type, slot.room || slot.location, slot.teacher].filter(Boolean).join(' · ')}
                     </span>
-                    {(slot.date_from || slot.date_to) && (
+                    {(slot.date_from || slot.date_to || slot.week_parity) && (
                       <span className="block text-xs tabular-nums text-surface-400">
-                        {period(slot.date_from, slot.date_to)}
-                        {phase === 'past' && ` · ${t('subjects.slotPast')}`}
-                        {phase === 'future' && ` · ${t('subjects.slotFuture')}`}
+                        {[
+                          period(slot.date_from, slot.date_to),
+                          slot.week_parity && t(slot.week_parity === 'even' ? 'subjects.weekEven' : 'subjects.weekOdd'),
+                          phase === 'past' && t('subjects.slotPast'),
+                          phase === 'future' && t('subjects.slotFuture'),
+                        ].filter(Boolean).join(' · ')}
                       </span>
                     )}
                   </span>
@@ -408,54 +411,62 @@ function slotPhase(from?: string | null, to?: string | null): 'past' | 'now' | '
 
 function period(from?: string | null, to?: string | null): string {
   const d = (x: string) => format(parseISO(x), 'dd.MM')
-  if (from && to) return `${d(from)} – ${d(to)}`
-  return from ? `с ${d(from)}` : `по ${d(to as string)}`
+  if (from && to) return from === to ? d(from) : `${d(from)} – ${d(to)}`
+  if (from) return `с ${d(from)}`
+  return to ? `по ${d(to)}` : ''
 }
 
-/** Ссылка на таблицу с оценками: видят все, ставит ведущий. */
-function GradesLink({ url, canEdit, busy, run }: { url: string | null; canEdit: boolean; busy: boolean; run: (a: SubjectAction) => void }) {
+/** «Оценки» в сводке: ссылка на таблицу оценок всей группы. Видят все, прикрепляет ведущий. */
+function GradesStat({ url, canEdit, busy, run }: { url: string | null; canEdit: boolean; busy: boolean; run: (a: SubjectAction) => void }) {
   const { t } = useT()
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(url ?? '')
-  if (!url && !canEdit) return null
+  const label = <div className="text-xs font-medium text-surface-500 dark:text-surface-400">{t('subjects.stat.grades')}</div>
   if (editing) {
     return (
-      <form
-        className="mt-3 flex max-w-xl items-center gap-2"
-        onSubmit={(e) => {
-          e.preventDefault()
-          run({ type: 'setGradesUrl', url: value.trim() || null })
-          setEditing(false)
-        }}
-      >
-        <Input autoFocus type="url" value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://docs.google.com/spreadsheets/…" />
-        <Button type="submit" size="sm" disabled={busy}>{t('subjects.save')}</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => { setEditing(false); setValue(url ?? '') }}>{t('groupLeave.cancel')}</Button>
-      </form>
+      <Card className="min-w-0">
+        {label}
+        <form
+          className="mt-1.5 space-y-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            run({ type: 'setGradesUrl', url: value.trim() || null })
+            setEditing(false)
+          }}
+        >
+          <Input autoFocus type="url" value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://docs.google.com/…" />
+          <div className="flex gap-1.5">
+            <Button type="submit" size="sm" disabled={busy}>{t('subjects.save')}</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setEditing(false); setValue(url ?? '') }}>{t('groupLeave.cancel')}</Button>
+          </div>
+        </form>
+      </Card>
     )
   }
   return (
-    <div className="mt-3 flex items-center gap-2">
+    <Card className="min-w-0">
+      {label}
       {url ? (
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-success-50 px-3 py-1.5 text-sm font-medium text-success-700 hover:bg-success-100 dark:bg-success-500/10 dark:text-success-500 dark:hover:bg-success-500/20"
+          className="mt-1 inline-flex max-w-full items-center gap-1.5 text-xl font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400"
         >
-          <Icon name="chart" size={14} />{t('subjects.grades')}<Icon name="external-link" size={12} />
+          <span className="truncate">{t('subjects.gradesOpen')}</span><Icon name="external-link" size={16} className="shrink-0" />
         </a>
       ) : (
-        <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-surface-300 px-2.5 py-0.5 text-xs text-surface-500 hover:border-primary-400 hover:text-primary-600 dark:border-surface-600">
-          <Icon name="plus" size={11} />{t('subjects.gradesAdd')}
+        <div className="mt-1 text-xl font-semibold text-surface-900 dark:text-surface-50">—</div>
+      )}
+      <div className="mt-0.5 truncate text-xs text-surface-500 dark:text-surface-400">
+        {url ? t('subjects.gradesHint') : canEdit ? '' : t('subjects.gradesNone')}
+      </div>
+      {canEdit && (
+        <button type="button" onClick={() => setEditing(true)} className="mt-1 text-xs text-primary-600 hover:underline dark:text-primary-400">
+          {t(url ? 'subjects.gradesEdit' : 'subjects.gradesAdd')}
         </button>
       )}
-      {url && canEdit && (
-        <button type="button" onClick={() => setEditing(true)} title={t('subjects.gradesEdit')} className="rounded p-1 text-surface-400 hover:text-surface-700 dark:hover:text-surface-200">
-          <Icon name="pencil" size={14} />
-        </button>
-      )}
-    </div>
+    </Card>
   )
 }
 

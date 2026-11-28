@@ -173,6 +173,7 @@ class ScheduleSlot(BaseModel):
     # Период, в который идут эти пары (из расписания)
     date_from: date | None = None
     date_to: date | None = None
+    week_parity: str | None = None  # odd / even — через неделю
 
 
 class LectureLink(BaseModel):
