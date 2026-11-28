@@ -38,9 +38,12 @@ export function useCreateGroup() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: GroupCreateRequest) => api.groups.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['groups'] })
+    mutationFn: ({ switchGroup = false, ...data }: GroupCreateRequest & { switchGroup?: boolean }) =>
+      api.groups.create(data, switchGroup),
+    onSuccess: (group) => {
+      // Новая группа сразу становится текущей: старой у человека больше нет (#162)
+      useAuthStore.getState().setSelectedGroup(group.id, group.code)
+      queryClient.invalidateQueries()
     },
   })
 }
@@ -66,9 +69,17 @@ export function useJoinGroup() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (code: string) => api.groups.join(code),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['groups'] })
+    mutationFn: (args: string | { code: string; switchGroup?: boolean }) =>
+      typeof args === 'string'
+        ? api.groups.join(args)
+        : api.groups.join(args.code, args.switchGroup ?? false),
+    onSuccess: (membership, args) => {
+      if (typeof args !== 'string' && args.switchGroup) {
+        useAuthStore.getState().setSelectedGroup(membership.group_id, args.code)
+        queryClient.invalidateQueries()
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['groups'] })
+      }
     },
   })
 }

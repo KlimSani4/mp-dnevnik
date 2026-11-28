@@ -9,11 +9,17 @@ export function useGroupContext() {
 
   const { data: myGroups, isLoading } = useMyGroups()
 
-  // Auto-select first group if none selected
+  // Выбрать группу, если не выбрана или человек в ней больше не состоит (вышел или
+  // сменил группу, #162) — иначе сайт показывал бы расписание чужой группы
   useEffect(() => {
-    if (!selectedGroupId && myGroups?.length) {
+    if (!myGroups) return
+    const stillMember = myGroups.some((m) => m.group.id === selectedGroupId)
+    if (stillMember) return
+    if (myGroups.length) {
       const first = myGroups[0]
       setSelectedGroup(first.group.id, first.group.code)
+    } else if (selectedGroupId) {
+      useAuthStore.setState({ selectedGroupId: null, selectedGroupCode: null })
     }
   }, [myGroups, selectedGroupId, setSelectedGroup])
 

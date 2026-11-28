@@ -5,7 +5,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.models.group import Group, StudentRole
+from src.core.models.group import Group, Student, StudentRole
 from src.core.repositories.group import GroupChatRepository, GroupRepository, StudentRepository
 from src.core.repositories.schedule import SubjectRepository
 from src.core.repositories.user import AuditLogRepository, UserRepository
@@ -87,7 +87,13 @@ class GroupService:
         return await self.group_repo.get_by_code(canonical) if canonical else None
 
     async def _create_group(
-        self, group_code: str, name: str | None, owner_id: uuid.UUID, joined_via: str
+        self,
+        group_code: str,
+        name: str | None,
+        owner_id: uuid.UUID,
+        joined_via: str,
+        *,
+        switch: bool = False,
     ) -> Group:
         """Создать группу с кодом из расписания rasp; создатель — подтверждённый староста.
 
@@ -100,6 +106,7 @@ class GroupService:
             raise NotFoundError(f"Group {group_code.strip()} is not in the university schedule")
         if await self.group_repo.get_by_code(code):
             raise ConflictError(f"Group {code} already exists")
+        await self._make_room(owner_id, None, switch=switch)
 
         group = await self.group_repo.create(code=code, name=name or code, owner_id=owner_id)
         await self.student_repo.create(
@@ -129,15 +136,23 @@ class GroupService:
         except Exception as e:  # noqa: BLE001 — группа уже создана, расписание догрузится
             await self.session.rollback()
             logger.warning("Failed to import schedule", extra={"group_code": code, "error": str(e)})
+        if await self._adopt_personal_events(owner_id, group.id):
+            await self.session.commit()
         return group
 
     async def create_group(
         self,
         data: GroupCreate,
         owner_id: uuid.UUID,
+        *,
+        switch: bool = False,
     ) -> GroupResponse:
-        """Создать группу на сайте (#146). Создатель — староста."""
-        group = await self._create_group(data.code, data.name, owner_id, "site")
+        """Создать группу на сайте (#146). Создатель — староста.
+
+        Человек состоит максимум в одной группе (#162): если он уже в группе, нужен
+        switch=True — тогда он сначала выходит из неё.
+        """
+        group = await self._create_group(data.code, data.name, owner_id, "site", switch=switch)
         return GroupResponse.model_validate(group)
 
     async def get_group(self, group_code: str) -> GroupResponse:
@@ -191,19 +206,22 @@ class GroupService:
         self,
         group_code: str,
         user_id: uuid.UUID,
+        *,
+        switch: bool = False,
     ) -> StudentResponse:
         """Вступить в существующую группу: заявка ждёт старосту.
 
-        Группу больше не создаёт молча (#146): для этого есть create_group.
+        Группу больше не создаёт молча (#146): для этого есть create_group. Если человек
+        уже в другой группе — 409 ALREADY_IN_GROUP, а с switch=True он из неё выходит (#162).
         """
         group = await self._find_group(group_code)
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
 
-        # Check if already member
+        await self._make_room(user_id, group.id, switch=switch)
         existing = await self.student_repo.get_by_user_and_group(user_id, group.id)
         if existing:
-            raise ConflictError("Already a member of this group")
+            raise ConflictError("Already a member of this group", code="ALREADY_MEMBER")
 
         student = await self.student_repo.create(
             user_id=user_id,
@@ -212,6 +230,7 @@ class GroupService:
             verified=False,
             joined_via="site",
         )
+        await self._adopt_personal_events(user_id, group.id, student)
 
         await self.audit_repo.log(
             action="group_joined",
@@ -396,6 +415,8 @@ class GroupService:
         self,
         telegram_id: str,
         group_code: str,
+        *,
+        switch: bool = False,
     ) -> StudentResponse:
         """Вступить в группу из бота; если группы ещё нет — создать её (создатель — староста).
 
@@ -410,7 +431,9 @@ class GroupService:
 
         group = await self._find_group(group_code)
         if not group:
-            group = await self._create_group(group_code, None, identity.user_id, "bot")
+            group = await self._create_group(
+                group_code, None, identity.user_id, "bot", switch=switch
+            )
             student = await self.student_repo.get_by_user_and_group(identity.user_id, group.id)
             assert student is not None
             await self.session.refresh(student)
@@ -420,6 +443,7 @@ class GroupService:
         if existing:
             return StudentResponse.model_validate(existing)
 
+        await self._make_room(identity.user_id, group.id, switch=switch)
         student = await self.student_repo.create(
             user_id=identity.user_id,
             group_id=group.id,
@@ -427,6 +451,7 @@ class GroupService:
             verified=False,
             joined_via="bot",
         )
+        await self._adopt_personal_events(identity.user_id, group.id, student)
         await self.audit_repo.log(
             action="group_joined",
             user_id=identity.user_id,
@@ -442,23 +467,73 @@ class GroupService:
         """Выйти из группы (#157).
 
         Удаляются данные участника в этой группе: статусы заданий и прогресс по
-        предметам (каскадом), свои отметки в расписании. Если уходит последний староста,
-        старостой становится заместитель (самый давний); если заместителя нет, группа
-        остаётся без старосты — назначить его может модератор (#159).
+        предметам (каскадом), правки пар этой группы. Личные события («встретить маму»)
+        остаются — они принадлежат человеку, а не группе (#162). Если уходит последний
+        староста, старостой становится заместитель (самый давний); если заместителя нет,
+        группа остаётся без старосты — назначить его может модератор (#159).
         """
-        from sqlalchemy import delete, select
-
-        from src.core.models.group import Student
-        from src.core.models.schedule import ScheduleOverride
-
         group = await self._find_group(group_code)
         if not group:
             raise NotFoundError(f"Group {group_code} not found")
+        await self._lock_user(user_id)
         student = await self.student_repo.get_by_user_and_group(user_id, group.id)
         if not student:
             raise NotFoundError("You are not a member of this group")
+        await self._leave(student, group, user_id)
+        await self.session.commit()
+
+    async def _lock_user(self, user_id: uuid.UUID) -> None:
+        """Строка пользователя под FOR UPDATE: два одновременных вступления не дадут
+        оказаться сразу в двух группах (#162)."""
+        from sqlalchemy import select
+
+        from src.core.models.user import User
+
+        await self.session.execute(select(User.id).where(User.id == user_id).with_for_update())
+
+    async def _make_room(
+        self, user_id: uuid.UUID, target_group_id: uuid.UUID | None, *, switch: bool
+    ) -> None:
+        """Одна группа на человека (#162).
+
+        Если человек уже в другой группе: без switch — 409 ALREADY_IN_GROUP с кодом
+        текущей группы, со switch — выход из неё (как leave_group, без commit).
+        """
+        await self._lock_user(user_id)
+        others = [
+            s
+            for s in await self.student_repo.get_user_students(user_id)
+            if s.group_id != target_group_id
+        ]
+        if not others:
+            return
+        if not switch:
+            raise ConflictError(
+                f"Already in group {others[0].group.code}",
+                code="ALREADY_IN_GROUP",
+                current_group=others[0].group.code,
+            )
+        for student in others:
+            await self._leave(student, student.group, user_id)
+
+    async def _leave(self, student: Student, group: Group, user_id: uuid.UUID) -> None:
+        from sqlalchemy import delete, select, update
+
+        from src.core.models.group import Student
+        from src.core.models.schedule import OverrideScope, OverrideType, ScheduleOverride
 
         was_starosta = student.role == StudentRole.STAROSTA
+        # Личные события остаются у человека: отвязываем от участника группы.
+        await self.session.execute(
+            update(ScheduleOverride)
+            .where(
+                ScheduleOverride.student_id == student.id,
+                ScheduleOverride.scope == OverrideScope.PERSONAL,
+                ScheduleOverride.override_type == OverrideType.ADD,
+            )
+            .values(student_id=None)
+        )
+        # Правки пар этой группы (скрыть пару, заметка к паре) к другой группе не относятся
         await self.session.execute(
             delete(ScheduleOverride).where(ScheduleOverride.student_id == student.id)
         )
@@ -490,11 +565,54 @@ class GroupService:
             resource="group",
             resource_id=str(group.id),
         )
-        await self.session.commit()
         logger.info(
             "User left group",
             extra={"group_code": group.code, "new_starosta": bool(successor)},
         )
+
+    async def _adopt_personal_events(
+        self, user_id: uuid.UUID, group_id: uuid.UUID, student: Student | None = None
+    ) -> int:
+        """Перенести личные события человека в новую группу (#162).
+
+        Личное событие хранится как ADD-переопределение, привязанное к какой-нибудь паре
+        группы (entry_id обязателен). При смене группы перевязываем его на пару новой
+        группы — иначе оно пропадёт, когда старая группа обновит расписание, и не попадёт
+        в напоминания. Если у новой группы ещё нет пар, события видны и так (их читают по
+        автору), а перевяжутся при следующей смене.
+        """
+        from sqlalchemy import select, update
+
+        from src.core.models.schedule import (
+            OverrideScope,
+            OverrideType,
+            ScheduleEntry,
+            ScheduleOverride,
+        )
+
+        anchor = (
+            await self.session.execute(
+                select(ScheduleEntry.id)
+                .where(ScheduleEntry.group_id == group_id)
+                .order_by(ScheduleEntry.weekday, ScheduleEntry.pair_number)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if student is None:
+            student = await self.student_repo.get_by_user_and_group(user_id, group_id)
+        values: dict[str, object] = {"student_id": student.id if student else None}
+        if anchor:
+            values["entry_id"] = anchor
+        result = await self.session.execute(
+            update(ScheduleOverride)
+            .where(
+                ScheduleOverride.author_id == user_id,
+                ScheduleOverride.scope == OverrideScope.PERSONAL,
+                ScheduleOverride.override_type == OverrideType.ADD,
+            )
+            .values(**values)
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
 
     async def set_student_role(
         self,
