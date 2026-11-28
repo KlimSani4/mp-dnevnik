@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import UTC
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,18 @@ class AssignmentService:
         self.subject_repo = SubjectRepository(session)
         self.audit_repo = AuditLogRepository(session)
 
+    async def _semester_for(self, group_id: uuid.UUID, deadline: datetime | None) -> int | None:
+        """Семестр группы на дату дедлайна (по МСК), без дедлайна — на сегодня."""
+        from src.core.academic import term_for
+        from src.core.services.schedule import moscow_today
+
+        group = await self.group_repo.get(group_id)
+        if not group:
+            return None
+        day = (deadline + timedelta(hours=3)).date() if deadline else moscow_today()
+        term = term_for(group.code, day)
+        return term.semester if term else None
+
     async def create_assignment(
         self,
         data: AssignmentCreate,
@@ -69,6 +81,9 @@ class AssignmentService:
             author_id=author_id,
             is_personal=data.is_personal,
             max_points=data.max_points,
+            kind=data.kind,
+            number=data.number,
+            semester=await self._semester_for(data.group_id, data.deadline),
         )
 
         await self.audit_repo.log(
@@ -151,7 +166,16 @@ class AssignmentService:
                 raise AuthorizationError("Cannot update this assignment")
 
         update_data = data.model_dump(exclude_unset=True)
-        await self.assignment_repo.update(assignment, **update_data)
+        if "deadline" in update_data:
+            update_data["semester"] = await self._semester_for(
+                assignment.group_id, update_data["deadline"]
+            )
+        # Не через repo.update: тот пропускает None, а здесь null — осознанная очистка
+        # (снять баллы, тип, дедлайн). Обязательные поля схема не даёт обнулить.
+        for key, value in update_data.items():
+            if value is None and key in ("title", "priority", "is_personal"):
+                continue
+            setattr(assignment, key, value)
         await self.session.commit()
 
         return await self.get_assignment(assignment_id)

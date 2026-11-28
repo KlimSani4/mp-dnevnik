@@ -58,7 +58,6 @@ import type {
   SubjectDetail,
   SubjectList,
   SubjectMaterialInput,
-  SubjectWorkInput,
 } from '../types'
 
 export function createAuthApi(client: ApiClient) {
@@ -385,21 +384,6 @@ export function createSubjectsApi(client: ApiClient) {
       return client.delete<SubjectDetail>(
         `/subjects/${id}/tags/${encodeURIComponent(key)}${semester ? `?semester=${semester}` : ''}`,
       )
-    },
-    addWork(id: string, data: SubjectWorkInput) {
-      return client.post<SubjectDetail>(`/subjects/${id}/works`, data)
-    },
-    updateWork(workId: string, data: Partial<SubjectWorkInput>) {
-      return client.patch<SubjectDetail>(`/subjects/works/${workId}`, data)
-    },
-    deleteWork(workId: string) {
-      return client.delete<SubjectDetail>(`/subjects/works/${workId}`)
-    },
-    approveWork(workId: string) {
-      return client.post<SubjectDetail>(`/subjects/works/${workId}/approve`)
-    },
-    setProgress(workId: string, passed: boolean, points: number | null) {
-      return client.put<SubjectDetail>(`/subjects/works/${workId}/progress`, { passed, points })
     },
     addMaterial(id: string, data: SubjectMaterialInput) {
       return client.post<SubjectDetail>(`/subjects/${id}/materials`, data)

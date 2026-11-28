@@ -30,7 +30,7 @@ interface Assignment {
   id: string
   title: string
   description: string
-  deadline: string
+  deadline: string | null
   priority: 'low' | 'normal' | 'high' | 'urgent'
   votes_up: number
   votes_down: number
@@ -38,6 +38,8 @@ interface Assignment {
   subject: { id: string; name: string }
   created_at: string
 }
+
+type DatedAssignment = Assignment & { deadline: string }
 
 interface Task {
   id: string
@@ -268,7 +270,7 @@ function WindowGap({ minutes }: { minutes: number }) {
   )
 }
 
-function DeadlineCard({ assignment }: { assignment: Assignment }) {
+function DeadlineCard({ assignment }: { assignment: DatedAssignment }) {
   const { t } = useT()
   const deadline = new Date(assignment.deadline)
   const now = new Date()
@@ -508,9 +510,11 @@ export function HomePage() {
   const activeTasks: Task[] = tasksQuery.data ?? []
 
   // Assignments for deadlines — derive from active tasks
-  const assignments: Assignment[] = activeTasks
+  // Без дедлайна (лаба из плана курса) в «горящие» не попадает
+  const assignments: DatedAssignment[] = activeTasks
     .filter((t) => t.state !== 'done')
     .map((t) => t.assignment)
+    .filter((a): a is DatedAssignment => !!a.deadline)
 
   // Live clock for countdown updates
   const [, setTick] = useState(0)

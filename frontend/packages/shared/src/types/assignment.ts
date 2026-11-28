@@ -1,11 +1,14 @@
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
+/** Тип работы; null у задания — обычное задание. Лабы идут в допуск */
+export type WorkKind = 'lab' | 'practice' | 'homework' | 'test' | 'coursework' | 'other'
 export type TaskState = 'todo' | 'review' | 'done'
 
 export interface Assignment {
   id: string
   title: string
   description: string
-  deadline: string
+  /** null — без дедлайна (например, лаба из плана курса) */
+  deadline: string | null
   priority: Priority
   link: string | null
   votes_up: number
@@ -15,6 +18,9 @@ export interface Assignment {
   author_id: string
   /** Максимальный балл; null — без баллов (#165) */
   max_points?: number | null
+  kind?: WorkKind | null
+  number?: number | null
+  semester?: number | null
   subject: {
     id: string
     name: string
@@ -27,21 +33,25 @@ export interface AssignmentCreateRequest {
   subject_id: string
   title: string
   description: string
-  deadline: string
+  deadline?: string | null
   priority: Priority
   link?: string
   is_personal?: boolean
   max_points?: number | null
+  kind?: WorkKind | null
+  number?: number | null
 }
 
 export interface AssignmentUpdateRequest {
   title?: string
   description?: string
-  deadline?: string
+  deadline?: string | null
   priority?: Priority
   link?: string
   is_personal?: boolean
   max_points?: number | null
+  kind?: WorkKind | null
+  number?: number | null
 }
 
 export interface AssignmentVoteRequest {

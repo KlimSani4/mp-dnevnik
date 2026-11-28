@@ -10,12 +10,9 @@ from src.core.schemas.subject import (
     GradesUrlIn,
     MaterialIn,
     MaterialPatch,
-    ProgressIn,
     SubjectDetail,
     SubjectList,
     TagsIn,
-    WorkIn,
-    WorkPatch,
 )
 from src.core.services.subject import SubjectService
 
@@ -77,39 +74,6 @@ async def set_grades_url(
 ) -> SubjectDetail:
     """Ссылка на таблицу с оценками: ставит ведущий группы."""
     return await SubjectService(db).set_grades_url(subject_id, data.url, user, semester)
-
-
-@router.post("/{subject_id}/works", response_model=SubjectDetail, status_code=201)
-async def add_work(
-    subject_id: uuid.UUID, data: WorkIn, user: CurrentUser, db: DBSession
-) -> SubjectDetail:
-    """Добавить работу. От ведущего — сразу, от участника — на проверку."""
-    return await SubjectService(db).add_work(subject_id, data, user)
-
-
-@router.patch("/works/{work_id}", response_model=SubjectDetail)
-async def update_work(
-    work_id: uuid.UUID, data: WorkPatch, user: CurrentUser, db: DBSession
-) -> SubjectDetail:
-    return await SubjectService(db).update_work(work_id, data, user)
-
-
-@router.delete("/works/{work_id}", response_model=SubjectDetail)
-async def delete_work(work_id: uuid.UUID, user: CurrentUser, db: DBSession) -> SubjectDetail:
-    return await SubjectService(db).delete_work(work_id, user)
-
-
-@router.post("/works/{work_id}/approve", response_model=SubjectDetail)
-async def approve_work(work_id: uuid.UUID, user: CurrentUser, db: DBSession) -> SubjectDetail:
-    return await SubjectService(db).approve_work(work_id, user)
-
-
-@router.put("/works/{work_id}/progress", response_model=SubjectDetail)
-async def set_progress(
-    work_id: uuid.UUID, data: ProgressIn, user: CurrentUser, db: DBSession
-) -> SubjectDetail:
-    """Личная отметка: сдал и сколько баллов получил."""
-    return await SubjectService(db).set_progress(work_id, data, user)
 
 
 @router.post("/{subject_id}/materials", response_model=SubjectDetail, status_code=201)

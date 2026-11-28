@@ -49,7 +49,7 @@ export function readFilters(p: URLSearchParams): Filters {
   }
 }
 
-const left = (s: SubjectSummary) => (s.required != null ? Math.max(0, s.required - s.works_passed) : null)
+const left = (s: SubjectSummary) => (s.required != null ? Math.max(0, s.required - s.labs_passed) : null)
 const daysTo = (s: SubjectSummary) =>
   s.next_deadline ? differenceInCalendarDays(parseISO(s.next_deadline.date), new Date()) : Infinity
 

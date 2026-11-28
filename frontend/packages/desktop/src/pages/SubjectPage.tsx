@@ -5,7 +5,7 @@
  * Добавить работу или материал может любой участник: от старосты, заместителя или
  * помощника — сразу, от остальных — «на проверке», пока ведущий не подтвердит.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { format, parseISO } from 'date-fns'
@@ -15,8 +15,6 @@ import type {
   SubjectAction,
   SubjectDetail,
   SubjectMaterialView,
-  SubjectWorkView,
-  WorkKind,
 } from '@nexora/shared'
 import { Button, Card, Icon, Input, Modal, Skeleton } from '../components/ui'
 import { DeadlineChip, fmt, LoadError, ReadOnlyNote } from './SubjectsPage'
@@ -24,7 +22,6 @@ import { SubjectAssignments } from '../components/SubjectAssignments'
 import { useT, type MessageKey } from '../i18n'
 
 const WEEKDAYS: MessageKey[] = ['wd.mon', 'wd.tue', 'wd.wed', 'wd.thu', 'wd.fri', 'wd.sat', 'wd.sun' as MessageKey]
-const WORK_KINDS: WorkKind[] = ['lab', 'practice', 'homework', 'test', 'coursework', 'other']
 const MATERIAL_KINDS: MaterialKind[] = ['theory', 'presentation', 'manual', 'lecture', 'recording', 'other']
 
 function host(url: string): string {
@@ -42,7 +39,6 @@ export function SubjectPage() {
   const semester = Number(params.get('semester')) || null
   const query = useSubject(id, semester)
   const action = useSubjectAction(id, semester)
-  const [workForm, setWorkForm] = useState<SubjectWorkView | 'new' | null>(null)
   // 'newLecture' — добавление из блока «Лекции»: тип сразу «Лекция», а не «Теория»
   const [materialForm, setMaterialForm] = useState<SubjectMaterialView | 'new' | 'newLecture' | null>(null)
   const s = query.data
@@ -62,7 +58,6 @@ export function SubjectPage() {
   }
 
   const pending =
-    s.works.filter((w) => w.status === 'pending').length +
     s.materials_list.filter((m) => m.status === 'pending').length +
     s.lectures.filter((l) => l.material?.status === 'pending').length
   const labsLeft = s.required_left
@@ -89,7 +84,7 @@ export function SubjectPage() {
 
       {!s.can_write && <ReadOnlyNote />}
 
-      {action.error && !workForm && !materialForm && (
+      {action.error && !materialForm && (
         <div role="alert" className="rounded-lg bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
           {action.error instanceof ApiClientError && action.error.status === 403 ? t('subjects.err.forbidden') : t('subjects.err.generic')}
         </div>
@@ -114,23 +109,7 @@ export function SubjectPage() {
       </div>
 
       {/* Задания из раздела «Задания» по этому предмету */}
-      <SubjectAssignments subjectId={s.id} />
-
-      {/* Работы */}
-      <Section
-        title={t('subjects.works')}
-        action={s.can_write && <Button size="sm" variant="secondary" icon={<Icon name="plus" size={14} />} onClick={() => setWorkForm('new')}>{t('subjects.addWork')}</Button>}
-      >
-        {s.works.length === 0 ? (
-          <Empty text={t('subjects.worksEmpty')} />
-        ) : (
-          <ul className="divide-y divide-surface-100 dark:divide-surface-700">
-            {s.works.map((w) => (
-              <WorkRow key={w.id} w={w} canModerate={s.can_moderate} readOnly={!s.can_write} busy={action.isPending} run={run} onEdit={() => setWorkForm(w)} />
-            ))}
-          </ul>
-        )}
-      </Section>
+      <SubjectAssignments subjectId={s.id} canWrite={s.can_write} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Материалы */}
@@ -188,7 +167,7 @@ export function SubjectPage() {
                   ) : (
                     <span className="min-w-0 flex-1 truncate text-sm text-surface-800 dark:text-surface-100">{d.title}</span>
                   )}
-                  <span className="shrink-0 text-2xs text-surface-400">{t(d.kind === 'work' ? 'subjects.dlWork' : 'subjects.dlTask')}</span>
+                  <span className="shrink-0 text-2xs text-surface-400">{t('subjects.dlTask')}</span>
                 </li>
               ))}
             </ul>
@@ -241,15 +220,6 @@ export function SubjectPage() {
 
       <p className="text-xs text-surface-400">{s.can_moderate ? t('subjects.hostNote') : t('subjects.memberNote')}</p>
 
-      {workForm && (
-        <WorkForm initial={workForm === 'new' ? null : workForm} canModerate={s.can_moderate} busy={action.isPending}
-          onClose={() => { setWorkForm(null); action.reset() }}
-          onSubmit={(data) => action.mutateAsync(workForm === 'new'
-            ? { type: 'addWork', data: { ...data, semester } }
-            : { type: 'updateWork', workId: workForm.id, data }).then(() => setWorkForm(null))}
-          error={action.error}
-        />
-      )}
       {materialForm && (
         <MaterialForm initial={typeof materialForm === 'string' ? null : materialForm} defaultKind={materialForm === 'newLecture' ? 'lecture' : 'theory'} canModerate={s.can_moderate} busy={action.isPending}
           onClose={() => { setMaterialForm(null); action.reset() }}
@@ -327,77 +297,6 @@ function ModerationButtons({ status, isMine, canModerate, busy, onApprove, onEdi
         </>
       )}
     </div>
-  )
-}
-
-function WorkRow({ w, canModerate, readOnly, busy, run, onEdit }: { w: SubjectWorkView; canModerate: boolean; readOnly: boolean; busy: boolean; run: (a: SubjectAction) => void; onEdit: () => void }) {
-  const { t } = useT()
-  const [points, setPoints] = useState(w.points != null ? String(w.points) : '')
-  useEffect(() => setPoints(w.points != null ? String(w.points) : ''), [w.points])
-  const approved = w.status === 'approved'
-  const savePoints = () => {
-    const n = points.trim() === '' ? null : Number(points.replace(',', '.'))
-    if (n !== null && (Number.isNaN(n) || n < 0)) return
-    if (n === w.points) return
-    run({ type: 'progress', workId: w.id, passed: n !== null ? true : w.passed, points: n })
-  }
-  return (
-    <li className={clsx('flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3', !approved && 'bg-warning-50/40 dark:bg-warning-500/5')}>
-      <button
-        type="button"
-        disabled={!approved || busy || readOnly}
-        aria-pressed={w.passed}
-        title={t(w.passed ? 'subjects.unmarkPassed' : 'subjects.markPassed')}
-        onClick={() => run({ type: 'progress', workId: w.id, passed: !w.passed, points: w.passed ? null : w.points })}
-        className={clsx(
-          'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors disabled:opacity-40',
-          w.passed ? 'border-success-500 bg-success-500 text-white' : 'border-surface-300 hover:border-primary-400 dark:border-surface-600',
-        )}
-      >
-        {w.passed && <Icon name="check" size={14} />}
-      </button>
-      <div className="min-w-0 flex-1 basis-56">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="rounded bg-surface-100 px-1.5 py-0.5 text-2xs font-medium text-surface-600 dark:bg-surface-700 dark:text-surface-300">
-            {t(`subjects.kind.${w.kind}` as MessageKey)}{w.number != null ? ` ${w.number}` : ''}
-          </span>
-          <span className={clsx('text-sm font-medium', w.passed ? 'text-surface-500 line-through decoration-surface-300' : 'text-surface-900 dark:text-surface-50')}>{w.title}</span>
-          {!approved && <Pending mine={w.is_mine} />}
-        </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-surface-500 dark:text-surface-400">
-          {w.deadline && <DeadlineChip date={w.deadline} />}
-          {w.url && (
-            <a href={w.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400">
-              <Icon name="link" size={11} />{t('subjects.task')}
-            </a>
-          )}
-          {w.description && <span className="truncate" title={w.description}>{w.description}</span>}
-          {!approved && w.author_name && <span>{t('subjects.by', { name: w.author_name })}</span>}
-        </div>
-      </div>
-      {approved && (
-        <label className="flex shrink-0 items-center gap-1 text-sm tabular-nums">
-          <input
-            disabled={readOnly}
-            inputMode="decimal"
-            value={points}
-            onChange={(e) => setPoints(e.target.value)}
-            onBlur={savePoints}
-            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-            placeholder="—"
-            aria-label={t('subjects.myPoints')}
-            className="w-14 rounded-md border border-surface-200 bg-transparent px-2 py-1 text-right text-sm focus:border-primary-400 focus:outline-none dark:border-surface-600"
-          />
-          <span className="text-surface-400">/ {w.max_points != null ? fmt(w.max_points) : '—'}</span>
-        </label>
-      )}
-      <ModerationButtons
-        status={w.status} isMine={w.is_mine} canModerate={canModerate} busy={busy}
-        onApprove={() => run({ type: 'approveWork', workId: w.id })}
-        onEdit={onEdit}
-        onDelete={() => run({ type: 'deleteWork', workId: w.id })}
-      />
-    </li>
   )
 }
 
@@ -513,58 +412,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const selectCls = 'w-full rounded-lg border border-surface-200 bg-white px-3 py-2 text-sm dark:border-surface-600 dark:bg-surface-800'
-
-function WorkForm({ initial, canModerate, busy, onClose, onSubmit, error }: {
-  initial: SubjectWorkView | null; canModerate: boolean; busy: boolean; onClose: () => void
-  onSubmit: (d: { kind: WorkKind; number: number | null; title: string; max_points: number | null; deadline: string | null; url: string | null; description: string | null }) => Promise<void>
-  error: unknown
-}) {
-  const { t } = useT()
-  const [kind, setKind] = useState<WorkKind>(initial?.kind ?? 'lab')
-  const [number, setNumber] = useState(initial?.number != null ? String(initial.number) : '')
-  const [title, setTitle] = useState(initial?.title ?? '')
-  const [max, setMax] = useState(initial?.max_points != null ? String(initial.max_points) : '')
-  const [deadline, setDeadline] = useState(initial?.deadline ?? '')
-  const [url, setUrl] = useState(initial?.url ?? '')
-  const [description, setDescription] = useState(initial?.description ?? '')
-  const num = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')))
-
-  return (
-    <Modal open onClose={onClose} title={t(initial ? 'subjects.editWork' : 'subjects.addWork')} scrollOnOverflow>
-      <form
-        className="space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault()
-          onSubmit({ kind, number: num(number), title: title.trim(), max_points: num(max), deadline: deadline || null, url: url.trim() || null, description: description.trim() || null }).catch(() => {})
-        }}
-      >
-        <div className="grid grid-cols-3 gap-3">
-          <Field label={t('subjects.f.kind')}>
-            <select value={kind} onChange={(e) => setKind(e.target.value as WorkKind)} className={selectCls}>
-              {WORK_KINDS.map((k) => <option key={k} value={k}>{t(`subjects.kind.${k}` as MessageKey)}</option>)}
-            </select>
-          </Field>
-          <Field label={t('subjects.f.number')}><Input inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="1" /></Field>
-          <Field label={t('subjects.f.max')}><Input inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} placeholder="10" /></Field>
-        </div>
-        <Field label={t('subjects.f.title')}><Input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('subjects.f.titlePh')} /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t('subjects.f.deadline')}><Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} /></Field>
-          <Field label={t('subjects.f.url')}><Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" /></Field>
-        </div>
-        <Field label={t('subjects.f.description')}>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={selectCls} />
-        </Field>
-        {!canModerate && !initial && <p className="text-xs text-surface-500">{t('subjects.willReview')}</p>}
-        {error != null && <p role="alert" className="text-sm text-danger-600">{error instanceof ApiClientError && error.status === 422 ? t('subjects.err.invalid') : t('subjects.err.generic')}</p>}
-        <div className="flex justify-end gap-2 pt-1">
-          <Button type="button" variant="ghost" onClick={onClose}>{t('groupLeave.cancel')}</Button>
-          <Button type="submit" disabled={busy || !title.trim()}>{t(initial ? 'subjects.save' : 'subjects.add')}</Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
 
 function MaterialForm({ initial, defaultKind = 'theory', canModerate, busy, onClose, onSubmit, error }: {
   initial: SubjectMaterialView | null; defaultKind?: MaterialKind; canModerate: boolean; busy: boolean; onClose: () => void

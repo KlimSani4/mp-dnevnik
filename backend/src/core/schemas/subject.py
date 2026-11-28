@@ -3,9 +3,9 @@
 import uuid
 from datetime import date, time
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-from src.core.models.subject_content import MaterialKind, WorkKind
+from src.core.models.subject_content import MaterialKind
 
 
 class SemesterOption(BaseModel):
@@ -19,8 +19,7 @@ class SemesterOption(BaseModel):
 class DeadlineView(BaseModel):
     title: str
     date: date
-    kind: str  # work / assignment
-    work_id: uuid.UUID | None = None
+    kind: str = "assignment"
     assignment_id: uuid.UUID | None = None
 
 
@@ -54,6 +53,9 @@ class SubjectSummary(BaseModel):
     grades_url: str | None = None
     works_total: int
     works_passed: int
+    # Лабы среди заданий: для допуска
+    labs_total: int = 0
+    labs_passed: int = 0
     points: float
     max_points: float
     required: int | None
@@ -80,31 +82,6 @@ def _clean_url(v: str | None) -> str | None:
     return v.strip()
 
 
-class WorkIn(BaseModel):
-    kind: WorkKind = WorkKind.LAB
-    number: int | None = Field(None, ge=0, le=999)
-    title: str = Field(min_length=1, max_length=255)
-    max_points: float | None = Field(None, ge=0, le=1000)
-    deadline: date | None = None
-    description: str | None = Field(None, max_length=4000)
-    url: str | None = Field(None, max_length=1024)
-    semester: int | None = Field(None, ge=1, le=12)
-
-    _url = field_validator("url")(_clean_url)
-
-
-class WorkPatch(BaseModel):
-    kind: WorkKind | None = None
-    number: int | None = Field(None, ge=0, le=999)
-    title: str | None = Field(None, min_length=1, max_length=255)
-    max_points: float | None = Field(None, ge=0, le=1000)
-    deadline: date | None = None
-    description: str | None = Field(None, max_length=4000)
-    url: str | None = Field(None, max_length=1024)
-
-    _url = field_validator("url")(_clean_url)
-
-
 class MaterialIn(BaseModel):
     kind: MaterialKind = MaterialKind.THEORY
     title: str = Field(min_length=1, max_length=255)
@@ -122,30 +99,6 @@ class MaterialPatch(BaseModel):
     lecture_date: date | None = None
 
     _url = field_validator("url")(_clean_url)
-
-
-class ProgressIn(BaseModel):
-    passed: bool
-    points: float | None = Field(None, ge=0, le=1000)
-
-
-class WorkView(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    kind: str
-    number: int | None
-    title: str
-    max_points: float | None
-    deadline: date | None
-    description: str | None
-    url: str | None
-    semester: int | None
-    status: str
-    author_name: str | None
-    is_mine: bool
-    passed: bool
-    points: float | None
 
 
 class MaterialView(BaseModel):
@@ -190,7 +143,6 @@ class SubjectDetail(SubjectSummary):
     can_moderate: bool
     can_write: bool = True
     schedule: list[ScheduleSlot]
-    works: list[WorkView]
     materials_list: list[MaterialView]
     lectures: list[LectureLink]
     deadlines: list[DeadlineView]

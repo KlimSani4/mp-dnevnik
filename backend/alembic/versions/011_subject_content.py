@@ -1,12 +1,13 @@
-"""Предметы: семестры, работы, материалы, личный учёт (#165).
+"""Предметы: семестры, материалы, теги (#165).
 
 - subjects.first_semester / last_semester — в каких семестрах шёл предмет. Для уже
   существующих предметов групп проставляется текущий семестр группы (по коду группы
   и дате миграции): истории раньше не было.
-- subject_works — работы (лабы, практики…) с макс. баллом и дедлайном.
 - subject_materials — материалы ссылками; file_key — задел под загрузку файлов.
-- subject_work_progress — личные отметки «сдал» и баллы.
 - subject_tags — теги предметов («прога», «ИБ», «основа основ»).
+
+Работы (лабы, практики…) — это задания с типом: kind/number/semester
+у assignments, миграция 014. Отдельных таблиц работ нет.
 
 Миграция идемпотентна.
 
@@ -70,15 +71,6 @@ def upgrade() -> None:
             op.add_column("subjects", sa.Column(col, sa.Integer))
 
     tables = _tables()
-    if "subject_works" not in tables:
-        op.create_table(
-            "subject_works",
-            *_content_columns(),
-            sa.Column("number", sa.Integer),
-            sa.Column("max_points", sa.Float),
-            sa.Column("deadline", sa.Date),
-            sa.Column("description", sa.Text),
-        )
     if "subject_materials" not in tables:
         op.create_table(
             "subject_materials",
@@ -86,42 +78,6 @@ def upgrade() -> None:
             sa.Column("file_key", sa.String(512)),
             sa.Column("lecture_date", sa.Date),
         )
-    if "subject_work_progress" not in tables:
-        op.create_table(
-            "subject_work_progress",
-            sa.Column("id", UUID(as_uuid=True), primary_key=True),
-            sa.Column(
-                "work_id",
-                UUID(as_uuid=True),
-                sa.ForeignKey("subject_works.id", ondelete="CASCADE"),
-                nullable=False,
-                index=True,
-            ),
-            sa.Column(
-                "user_id",
-                UUID(as_uuid=True),
-                sa.ForeignKey("users.id", ondelete="CASCADE"),
-                nullable=False,
-                index=True,
-            ),
-            sa.Column("passed", sa.Boolean, nullable=False, server_default=sa.false()),
-            sa.Column("points", sa.Float),
-            sa.Column("passed_at", sa.DateTime(timezone=True)),
-            sa.Column(
-                "created_at",
-                sa.DateTime(timezone=True),
-                server_default=sa.func.now(),
-                nullable=False,
-            ),
-            sa.Column(
-                "updated_at",
-                sa.DateTime(timezone=True),
-                server_default=sa.func.now(),
-                nullable=False,
-            ),
-            sa.UniqueConstraint("work_id", "user_id", name="uq_work_progress_user"),
-        )
-
     if "subject_tags" not in tables:
         op.create_table(
             "subject_tags",
@@ -183,7 +139,7 @@ def _backfill_semesters() -> None:
 
 def downgrade() -> None:
     tables = _tables()
-    for table in ("subject_tags", "subject_work_progress", "subject_materials", "subject_works"):
+    for table in ("subject_tags", "subject_materials"):
         if table in tables:
             op.drop_table(table)
     for col in ("last_semester", "first_semester"):

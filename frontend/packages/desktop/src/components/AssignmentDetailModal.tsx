@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { format, formatDistanceToNow, isPast, startOfDay } from 'date-fns'
 import { useState, useCallback } from 'react'
-import { Modal, Button, Badge, Avatar, DatePicker, Icon, Input } from './ui'
+import { Modal, Button, Badge, Avatar, DatePicker, Dropdown, Icon, Input } from './ui'
 import { PriorityDropdown } from './PriorityDropdown'
 import { useUpdateAssignment, useDeleteAssignment, useUpdateTask } from '@nexora/shared'
 import { Markdown } from './Markdown'
@@ -9,8 +9,11 @@ import {
   type Priority,
   type TaskState,
   type Task,
+  type WorkKind,
   PRIORITY_LABELS,
   PRIORITY_BADGE_VARIANT,
+  WORK_KINDS,
+  workLabel,
 } from '../types/assignments'
 import { useAuthorName } from '../hooks/useAuthorName'
 import { dateLocale, translate, useT, type MessageKey } from '../i18n'
@@ -35,11 +38,13 @@ const STATE_LABELS: Record<TaskState, MessageKey> = {
 
 /* ─── Helpers ─── */
 
-function formatDeadline(deadline: string): string {
+function formatDeadline(deadline: string | null): string {
+  if (!deadline) return translate('assign.noDeadline')
   return format(new Date(deadline), 'd MMMM yyyy, HH:mm', { locale: dateLocale() })
 }
 
-function formatDeadlineShort(deadline: string): string {
+function formatDeadlineShort(deadline: string | null): string {
+  if (!deadline) return translate('assign.noDeadline')
   return format(new Date(deadline), 'd MMM yyyy', { locale: dateLocale() })
 }
 
@@ -47,7 +52,8 @@ function formatCreatedAt(date: string): string {
   return format(new Date(date), 'd MMMM yyyy', { locale: dateLocale() })
 }
 
-function getRelativeDeadline(deadline: string): string {
+function getRelativeDeadline(deadline: string | null): string {
+  if (!deadline) return ''
   const dl = startOfDay(new Date(deadline))
   if (isPast(dl)) {
     return translate('assign.overdueAgo', { d: formatDistanceToNow(dl, { locale: dateLocale(), addSuffix: true }) })
@@ -55,13 +61,14 @@ function getRelativeDeadline(deadline: string): string {
   return translate('assign.timeLeft', { d: formatDistanceToNow(dl, { locale: dateLocale() }) })
 }
 
-function isOverdue(deadline: string): boolean {
+function isOverdue(deadline: string | null): boolean {
+  if (!deadline) return false
   return isPast(startOfDay(new Date(deadline)))
 }
 
 /** Format ISO datetime → date string for <input type="date"> */
-function isoToDateInput(iso: string): string {
-  return iso.slice(0, 10)
+function isoToDateInput(iso: string | null): string {
+  return iso ? iso.slice(0, 10) : ''
 }
 
 /* ─── Component ─── */
@@ -87,6 +94,8 @@ function AssignmentDetailModal({
   const [editPriority, setEditPriority] = useState<string>('normal')
   const [editLink, setEditLink] = useState('')
   const [editMaxPoints, setEditMaxPoints] = useState('')
+  const [editKind, setEditKind] = useState<WorkKind | null>(null)
+  const [editNumber, setEditNumber] = useState('')
 
   const enterEditMode = useCallback(() => {
     if (!task) return
@@ -97,6 +106,8 @@ function AssignmentDetailModal({
     setEditPriority(a.priority)
     setEditLink(a.link ?? '')
     setEditMaxPoints(a.max_points != null ? String(a.max_points) : '')
+    setEditKind(a.kind ?? null)
+    setEditNumber(a.number != null ? String(a.number) : '')
     setEditMode(true)
   }, [task])
 
@@ -112,10 +123,13 @@ function AssignmentDetailModal({
         data: {
           title: editTitle.trim(),
           description: editDescription.trim() || undefined,
-          deadline: editDeadline ? new Date(editDeadline).toISOString() : undefined,
+          // Пустой дедлайн — снять его (лаба из плана без срока)
+          deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
           priority: editPriority as Priority,
           link: editLink.trim() || undefined,
           max_points: parsePoints(editMaxPoints),
+          kind: editKind,
+          number: editKind && editNumber.trim() !== '' ? Math.max(0, Math.round(Number(editNumber)) || 0) : null,
         },
       },
       {
@@ -124,7 +138,7 @@ function AssignmentDetailModal({
         },
       },
     )
-  }, [task, updateAssignment, editTitle, editDescription, editDeadline, editPriority, editLink, editMaxPoints])
+  }, [task, updateAssignment, editTitle, editDescription, editDeadline, editPriority, editLink, editMaxPoints, editKind, editNumber])
 
   const handleDelete = useCallback(() => {
     if (!task) return
@@ -209,6 +223,11 @@ function AssignmentDetailModal({
             <>
               {/* Title */}
               <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-50 leading-tight mb-3">
+                {assignment.kind && (
+                  <span className="mr-2 align-middle rounded-md bg-primary-50 px-1.5 py-0.5 text-sm font-semibold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
+                    {workLabel(assignment.kind, assignment.number)}
+                  </span>
+                )}
                 {assignment.title}
               </h2>
 
@@ -279,6 +298,20 @@ function AssignmentDetailModal({
             </div>
             <DatePicker label={t('assign.deadline')} value={editDeadline} onChange={setEditDeadline} />
             <PriorityDropdown value={editPriority} onChange={setEditPriority} />
+            <div className={clsx('grid gap-3', editKind ? 'grid-cols-[1fr_7rem]' : 'grid-cols-1')}>
+              <Dropdown
+                label={t('assign.kind')}
+                options={[
+                  { value: '', label: t('assign.kind.task') },
+                  ...WORK_KINDS.map((k) => ({ value: k, label: t(`assign.kind.${k}` as MessageKey) })),
+                ]}
+                value={editKind ?? ''}
+                onChange={(v) => setEditKind((v || null) as WorkKind | null)}
+              />
+              {editKind && (
+                <Input label={t('assign.number')} type="number" min={0} value={editNumber} onChange={(e) => setEditNumber(e.target.value)} placeholder="1" />
+              )}
+            </div>
             <Input
               label={t('assign.maxPoints')}
               type="number"
@@ -367,9 +400,11 @@ function AssignmentDetailModal({
                 {overdue ? t('assign.overdue') : t('assign.deadline')}:{' '}
                 {formatDeadline(assignment.deadline)}
               </span>
-              <span className="text-xs text-surface-400 dark:text-surface-500">
-                ({getRelativeDeadline(assignment.deadline)})
-              </span>
+              {assignment.deadline && (
+                <span className="text-xs text-surface-400 dark:text-surface-500">
+                  ({getRelativeDeadline(assignment.deadline)})
+                </span>
+              )}
             </div>
 
             {/* Баллы: максимум задания и свой полученный (#165) */}

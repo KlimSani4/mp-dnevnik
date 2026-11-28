@@ -21,7 +21,6 @@ from src.core.academic import term_for
 from src.core.models.base import Base
 from src.core.models.group import Group, Student, StudentRole
 from src.core.models.schedule import ScheduleEntry, Subject
-from src.core.models.subject_content import SubjectWorkProgress
 from src.core.models.user import User
 from src.core.services import subject as subject_service
 from src.shared.security import create_access_token
@@ -156,7 +155,6 @@ async def test_access(ctx: Ctx) -> None:
     r = await c.get(f"/subjects/{ids['nets']}", headers=_auth(ids["pending"]))
     assert r.status_code == 200 and r.json()["can_write"] is False
     for path, body in (
-        ("works", {"kind": "lab", "title": "x"}),
         ("materials", {"kind": "theory", "title": "x", "url": "https://a.b/c"}),
         ("tags", {"tags": ["x"]}),
     ):
@@ -169,77 +167,64 @@ async def test_access(ctx: Ctx) -> None:
     assert r.status_code == 404
 
 
-async def test_works_moderation_and_progress(ctx: Ctx) -> None:
+async def _gid(maker: Any) -> Any:
+    async with maker() as s:
+        return (await s.execute(select(Group.id).where(Group.code == CODE))).scalar_one()
+
+
+async def test_works_are_assignments(ctx: Ctx) -> None:
+    """Работы — это задания с типом: сводка, допуск, дедлайны считаются по ним."""
     c, ids, maker = ctx
     nets = ids["nets"]
-    deadline = (subject_service.moscow_today() + timedelta(days=5)).isoformat()
+    gid = str(await _gid(maker))
+    deadline = (subject_service.moscow_today() + timedelta(days=5)).isoformat() + "T20:59:00Z"
 
-    # Староста — сразу видно всем
-    r = await c.post(
-        f"/subjects/{nets}/works",
-        json={
-            "kind": "lab",
-            "number": 1,
-            "title": "ЛР1. Сокеты",
-            "max_points": 10,
-            "deadline": deadline,
-        },
-        headers=_auth(ids["head"]),
+    async def create(uid: Any, **body: Any) -> dict[str, Any]:
+        r = await c.post(
+            "/assignments",
+            json={"group_id": gid, "subject_id": str(nets)} | body,
+            headers=_auth(uid),
+        )
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    lab1 = await create(
+        ids["head"], title="Сокеты", kind="lab", number=1, max_points=10, deadline=deadline
     )
-    assert r.status_code == 201, r.text
-    lab1 = r.json()["works"][0]
-    assert lab1["status"] == "approved"
+    assert lab1["kind"] == "lab" and lab1["number"] == 1 and lab1["semester"] == NOW
+    await create(ids["anna"], title="HTTP", kind="lab", number=2, max_points=15)  # без дедлайна
+    await create(ids["head"], title="Доклад", max_points=5)  # обычное задание
+    await create(ids["anna"], title="Конспект", is_personal=True)  # личное — только Анне
 
-    # Участник — на проверку: видит он и ведущий, но не другие
-    r = await c.post(
-        f"/subjects/{nets}/works",
-        json={"kind": "lab", "number": 2, "title": "ЛР2. HTTP", "max_points": 15},
-        headers=_auth(ids["anna"]),
-    )
-    lab2 = next(w for w in r.json()["works"] if w["number"] == 2)
-    assert lab2["status"] == "pending" and lab2["is_mine"]
-    boris = (await c.get(f"/subjects/{nets}", headers=_auth(ids["boris"]))).json()
-    assert [w["number"] for w in boris["works"]] == [1]
-    head = (await c.get(f"/subjects?group={CODE}", headers=_auth(ids["head"]))).json()
-    assert next(s for s in head["subjects"] if s["name"] == "Сети ЭВМ")["pending"] == 1
-
-    # Чужое предложение участник не правит; ведущий подтверждает
     r = await c.patch(
-        f"/subjects/works/{lab2['id']}", json={"title": "x"}, headers=_auth(ids["boris"])
+        f"/tasks/{lab1['id']}", json={"state": "done", "points": 8.5}, headers=_auth(ids["anna"])
     )
-    assert r.status_code == 404
-    r = await c.post(f"/subjects/works/{lab2['id']}/approve", headers=_auth(ids["anna"]))
-    assert r.status_code == 403
-    r = await c.post(f"/subjects/works/{lab2['id']}/approve", headers=_auth(ids["head"]))
-    assert r.status_code == 200
-    # После подтверждения автор уже не правит
-    r = await c.patch(
-        f"/subjects/works/{lab2['id']}", json={"title": "y"}, headers=_auth(ids["anna"])
-    )
-    assert r.status_code == 403
+    assert r.status_code == 200, r.text
 
-    # Личный учёт
-    r = await c.put(
-        f"/subjects/works/{lab1['id']}/progress",
-        json={"passed": True, "points": 8.5},
-        headers=_auth(ids["anna"]),
-    )
-    d = r.json()
-    assert d["works_passed"] == 1 and d["points"] == 8.5 and d["max_points"] == 25
+    d = (await c.get(f"/subjects/{nets}", headers=_auth(ids["anna"]))).json()
+    assert "works" not in d
+    assert (d["works_total"], d["works_passed"]) == (4, 1)
+    assert (d["labs_total"], d["labs_passed"]) == (2, 1)
+    assert d["points"] == 8.5 and d["max_points"] == 30
     assert d["required"] == 3 and d["required_left"] == 2
-    assert d["next_deadline"]["title"] == "ЛР1. Сокеты"
+    assert d["next_deadline"] is None  # единственный дедлайн уже сдан
     assert d["teachers"] == ["Иванов И. И."]
     assert d["lectures"][0]["url"] == "https://webinar.example/nets"
     assert d["schedule"][0]["room"] is None and d["schedule"][0]["weekday"] == 3
-    # У Бориса своя отметка
-    b = (await c.get(f"/subjects/{nets}", headers=_auth(ids["boris"]))).json()
-    assert b["works_passed"] == 0
 
-    # Удаление каскадом убирает отметки
-    r = await c.delete(f"/subjects/works/{lab1['id']}", headers=_auth(ids["head"]))
-    assert r.status_code == 200
-    async with maker() as s:
-        assert (await s.execute(select(SubjectWorkProgress))).first() is None
+    b = (await c.get(f"/subjects/{nets}", headers=_auth(ids["boris"]))).json()
+    assert (b["works_total"], b["works_passed"], b["points"]) == (3, 0, 0)
+    assert b["next_deadline"]["title"] == "Сокеты"
+
+    # Прошлый семестр: задание с дедлайном тогда — не в текущей сводке
+    r = await c.patch(
+        f"/assignments/{lab1['id']}",
+        json={"deadline": "2025-03-01T10:00:00Z", "max_points": None},
+        headers=_auth(ids["head"]),
+    )
+    assert r.json()["semester"] == 2 and r.json()["max_points"] is None
+    b = (await c.get(f"/subjects/{nets}?semester={NOW}", headers=_auth(ids["boris"]))).json()
+    assert b["works_total"] == 2
 
 
 async def test_materials(ctx: Ctx) -> None:
@@ -282,18 +267,25 @@ async def test_materials(ctx: Ctx) -> None:
 async def test_queue_passed_marks_lab(ctx: Ctx) -> None:
     c, ids, maker = ctx
     nets = ids["nets"]
+    gid = str(await _gid(maker))
     r = await c.post(
-        f"/subjects/{nets}/works",
-        json={"kind": "lab", "number": 3, "title": "ЛР3", "max_points": 10},
+        "/assignments",
+        json={"group_id": gid, "subject_id": str(nets), "title": "ЛР3", "kind": "lab", "number": 3},
         headers=_auth(ids["head"]),
     )
+    assert r.status_code == 201
     async with maker() as s:
         n = await subject_service.mark_labs_passed(s, nets, ids["boris"], [3, 4])
         await s.commit()
     assert n == 1
     b = (await c.get(f"/subjects/{nets}", headers=_auth(ids["boris"]))).json()
-    assert b["works_passed"] == 1 and b["works"][0]["passed"]
-    assert r.status_code == 201
+    assert b["labs_passed"] == 1 and b["works_passed"] == 1
+    # Повторно — без дублей
+    async with maker() as s:
+        assert await subject_service.mark_labs_passed(s, nets, ids["boris"], [3]) == 1
+        await s.commit()
+    tasks = (await c.get(f"/tasks?group_id={gid}", headers=_auth(ids["boris"]))).json()
+    assert [t["state"] for t in tasks if t["assignment"]["title"] == "ЛР3"] == ["done"]
 
 
 async def test_import_marks_semesters(ctx: Ctx) -> None:
