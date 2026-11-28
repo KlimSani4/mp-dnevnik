@@ -3,13 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
 import type { Group, GroupCreateRequest, GroupRole, GroupSearchParams, GroupUpdateRequest, Subject } from '../types'
 
-export function useMyGroups() {
+export function useMyGroups(options: { enabled?: boolean } = {}) {
   const api = useApi()
 
   return useQuery({
     queryKey: ['groups', 'my'],
     queryFn: () => api.groups.getMy(),
     staleTime: 1000 * 60 * 10,
+    enabled: options.enabled ?? true,
   })
 }
 
@@ -146,6 +147,21 @@ export function useRejectStudent() {
   })
 }
 
+/** Удалить участника из группы: староста или модератор платформы */
+export function useRemoveStudent() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ code, userId }: { code: string; userId: string }) =>
+      api.groups.removeStudent(code, userId),
+    onSuccess: (_data, { code }) => {
+      queryClient.invalidateQueries({ queryKey: ['groups', code, 'students'] })
+      queryClient.invalidateQueries({ queryKey: ['moderation'] })
+    },
+  })
+}
+
 export function useChangeStudentRole() {
   const api = useApi()
   const queryClient = useQueryClient()
@@ -195,6 +211,51 @@ export function useUpdateSubjectRequirements() {
       }),
     onSuccess: (_data, { code }) => {
       queryClient.invalidateQueries({ queryKey: ['groups', code] })
+    },
+  })
+}
+
+// ─── Ссылка-приглашение (#147) ───
+
+export function useGroupInvite(code: string | null) {
+  const api = useApi()
+  return useQuery({
+    queryKey: ['groups', 'invite', code],
+    queryFn: () => api.groups.invite(code!),
+    enabled: !!code,
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useResetInvite() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (code: string) => api.groups.resetInvite(code),
+    onSuccess: (invite) => queryClient.setQueryData(['groups', 'invite', invite.code], invite),
+  })
+}
+
+export function useInvitePreview(token: string | null) {
+  const api = useApi()
+  return useQuery({
+    queryKey: ['groups', 'invite-preview', token],
+    queryFn: () => api.groups.invitePreview(token!),
+    enabled: !!token,
+    retry: false,
+  })
+}
+
+export function useJoinByInvite() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ token, switchGroup = false }: { token: string; switchGroup?: boolean }) =>
+      api.groups.joinByInvite(token, switchGroup),
+    onSuccess: (_membership, { switchGroup }) => {
+      // После смены группы выбор сбросится и useGroupContext возьмёт новую (#162)
+      if (switchGroup) useAuthStore.setState({ selectedGroupId: null, selectedGroupCode: null })
+      queryClient.invalidateQueries()
     },
   })
 }

@@ -4,7 +4,7 @@ import enum
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Enum, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,6 +21,8 @@ class Group(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "groups"
 
+    __table_args__ = (Index("uq_groups_invite_token", "invite_token", unique=True),)
+
     code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
     name: Mapped[str | None] = mapped_column(String(255))
     owner_id: Mapped[uuid.UUID] = mapped_column(
@@ -29,6 +31,9 @@ class Group(Base, UUIDMixin, TimestampMixin):
         nullable=False,
     )
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    # Ссылка-приглашение (#147): случайный токен вместо угадываемого кода группы.
+    # Создаётся при первом запросе, «Сбросить ссылку» выдаёт новый — старый QR не работает.
+    invite_token: Mapped[str | None] = mapped_column(String(32))
 
     # Relationships
     owner: Mapped["User"] = relationship("User", foreign_keys=[owner_id])

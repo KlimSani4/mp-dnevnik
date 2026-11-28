@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from src.api.deps import CurrentUser, CurrentUserOptional, DBSession, require_group_moderator
 from src.core.schemas.group import (
     GroupCreate,
+    GroupInvite,
+    GroupInvitePreview,
     GroupResponse,
     GroupUpdate,
     RoleUpdateRequest,
@@ -61,6 +63,38 @@ async def get_my_groups(
     """Get groups current user is member of."""
     group_service = GroupService(db)
     return await group_service.get_user_groups(user.id)
+
+
+# ─── Ссылка-приглашение (#147). Пути с /invite/ — до /{code}, чтобы не перехватились ───
+
+
+@router.get("/invite/{token}", response_model=GroupInvitePreview)
+async def invite_preview(token: str, db: DBSession) -> GroupInvitePreview:
+    """Какая группа за ссылкой. Без входа: страница /join показывает её до логина."""
+    return await GroupService(db).invite_preview(token)
+
+
+@router.post("/invite/{token}/join", response_model=StudentResponse, status_code=201)
+async def join_by_invite(
+    token: str,
+    user: CurrentUser,
+    db: DBSession,
+    switch: bool = Query(False, description="Выйти из текущей группы (#162)"),
+) -> StudentResponse:
+    """Заявка в группу по ссылке-приглашению; подтверждает староста."""
+    return await GroupService(db).join_by_invite(token, user.id, switch=switch)
+
+
+@router.get("/{code}/invite", response_model=GroupInvite)
+async def get_invite(code: str, user: CurrentUser, db: DBSession) -> GroupInvite:
+    """Токен ссылки-приглашения: видят подтверждённые участники, чтобы переслать."""
+    return await GroupService(db).get_invite(code, user.id)
+
+
+@router.post("/{code}/invite/reset", response_model=GroupInvite)
+async def reset_invite(code: str, user: CurrentUser, db: DBSession) -> GroupInvite:
+    """Сбросить ссылку: старая и её QR перестают работать. Староста или заместитель."""
+    return await GroupService(db).reset_invite(code, user.id)
 
 
 @router.get("/{code}", response_model=GroupResponse)
@@ -148,6 +182,20 @@ async def verify_student(
     """Verify student membership (moderator only)."""
     group_service = GroupService(db)
     return await group_service.verify_student(code, user_id, user.id)
+
+
+@router.delete("/{code}/students/{user_id}", status_code=204)
+async def remove_student(
+    code: str,
+    user_id: uuid.UUID,
+    user: CurrentUser,
+    db: DBSession,
+) -> None:
+    """Удалить участника: староста — из своей группы, модератор — из любой.
+
+    Себя — нельзя (409 REMOVE_SELF, для этого выход); старосту — только модератор.
+    """
+    await GroupService(db).remove_student(code, user_id, user.id)
 
 
 @router.post("/{code}/reject/{user_id}", status_code=204)

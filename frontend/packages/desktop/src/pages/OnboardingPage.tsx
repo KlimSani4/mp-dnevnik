@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Button, Card } from '../components/ui'
 import { GroupPicker } from '../components/GroupPicker'
@@ -32,6 +32,8 @@ export function OnboardingPage() {
   const [awaitingBot, setAwaitingBot] = useState(false)
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  // Пришли по ссылке-приглашению (#147): после входа — обратно на /join/<токен>
+  const invite = useSearchParams()[0].get('invite')
   const botAuthMutation = useTelegramBotAuth()
   const devLoginMutation = useDevLogin()
   const effectiveGroupCode = selectedGroup || groupCode.trim()
@@ -40,9 +42,9 @@ export function OnboardingPage() {
   // Redirect if already authenticated and has gone through onboarding
   useEffect(() => {
     if (isAuthenticated && step === 'welcome') {
-      navigate('/', { replace: true })
+      navigate(invite ? `/join/${encodeURIComponent(invite)}` : '/', { replace: true })
     }
-  }, [isAuthenticated, step, navigate])
+  }, [isAuthenticated, step, navigate, invite])
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const telegramContainerRef = useRef<HTMLDivElement>(null)
@@ -51,7 +53,8 @@ export function OnboardingPage() {
     setLoginError(null)
     try {
       await devLoginMutation.mutateAsync('12345')
-      setStep('group')
+      if (invite) navigate(`/join/${encodeURIComponent(invite)}`, { replace: true })
+      else setStep('group')
     } catch {
       setLoginError('Dev-вход доступен только при APP_ENV=development на backend.')
     }
@@ -72,7 +75,8 @@ export function OnboardingPage() {
   const handlePollSuccess = () => {
     setPollToken(null)
     setAwaitingBot(false)
-    goNext()
+    if (invite) navigate(`/join/${encodeURIComponent(invite)}`, { replace: true })
+    else goNext()
   }
 
   useTelegramBotPoll(pollToken, handlePollSuccess)

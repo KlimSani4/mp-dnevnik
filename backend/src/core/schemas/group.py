@@ -139,3 +139,19 @@ class RoleUpdateRequest(BaseModel):
     """Request to change a student's role."""
 
     role: StudentRole
+
+
+class GroupInvite(BaseModel):
+    """Ссылка-приглашение в группу (#147). URL собирает фронтенд: /join/<token>."""
+
+    code: str
+    token: str
+    can_reset: bool
+
+
+class GroupInvitePreview(BaseModel):
+    """Что видно по токену до вступления: какая это группа."""
+
+    code: str
+    name: str | None
+    members: int

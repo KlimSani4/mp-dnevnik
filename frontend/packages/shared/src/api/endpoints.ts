@@ -11,6 +11,8 @@ import type {
   Group,
   GroupMembership,
   GroupCreateRequest,
+  GroupInvite,
+  GroupInvitePreview,
   GroupUpdateRequest,
   GroupSearchParams,
   GroupStudent,
@@ -118,6 +120,21 @@ export function createGroupsApi(client: ApiClient) {
         `/groups/${encodeURIComponent(code)}/join${switchGroup ? '?switch=true' : ''}`,
       )
     },
+    /** Ссылка-приглашение группы (#147) */
+    invite(code: string) {
+      return client.get<GroupInvite>(`/groups/${encodeURIComponent(code)}/invite`)
+    },
+    resetInvite(code: string) {
+      return client.post<GroupInvite>(`/groups/${encodeURIComponent(code)}/invite/reset`)
+    },
+    invitePreview(token: string) {
+      return client.get<GroupInvitePreview>(`/groups/invite/${encodeURIComponent(token)}`)
+    },
+    joinByInvite(token: string, switchGroup = false) {
+      return client.post<GroupMembership>(
+        `/groups/invite/${encodeURIComponent(token)}/join${switchGroup ? '?switch=true' : ''}`,
+      )
+    },
     /** Выйти из группы (#157) */
     leave(code: string) {
       return client.delete<void>(`/groups/${encodeURIComponent(code)}/membership`)
@@ -127,6 +144,10 @@ export function createGroupsApi(client: ApiClient) {
     },
     reject(code: string, userId: string) {
       return client.post<void>(`/groups/${code}/reject/${userId}`)
+    },
+    /** Удалить участника: староста — из своей группы, модератор — из любой */
+    removeStudent(code: string, userId: string) {
+      return client.delete<void>(`/groups/${encodeURIComponent(code)}/students/${userId}`)
     },
     getSubjects(code: string) {
       return client.get<Subject[]>(`/groups/${code}/subjects`)
