@@ -24,12 +24,29 @@ class DeadlineView(BaseModel):
     assignment_id: uuid.UUID | None = None
 
 
+class TagView(BaseModel):
+    tag: str
+    key: str
+    can_remove: bool = False
+
+
+class TagCount(BaseModel):
+    tag: str
+    key: str
+    count: int
+
+
+class TagsIn(BaseModel):
+    tags: list[str] = Field(min_length=1, max_length=12)
+
+
 class SubjectSummary(BaseModel):
     """Карточка предмета в списке."""
 
     id: uuid.UUID
     name: str
     is_custom: bool
+    tags: list[TagView] = []
     teachers: list[str]
     lesson_types: list[str]
     first_semester: int | None
@@ -50,6 +67,8 @@ class SubjectList(BaseModel):
     selected_semester: int | None
     semesters: list[SemesterOption]
     subjects: list[SubjectSummary]
+    group_tags: list[TagCount] = []
+    tag_suggestions: list[str] = []
 
 
 def _clean_url(v: str | None) -> str | None:

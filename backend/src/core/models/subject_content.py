@@ -121,3 +121,23 @@ class SubjectWorkProgress(Base, UUIDMixin, TimestampMixin):
     passed: Mapped[bool] = mapped_column(Boolean, default=False)
     points: Mapped[float | None] = mapped_column(Float)
     passed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SubjectTag(Base, UUIDMixin, TimestampMixin):
+    """Тег предмета: «прога», «ИБ», «основа основ»… Общий для группы.
+
+    tag — как написали, key — нижний регистр без лишних пробелов: «ИБ» и «иб» —
+    один тег. Ставит любой подтверждённый участник, убирает поставивший или ведущий.
+    """
+
+    __tablename__ = "subject_tags"
+    __table_args__ = (UniqueConstraint("subject_id", "key", name="uq_subject_tag_key"),)
+
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("subjects.id", ondelete="CASCADE"), index=True
+    )
+    tag: Mapped[str] = mapped_column(String(32))
+    key: Mapped[str] = mapped_column(String(32), index=True)
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )

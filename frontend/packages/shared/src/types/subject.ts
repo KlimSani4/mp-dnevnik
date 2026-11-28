@@ -20,10 +20,23 @@ export interface SubjectDeadline {
   assignment_id: string | null
 }
 
+export interface SubjectTag {
+  tag: string
+  key: string
+  can_remove: boolean
+}
+
+export interface SubjectTagCount {
+  tag: string
+  key: string
+  count: number
+}
+
 export interface SubjectSummary {
   id: string
   name: string
   is_custom: boolean
+  tags: SubjectTag[]
   teachers: string[]
   lesson_types: string[]
   first_semester: number | null
@@ -44,6 +57,8 @@ export interface SubjectList {
   selected_semester: number | null
   semesters: SemesterOption[]
   subjects: SubjectSummary[]
+  group_tags: SubjectTagCount[]
+  tag_suggestions: string[]
 }
 
 export interface SubjectWorkView {

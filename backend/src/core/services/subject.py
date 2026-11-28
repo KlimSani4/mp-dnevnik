@@ -29,6 +29,7 @@ from src.core.models.subject_content import (
     ContentStatus,
     MaterialKind,
     SubjectMaterial,
+    SubjectTag,
     SubjectWork,
     SubjectWorkProgress,
     WorkKind,
@@ -46,6 +47,8 @@ from src.core.schemas.subject import (
     SubjectDetail,
     SubjectList,
     SubjectSummary,
+    TagCount,
+    TagView,
     WorkIn,
     WorkPatch,
     WorkView,
@@ -53,6 +56,33 @@ from src.core.schemas.subject import (
 from src.shared.exceptions import AuthorizationError, NotFoundError
 
 HOST_ROLES = {StudentRole.STAROSTA, StudentRole.DEPUTY, StudentRole.ASSISTANT}
+
+# Подсказки тегов: с чего начать, если в группе тегов ещё нет (#165)
+TAG_PRESETS = [
+    "прога",
+    "ИБ",
+    "основа основ",
+    "архитектура",
+    "сети",
+    "математика",
+    "алгоритмы",
+    "базы данных",
+    "веб",
+    "железо",
+    "проект",
+    "гуманитарка",
+    "язык",
+    "физра",
+    "экзамен",
+    "зачёт",
+]
+MAX_TAGS = 12
+
+
+def normalize_tag(raw: str) -> tuple[str, str] | None:
+    """(как показывать, ключ). «#ИБ » → («ИБ», «иб»); пустое — None."""
+    tag = " ".join(raw.strip().lstrip("#").split())[:32].strip()
+    return (tag, tag.lower()) if tag else None
 
 
 def moscow_today() -> date:
@@ -150,12 +180,34 @@ class SubjectService:
 
         data = await self._collect([s.id for s in shown], viewer, selected)
         summaries = [self._summary(s, viewer, data) for s in shown]
+        group_tags = await self._group_tags([s.id for s in subjects])
+        used = {t.key for t in group_tags}
         return SubjectList(
+            group_tags=group_tags,
+            tag_suggestions=[p for p in TAG_PRESETS if p.lower() not in used],
             group_code=group.code,
             current_semester=viewer.current_semester,
             selected_semester=selected,
             semesters=options,
             subjects=summaries,
+        )
+
+    async def _group_tags(self, subject_ids: list[uuid.UUID]) -> list[TagCount]:
+        """Все теги предметов группы (за все семестры) с числом предметов."""
+        if not subject_ids:
+            return []
+        counts: dict[str, list[Any]] = {}
+        for t in (
+            await self.session.execute(
+                select(SubjectTag)
+                .where(SubjectTag.subject_id.in_(subject_ids))
+                .order_by(SubjectTag.created_at)
+            )
+        ).scalars():
+            counts.setdefault(t.key, [t.tag, 0])[1] += 1
+        return sorted(
+            (TagCount(tag=v[0], key=k, count=v[1]) for k, v in counts.items()),
+            key=lambda x: (-x.count, x.key),
         )
 
     @staticmethod
@@ -184,7 +236,14 @@ class SubjectService:
     ) -> dict[str, Any]:
         """Всё, что нужно для карточек и страниц предметов, одним набором запросов."""
         if not subject_ids:
-            return {"works": {}, "materials": {}, "progress": {}, "entries": {}, "assignments": {}}
+            return {
+                "works": {},
+                "materials": {},
+                "progress": {},
+                "entries": {},
+                "assignments": {},
+                "tags": {},
+            }
         visible = or_(
             SubjectWork.status == ContentStatus.APPROVED,
             *([] if not viewer.is_host else [SubjectWork.status == ContentStatus.PENDING]),
@@ -282,7 +341,19 @@ class SubjectService:
                 out[it.subject_id].append(it)
             return out
 
+        tags = (
+            (
+                await self.session.execute(
+                    select(SubjectTag)
+                    .where(SubjectTag.subject_id.in_(subject_ids))
+                    .order_by(SubjectTag.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
         return {
+            "tags": by_subject(list(tags)),
             "works": by_subject(works),
             "materials": by_subject(materials),
             "progress": progress,
@@ -333,6 +404,14 @@ class SubjectService:
             id=subject.id,
             name=subject.name,
             is_custom=subject.is_custom,
+            tags=[
+                TagView(
+                    tag=t.tag,
+                    key=t.key,
+                    can_remove=viewer.is_host or t.author_id == viewer.user.id,
+                )
+                for t in data["tags"].get(subject.id, [])
+            ],
             teachers=sorted({e.teacher for e in entries if e.teacher}),
             lesson_types=sorted({e.lesson_type for e in entries if e.lesson_type}),
             first_semester=subject.first_semester,
@@ -448,6 +527,58 @@ class SubjectService:
             deadlines=self._deadlines(subject.id, data),
             required_left=max(0, required - labs_passed) if required is not None else None,
         )
+
+    # ─── Теги ───
+
+    async def add_tags(
+        self, subject_id: uuid.UUID, tags: list[str], user: User, semester: int | None = None
+    ) -> SubjectDetail:
+        """Поставить теги. Уже стоящие (без учёта регистра) пропускаются."""
+        subject, _ = await self._subject_viewer(subject_id, user)
+        existing = {
+            t.key
+            for t in (
+                await self.session.execute(
+                    select(SubjectTag).where(SubjectTag.subject_id == subject.id)
+                )
+            ).scalars()
+        }
+        for raw in tags:
+            norm = normalize_tag(raw)
+            if not norm or norm[1] in existing:
+                continue
+            if len(existing) >= MAX_TAGS:
+                break
+            existing.add(norm[1])
+            self.session.add(
+                SubjectTag(subject_id=subject.id, tag=norm[0], key=norm[1], author_id=user.id)
+            )
+        await self.session.commit()
+        return await self.detail(subject.id, user, semester)
+
+    async def remove_tag(
+        self, subject_id: uuid.UUID, key: str, user: User, semester: int | None = None
+    ) -> SubjectDetail:
+        subject, viewer = await self._subject_viewer(subject_id, user)
+        norm = normalize_tag(key)
+        tag = (
+            (
+                await self.session.execute(
+                    select(SubjectTag).where(
+                        SubjectTag.subject_id == subject.id, SubjectTag.key == norm[1]
+                    )
+                )
+            ).scalar_one_or_none()
+            if norm
+            else None
+        )
+        if not tag:
+            raise NotFoundError("Tag not found")
+        if not (viewer.is_host or tag.author_id == user.id):
+            raise AuthorizationError("Only the author or the group head can remove a tag")
+        await self.session.delete(tag)
+        await self.session.commit()
+        return await self.detail(subject.id, user, semester)
 
     # ─── Работы ───
 

@@ -289,3 +289,41 @@ async def test_import_marks_semesters(ctx: Ctx) -> None:
     mark_semester(s, None)
     assert (s.first_semester, s.last_semester) == (1, 4)
     assert ctx
+
+
+async def test_tags(ctx: Ctx) -> None:
+    c, ids, _ = ctx
+    nets = ids["nets"]
+    # Участник ставит теги; регистр и # не важны, дубли пропускаются
+    r = await c.post(
+        f"/subjects/{nets}/tags",
+        json={"tags": ["#ИБ ", "сети", "иб", "  "]},
+        headers=_auth(ids["anna"]),
+    )
+    assert r.status_code == 200, r.text
+    assert [(t["tag"], t["can_remove"]) for t in r.json()["tags"]] == [("ИБ", True), ("сети", True)]
+
+    # Другой участник видит, но убрать чужой не может; ведущий — может
+    r = await c.get(f"/subjects/{nets}", headers=_auth(ids["boris"]))
+    assert [t["can_remove"] for t in r.json()["tags"]] == [False, False]
+    r = await c.delete(f"/subjects/{nets}/tags/иб", headers=_auth(ids["boris"]))
+    assert r.status_code == 403
+    r = await c.delete(f"/subjects/{nets}/tags/ИБ", headers=_auth(ids["head"]))
+    assert [t["tag"] for t in r.json()["tags"]] == ["сети"]
+
+    # В списке — теги группы со счётчиком и подсказки без уже занятых
+    await c.post(
+        f"/subjects/{ids['old']}/tags",
+        json={"tags": ["Сети", "основа основ"]},
+        headers=_auth(ids["anna"]),
+    )
+    data = (await c.get(f"/subjects?group={CODE}", headers=_auth(ids["anna"]))).json()
+    assert [(t["key"], t["count"]) for t in data["group_tags"]] == [
+        ("сети", 2),
+        ("основа основ", 1),
+    ]
+    assert "сети" not in data["tag_suggestions"] and "прога" in data["tag_suggestions"]
+
+    # Чужая группа — нельзя
+    r = await c.post(f"/subjects/{nets}/tags", json={"tags": ["x"]}, headers=_auth(ids["outsider"]))
+    assert r.status_code == 403

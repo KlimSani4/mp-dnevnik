@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { format, parseISO } from 'date-fns'
-import { ApiClientError, useSubject, useSubjectAction, useUpdateSubjectRequirements } from '@nexora/shared'
+import { ApiClientError, useGroupContext, useSubject, useSubjectAction, useSubjectList, useUpdateSubjectRequirements } from '@nexora/shared'
 import type {
   MaterialKind,
   SubjectAction,
@@ -79,6 +79,7 @@ export function SubjectPage() {
             </span>
           )}
         </div>
+        <TagEditor detail={s} semester={semester} busy={action.isPending} run={run} />
       </div>
 
       {action.error && !workForm && !materialForm && (
@@ -523,5 +524,71 @@ function RequirementEditor({ code, subjectId, current }: { code: string; subject
       <input autoFocus inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} placeholder={t('subjects.requiredPh')} className="w-16 rounded-md border border-surface-200 bg-transparent px-2 py-1 text-sm dark:border-surface-600" />
       <Button size="sm" type="submit" disabled={update.isPending}>{t('subjects.save')}</Button>
     </form>
+  )
+}
+
+function TagEditor({ detail, semester, busy, run }: { detail: SubjectDetail; semester: number | null; busy: boolean; run: (a: SubjectAction) => void }) {
+  const { t } = useT()
+  const { groupCode } = useGroupContext()
+  const list = useSubjectList(groupCode, semester ?? null).data
+  const [adding, setAdding] = useState(false)
+  const [value, setValue] = useState('')
+  const have = new Set(detail.tags.map((x) => x.key))
+  const suggestions = [
+    ...(list?.group_tags.map((x) => x.tag) ?? []),
+    ...(list?.tag_suggestions ?? []),
+  ].filter((x, i, arr) => !have.has(x.toLowerCase()) && arr.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === i)
+  const q = value.trim().toLowerCase().replace(/^#/, '')
+  const matches = suggestions.filter((x) => !q || x.toLowerCase().includes(q)).slice(0, 8)
+  const add = (tag: string) => {
+    const clean = tag.trim().replace(/^#/, '')
+    if (!clean) return
+    run({ type: 'addTags', tags: [clean] })
+    setValue('')
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      {detail.tags.map((tg) => (
+        <span key={tg.key} className="inline-flex items-center gap-1 rounded-full bg-primary-50 py-0.5 pl-2.5 pr-1 text-xs font-medium text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
+          #{tg.tag}
+          {tg.can_remove ? (
+            <button type="button" disabled={busy} onClick={() => run({ type: 'removeTag', key: tg.key })} title={t('subjects.tags.remove')} className="rounded-full p-0.5 hover:bg-primary-100 dark:hover:bg-primary-500/20">
+              <Icon name="x" size={11} />
+            </button>
+          ) : <span className="w-1" />}
+        </span>
+      ))}
+      {!adding ? (
+        <button type="button" onClick={() => setAdding(true)} className="rounded-full border border-dashed border-surface-300 px-2.5 py-0.5 text-xs text-surface-500 hover:border-primary-400 hover:text-primary-600 dark:border-surface-600">
+          + {t(detail.tags.length ? 'subjects.tags.add' : 'subjects.tags.addFirst')}
+        </button>
+      ) : (
+        <div className="relative">
+          <form onSubmit={(e) => { e.preventDefault(); add(value) }} className="flex items-center gap-1">
+            <input
+              autoFocus
+              value={value}
+              maxLength={32}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && (setAdding(false), setValue(''))}
+              placeholder={t('subjects.tags.placeholder')}
+              aria-label={t('subjects.tags.add')}
+              className="w-44 rounded-full border border-primary-300 bg-white px-3 py-0.5 text-xs focus:outline-none dark:bg-surface-800"
+            />
+            <button type="button" onClick={() => { setAdding(false); setValue('') }} className="text-xs text-surface-400 hover:text-surface-700">{t('groupLeave.cancel')}</button>
+          </form>
+          {matches.length > 0 && (
+            <div className="absolute left-0 top-full z-20 mt-1 flex w-72 flex-wrap gap-1 rounded-lg border border-surface-200 bg-white p-2 shadow-lg dark:border-surface-700 dark:bg-surface-800">
+              {matches.map((m) => (
+                <button key={m} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => add(m)} className="rounded-full bg-surface-100 px-2 py-0.5 text-xs text-surface-700 hover:bg-primary-50 hover:text-primary-700 dark:bg-surface-700 dark:text-surface-200">
+                  #{m}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

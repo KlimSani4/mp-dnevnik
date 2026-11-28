@@ -70,7 +70,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["student_id"], ["students.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "subject_id", "semester_id", "student_id",
+            "subject_id",
+            "semester_id",
+            "student_id",
             name="uq_subject_semester_student",
         ),
     )

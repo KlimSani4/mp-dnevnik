@@ -375,6 +375,14 @@ export function createSubjectsApi(client: ApiClient) {
     get(id: string, semester?: number | null) {
       return client.get<SubjectDetail>(`/subjects/${id}`, s(semester))
     },
+    addTags(id: string, tags: string[], semester?: number | null) {
+      return client.post<SubjectDetail>(`/subjects/${id}/tags${semester ? `?semester=${semester}` : ''}`, { tags })
+    },
+    removeTag(id: string, key: string, semester?: number | null) {
+      return client.delete<SubjectDetail>(
+        `/subjects/${id}/tags/${encodeURIComponent(key)}${semester ? `?semester=${semester}` : ''}`,
+      )
+    },
     addWork(id: string, data: SubjectWorkInput) {
       return client.post<SubjectDetail>(`/subjects/${id}/works`, data)
     },

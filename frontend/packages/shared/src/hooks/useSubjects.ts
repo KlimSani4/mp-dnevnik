@@ -23,6 +23,8 @@ export function useSubject(id: string | null, semester?: number | null) {
 }
 
 export type SubjectAction =
+  | { type: 'addTags'; tags: string[] }
+  | { type: 'removeTag'; key: string }
   | { type: 'addWork'; data: SubjectWorkInput }
   | { type: 'updateWork'; workId: string; data: Partial<SubjectWorkInput> }
   | { type: 'deleteWork'; workId: string }
@@ -41,6 +43,8 @@ export function useSubjectAction(id: string, semester?: number | null) {
     mutationFn: (a: SubjectAction): Promise<SubjectDetail> => {
       const s = api.subjects
       switch (a.type) {
+        case 'addTags': return s.addTags(id, a.tags, semester)
+        case 'removeTag': return s.removeTag(id, a.key, semester)
         case 'addWork': return s.addWork(id, a.data)
         case 'updateWork': return s.updateWork(a.workId, a.data)
         case 'deleteWork': return s.deleteWork(a.workId)

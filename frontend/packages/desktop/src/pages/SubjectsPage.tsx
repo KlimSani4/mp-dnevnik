@@ -4,12 +4,14 @@
  * Семестр берётся из адреса (?semester=5 или ?semester=all), по умолчанию — текущий.
  * Курс и семестр сервер считает по коду группы; предмет помнит, в каких семестрах шёл.
  */
+import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { format, parseISO, differenceInCalendarDays } from 'date-fns'
 import { useGroupContext, useSubjectList } from '@nexora/shared'
-import type { SemesterOption, SubjectSummary } from '@nexora/shared'
+import type { SemesterOption, SubjectList, SubjectSummary } from '@nexora/shared'
 import { Card, Icon, Skeleton } from '../components/ui'
+import { applyFilters, readFilters, SubjectFilters, type Filters } from '../components/SubjectFilters'
 import { NoGroupState } from '../components/NoGroupState'
 import { useT } from '../i18n'
 
@@ -44,6 +46,24 @@ export function SubjectsPage() {
 
   const selected: number | 'all' | null = requested === 'all' ? 'all' : (data?.selected_semester ?? null)
   const semesters = data?.semesters ?? []
+  const filters = readFilters(params)
+  const shown = useMemo(() => applyFilters(data?.subjects ?? [], filters), [data, params]) // eslint-disable-line react-hooks/exhaustive-deps
+  const setFilters = (next: Partial<Filters>) => {
+    const p = new URLSearchParams(params)
+    const merged = { ...filters, ...next }
+    const put = (k: string, v: string | string[]) => {
+      const val = Array.isArray(v) ? v.join(',') : v
+      if (val) p.set(k, val)
+      else p.delete(k)
+    }
+    put('q', merged.q)
+    put('tags', merged.tags)
+    put('teacher', merged.teacher)
+    put('type', merged.types)
+    put('only', merged.only)
+    put('sort', merged.sort === 'name' ? '' : merged.sort)
+    setParams(p, { replace: true })
+  }
 
   return (
     <div>
@@ -58,12 +78,23 @@ export function SubjectsPage() {
         <SemesterFilter semesters={semesters} selected={selected} onSelect={setSemester} />
       )}
 
+      {data && data.subjects.length > 0 && (
+        <SubjectFilters list={data as SubjectList} filters={filters} onChange={setFilters} shown={shown.length} />
+      )}
+
       {query.isLoading ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-44 rounded-xl" />)}
         </div>
       ) : query.isError ? (
         <Card className="py-10 text-center text-sm text-surface-500 dark:text-surface-400">{t('subjects.loadError')}</Card>
+      ) : data && data.subjects.length > 0 && shown.length === 0 ? (
+        <Card className="py-12 text-center">
+          <p className="font-medium text-surface-600 dark:text-surface-300">{t('subjects.filter.nothing')}</p>
+          <button type="button" onClick={() => setFilters({ q: '', tags: [], teacher: '', types: [], only: [] })} className="mt-2 text-sm text-primary-600 hover:underline dark:text-primary-400">
+            {t('subjects.filter.reset')}
+          </button>
+        </Card>
       ) : !data?.subjects.length ? (
         <Card className="py-12 text-center">
           <p className="font-medium text-surface-600 dark:text-surface-300">{t('subjects.emptySemester')}</p>
@@ -71,8 +102,8 @@ export function SubjectsPage() {
         </Card>
       ) : (
         <div className={clsx('grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3', query.isFetching && 'opacity-70 transition-opacity')}>
-          {data.subjects.map((s) => (
-            <SubjectCard key={s.id} subject={s} semester={typeof selected === 'number' ? selected : null} />
+          {shown.map((s) => (
+            <SubjectCard key={s.id} subject={s} semester={typeof selected === 'number' ? selected : null} activeTags={filters.tags} />
           ))}
         </div>
       )}
@@ -172,7 +203,7 @@ export function DeadlineChip({ date, title }: { date: string; title?: string }) 
   )
 }
 
-function SubjectCard({ subject: s, semester }: { subject: SubjectSummary; semester: number | null }) {
+function SubjectCard({ subject: s, semester, activeTags }: { subject: SubjectSummary; semester: number | null; activeTags: string[] }) {
   const { t } = useT()
   const ratio = s.works_total ? s.works_passed / s.works_total : 0
   const left = s.required != null ? Math.max(0, s.required - s.works_passed) : null
@@ -195,6 +226,24 @@ function SubjectCard({ subject: s, semester }: { subject: SubjectSummary; semest
           </div>
           {s.teachers.length > 0 && (
             <p className="mt-0.5 truncate text-sm text-surface-500 dark:text-surface-400">{s.teachers.join(', ')}</p>
+          )}
+          {s.tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {s.tags.slice(0, 5).map((tg) => (
+                <span
+                  key={tg.key}
+                  className={clsx(
+                    'rounded-full px-2 py-0.5 text-2xs font-medium',
+                    activeTags.includes(tg.key)
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300',
+                  )}
+                >
+                  #{tg.tag}
+                </span>
+              ))}
+              {s.tags.length > 5 && <span className="text-2xs text-surface-400">+{s.tags.length - 5}</span>}
+            </div>
           )}
         </div>
 

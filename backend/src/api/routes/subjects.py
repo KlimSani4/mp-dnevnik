@@ -12,6 +12,7 @@ from src.core.schemas.subject import (
     ProgressIn,
     SubjectDetail,
     SubjectList,
+    TagsIn,
     WorkIn,
     WorkPatch,
 )
@@ -39,6 +40,30 @@ async def get_subject(
     semester: int | None = Query(None, ge=1, le=12),
 ) -> SubjectDetail:
     return await SubjectService(db).detail(subject_id, user, semester)
+
+
+@router.post("/{subject_id}/tags", response_model=SubjectDetail)
+async def add_tags(
+    subject_id: uuid.UUID,
+    data: TagsIn,
+    user: CurrentUser,
+    db: DBSession,
+    semester: int | None = Query(None, ge=1, le=12),
+) -> SubjectDetail:
+    """Поставить теги («прога», «ИБ»…): любой подтверждённый участник."""
+    return await SubjectService(db).add_tags(subject_id, data.tags, user, semester)
+
+
+@router.delete("/{subject_id}/tags/{key}", response_model=SubjectDetail)
+async def remove_tag(
+    subject_id: uuid.UUID,
+    key: str,
+    user: CurrentUser,
+    db: DBSession,
+    semester: int | None = Query(None, ge=1, le=12),
+) -> SubjectDetail:
+    """Убрать тег: поставивший или ведущий."""
+    return await SubjectService(db).remove_tag(subject_id, key, user, semester)
 
 
 @router.post("/{subject_id}/works", response_model=SubjectDetail, status_code=201)

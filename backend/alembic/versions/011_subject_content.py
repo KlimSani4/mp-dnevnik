@@ -6,6 +6,7 @@
 - subject_works — работы (лабы, практики…) с макс. баллом и дедлайном.
 - subject_materials — материалы ссылками; file_key — задел под загрузку файлов.
 - subject_work_progress — личные отметки «сдал» и баллы.
+- subject_tags — теги предметов («прога», «ИБ», «основа основ»).
 
 Миграция идемпотентна.
 
@@ -121,6 +122,37 @@ def upgrade() -> None:
             sa.UniqueConstraint("work_id", "user_id", name="uq_work_progress_user"),
         )
 
+    if "subject_tags" not in tables:
+        op.create_table(
+            "subject_tags",
+            sa.Column("id", UUID(as_uuid=True), primary_key=True),
+            sa.Column(
+                "subject_id",
+                UUID(as_uuid=True),
+                sa.ForeignKey("subjects.id", ondelete="CASCADE"),
+                nullable=False,
+                index=True,
+            ),
+            sa.Column("tag", sa.String(32), nullable=False),
+            sa.Column("key", sa.String(32), nullable=False, index=True),
+            sa.Column(
+                "author_id", UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL")
+            ),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+            sa.UniqueConstraint("subject_id", "key", name="uq_subject_tag_key"),
+        )
+
     _backfill_semesters()
 
 
@@ -151,7 +183,7 @@ def _backfill_semesters() -> None:
 
 def downgrade() -> None:
     tables = _tables()
-    for table in ("subject_work_progress", "subject_materials", "subject_works"):
+    for table in ("subject_tags", "subject_work_progress", "subject_materials", "subject_works"):
         if table in tables:
             op.drop_table(table)
     for col in ("last_semester", "first_semester"):
