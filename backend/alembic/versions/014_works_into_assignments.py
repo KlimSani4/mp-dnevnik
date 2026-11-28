@@ -10,15 +10,15 @@
 - subject_work_progress → task_statuses: «сдал» → done, баллы переносятся.
 - Таблицы subject_works и subject_work_progress удаляются.
 
-downgrade возвращает пустые таблицы работ; перенесённые задания остаются заданиями.
+Таблицы работ были только у локальных баз, собранных на ветке #166: в 011 их
+больше нет, на проде их не было. downgrade снимает новые колонки; перенесённые
+задания остаются заданиями.
 
 Revision ID: 014
 Revises: 013
 """
 
-import importlib.util
 from collections.abc import Sequence
-from pathlib import Path
 
 import sqlalchemy as sa
 
@@ -118,18 +118,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Схему таблиц работ берём из 011, чтобы не дублировать
-    spec = importlib.util.spec_from_file_location(
-        "m011", Path(__file__).with_name("011_subject_content.py")
-    )
-    assert spec and spec.loader
-    m011 = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m011)
-    tables = _tables()
-    if "subject_works" not in tables or "subject_work_progress" not in tables:
-        # 011.upgrade идемпотентна: создаст только недостающие таблицы
-        m011.upgrade()
-
     have = _columns("assignments")
     for name, _ in NEW_COLUMNS:
         if name in have:
