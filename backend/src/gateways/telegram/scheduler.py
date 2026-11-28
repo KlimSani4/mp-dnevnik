@@ -219,8 +219,11 @@ async def send_upcoming_class_notifications() -> None:
                                 extra={"user": identity.external_id, "error": str(e)},
                             )
             except Exception as e:
+                # Текст ошибки — в самом сообщении: формат логов не выводит extra
                 logger.warning(
-                    "Failed to process class reminders for group",
+                    "Failed to process class reminders for group %s: %r",
+                    group.code,
+                    e,
                     extra={"group": group.code, "error": str(e)},
                 )
 
