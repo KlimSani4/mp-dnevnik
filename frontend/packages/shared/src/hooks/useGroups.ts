@@ -211,6 +211,7 @@ export function useUpdateSubjectRequirements() {
       }),
     onSuccess: (_data, { code }) => {
       queryClient.invalidateQueries({ queryKey: ['groups', code] })
+      queryClient.invalidateQueries({ queryKey: ['subjects'] })
     },
   })
 }

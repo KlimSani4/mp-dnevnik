@@ -27,9 +27,26 @@ from src.core.models.schedule import (
     Subject,
 )
 from src.core.models.semester import ControlType, Semester, SubjectSemester
+from src.core.models.subject_content import (
+    ContentStatus,
+    MaterialKind,
+    SubjectMaterial,
+    SubjectTag,
+    SubjectWork,
+    SubjectWorkProgress,
+    WorkKind,
+)
 from src.core.models.user import AuditLog, ConsentRecord, Identity, User
 
 __all__ = [
+    # Subject content (#165)
+    "ContentStatus",
+    "MaterialKind",
+    "SubjectMaterial",
+    "SubjectTag",
+    "SubjectWork",
+    "SubjectWorkProgress",
+    "WorkKind",
     # Base
     "Base",
     "UUIDMixin",

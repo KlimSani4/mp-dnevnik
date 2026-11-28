@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 if TYPE_CHECKING:
     from redis.asyncio import Redis as _Redis
 
-from src.core.models.schedule import OverrideScope, OverrideType, ScheduleOverride
+from src.core.academic import AcademicTerm, term_for
+from src.core.models.schedule import OverrideScope, OverrideType, ScheduleOverride, Subject
 from src.core.repositories.group import GroupRepository, StudentRepository
 from src.core.repositories.schedule import (
     ScheduleEntryRepository,
@@ -34,6 +35,22 @@ from src.shared.exceptions import AuthorizationError, NotFoundError
 logger = logging.getLogger(__name__)
 
 SCHEDULE_CACHE_TTL = 3600  # 1 hour
+
+
+def moscow_today() -> date:
+    from datetime import UTC, datetime, timedelta
+
+    return (datetime.now(UTC) + timedelta(hours=3)).date()
+
+
+def mark_semester(subject: Subject, term: AcademicTerm | None) -> None:
+    """Запомнить, что предмет идёт в этом семестре (#165): история для фильтров."""
+    if term is None:
+        return
+    if subject.first_semester is None or term.semester < subject.first_semester:
+        subject.first_semester = term.semester
+    if subject.last_semester is None or term.semester > subject.last_semester:
+        subject.last_semester = term.semester
 
 
 class ScheduleService:
@@ -284,12 +301,14 @@ class ScheduleService:
                     break
 
         count = 0
+        term = term_for(group.code, moscow_today())
         for i, item in enumerate(parsed):
             subject = await self.subject_repo.get_or_create(
                 name=item["subject"],
                 short_name=item.get("short_name"),
                 group_id=group.id,
             )
+            mark_semester(subject, term)
             fields: dict[str, Any] = {
                 "subject_id": subject.id,
                 "start_time": item["start"],
@@ -381,6 +400,7 @@ class ScheduleService:
                 short_name=item["short_name"],
                 group_id=group.id,
             )
+            mark_semester(subject, term_for(group.code, item["date"]))
 
             key = (item["date"], item["pair_number"], item["subject"], item["lesson_type"])
             seen_keys.add(key)

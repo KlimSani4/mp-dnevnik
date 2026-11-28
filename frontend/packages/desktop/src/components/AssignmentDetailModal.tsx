@@ -3,7 +3,8 @@ import { format, formatDistanceToNow, isPast, startOfDay } from 'date-fns'
 import { useState, useCallback } from 'react'
 import { Modal, Button, Badge, Avatar, DatePicker, Icon, Input } from './ui'
 import { PriorityDropdown } from './PriorityDropdown'
-import { useUpdateAssignment, useDeleteAssignment } from '@nexora/shared'
+import { useUpdateAssignment, useDeleteAssignment, useUpdateTask } from '@nexora/shared'
+import { Markdown } from './Markdown'
 import {
   type Priority,
   type TaskState,
@@ -85,6 +86,7 @@ function AssignmentDetailModal({
   const [editDeadline, setEditDeadline] = useState('')
   const [editPriority, setEditPriority] = useState<string>('normal')
   const [editLink, setEditLink] = useState('')
+  const [editMaxPoints, setEditMaxPoints] = useState('')
 
   const enterEditMode = useCallback(() => {
     if (!task) return
@@ -94,6 +96,7 @@ function AssignmentDetailModal({
     setEditDeadline(isoToDateInput(a.deadline))
     setEditPriority(a.priority)
     setEditLink(a.link ?? '')
+    setEditMaxPoints(a.max_points != null ? String(a.max_points) : '')
     setEditMode(true)
   }, [task])
 
@@ -112,6 +115,7 @@ function AssignmentDetailModal({
           deadline: editDeadline ? new Date(editDeadline).toISOString() : undefined,
           priority: editPriority as Priority,
           link: editLink.trim() || undefined,
+          max_points: parsePoints(editMaxPoints),
         },
       },
       {
@@ -120,7 +124,7 @@ function AssignmentDetailModal({
         },
       },
     )
-  }, [task, updateAssignment, editTitle, editDescription, editDeadline, editPriority, editLink])
+  }, [task, updateAssignment, editTitle, editDescription, editDeadline, editPriority, editLink, editMaxPoints])
 
   const handleDelete = useCallback(() => {
     if (!task) return
@@ -268,12 +272,22 @@ function AssignmentDetailModal({
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
                 placeholder={t('assign.descriptionPlaceholder')}
-                rows={4}
-                className="input resize-none"
+                rows={6}
+                className="input resize-y font-mono text-[13px]"
               />
+              <p className="text-xs text-surface-400">{t('assign.markdownHint')}</p>
             </div>
             <DatePicker label={t('assign.deadline')} value={editDeadline} onChange={setEditDeadline} />
             <PriorityDropdown value={editPriority} onChange={setEditPriority} />
+            <Input
+              label={t('assign.maxPoints')}
+              type="number"
+              min={0}
+              step="any"
+              value={editMaxPoints}
+              onChange={(e) => setEditMaxPoints(e.target.value)}
+              placeholder={t('assign.maxPointsPlaceholder')}
+            />
             <Input
               label={t('assign.link')}
               type="url"
@@ -358,14 +372,19 @@ function AssignmentDetailModal({
               </span>
             </div>
 
+            {/* Баллы: максимум задания и свой полученный (#165) */}
+            <PointsBlock task={task} />
+
             {/* Description */}
             <div className="rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
               <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-50 mb-2">
                 {t('assign.description')}
               </h3>
-              <p className="text-sm text-surface-600 dark:text-surface-400 leading-relaxed whitespace-pre-wrap">
-                {assignment.description}
-              </p>
+              {assignment.description?.trim() ? (
+                <Markdown text={assignment.description} />
+              ) : (
+                <p className="text-sm text-surface-400">{t('assign.noDescription')}</p>
+              )}
             </div>
 
             {/* External Link */}
@@ -522,4 +541,65 @@ function AssignmentDetailModal({
 }
 
 export { AssignmentDetailModal }
+/** Пусто — null, иначе число ≥ 0. */
+function parsePoints(v: string): number | null {
+  const n = Number(v.replace(',', '.'))
+  return v.trim() === '' || !Number.isFinite(n) || n < 0 ? null : n
+}
+
+/** Мой балл за задание: ставится в любой момент, обычно после «Сдал» / «Зачтено». */
+function PointsBlock({ task }: { task: Task }) {
+  const { t } = useT()
+  const updateTask = useUpdateTask()
+  const saved = task.points != null ? String(task.points) : ''
+  const [value, setValue] = useState(saved)
+  const [prev, setPrev] = useState(saved)
+  if (saved !== prev) {
+    // Пришли свежие данные — подтягиваем, не затирая ввод без причины
+    setPrev(saved)
+    setValue(saved)
+  }
+  const max = task.assignment.max_points
+  const points = parsePoints(value)
+  const tooMuch = max != null && points != null && points > max
+  const dirty = (points ?? null) !== (task.points ?? null)
+  const save = () =>
+    updateTask.mutate({ assignmentId: task.assignment.id, data: { state: task.state, points } })
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-white p-3 shadow-sm dark:bg-surface-800">
+      <Icon name="chart" size={16} className="text-surface-400" />
+      <span className="text-sm font-medium text-surface-700 dark:text-surface-300">{t('assign.myPoints')}</span>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (dirty) save()
+        }}
+      >
+        <input
+          type="number"
+          min={0}
+          step="any"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="—"
+          aria-label={t('assign.myPoints')}
+          className={clsx('input !h-8 !w-20 !px-2 text-center tabular-nums', tooMuch && '!border-warning-500')}
+        />
+        <span className="text-sm text-surface-500 dark:text-surface-400">
+          {max != null ? t('assign.ofMax', { max: String(max) }) : t('assign.noMax')}
+        </span>
+        {dirty && (
+          <Button type="submit" size="sm" variant="primary">
+            {updateTask.isPending ? t('common.saving') : t('common.save')}
+          </Button>
+        )}
+      </form>
+      {tooMuch && <span className="text-xs text-warning-600 dark:text-warning-500">{t('assign.overMax')}</span>}
+    </div>
+  )
+}
+
 export type { AssignmentDetailModalProps }

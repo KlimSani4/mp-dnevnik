@@ -22,6 +22,7 @@ from src.api.routes import (
     queues,
     schedule,
     semesters,
+    subjects,
     support,
     tasks,
     users,
@@ -39,6 +40,51 @@ logger = logging.getLogger(__name__)
 _bot_task: asyncio.Task[None] | None = None
 
 
+def is_schema_outdated(exc: BaseException) -> bool:
+    """Ошибка из-за неприменённых миграций: нет таблицы или колонки."""
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        name = type(cur).__name__
+        if name in (
+            "UndefinedColumnError",
+            "UndefinedTableError",
+            "UndefinedColumn",
+            "UndefinedTable",
+        ):
+            return True
+        cur = cur.__cause__ or cur.__context__ or getattr(cur, "orig", None)
+    return False
+
+
+async def warn_if_migrations_pending() -> None:
+    """Громко сказать в лог, если база отстаёт от миграций в коде (#165)."""
+    try:
+        from pathlib import Path
+
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+        from sqlalchemy import text
+
+        from src.shared.database import engine
+
+        root = Path(__file__).resolve().parents[2]
+        head = ScriptDirectory.from_config(Config(str(root / "alembic.ini"))).get_current_head()
+        async with engine.connect() as conn:
+            current = (
+                await conn.execute(text("SELECT version_num FROM alembic_version"))
+            ).scalar_one_or_none()
+        if current != head:
+            logger.error(
+                "Database is at migration %s, code expects %s: run `alembic upgrade head`",
+                current,
+                head,
+            )
+    except Exception as e:  # noqa: BLE001 — проверка не должна мешать старту
+        logger.warning("Could not check migrations: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> Any:
     """Application lifespan events."""
@@ -49,6 +95,7 @@ async def lifespan(_app: FastAPI) -> Any:
 
     await init_db()
     logger.info("Database initialized")
+    await warn_if_migrations_pending()
 
     try:
         await init_redis()
@@ -108,12 +155,25 @@ def create_app() -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def generic_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
+    async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled exception")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error"},
-        )
+        content: dict[str, str] = {"detail": "Internal server error", "code": "INTERNAL"}
+        if is_schema_outdated(exc):
+            # Таблицы или колонки нет — не применены миграции (#165)
+            content = {
+                "detail": "Database schema is outdated: run alembic upgrade head",
+                "code": "DB_SCHEMA_OUTDATED",
+            }
+        response = JSONResponse(status_code=500, content=content)
+        # Ответ на необработанную ошибку собирается снаружи CORSMiddleware и уходит
+        # без CORS-заголовков: браузер прячет 500 и сайт видит «нет связи с сервером».
+        # Добавляем их сами для разрешённых источников.
+        origin = request.headers.get("origin")
+        if origin and (origin in settings.CORS_ORIGINS or "*" in settings.CORS_ORIGINS):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Vary"] = "Origin"
+        return response
 
     # Middleware (order matters - first added = last executed)
     app.add_middleware(RequestLoggingMiddleware)
@@ -146,6 +206,7 @@ def create_app() -> FastAPI:
     app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
     app.include_router(internal.router, prefix="/api/v1/internal", tags=["internal"])
     app.include_router(queues.router, prefix="/api/v1/queues", tags=["queues"])
+    app.include_router(subjects.router, prefix="/api/v1/subjects", tags=["subjects"])
     app.include_router(support.router, prefix="/api/v1/support", tags=["support"])
     app.include_router(moderation.router, prefix="/api/v1/moderation", tags=["moderation"])
 

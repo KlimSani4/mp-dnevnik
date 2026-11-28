@@ -5,7 +5,17 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +56,8 @@ class Assignment(Base, UUIDMixin, TimestampMixin):
     votes_down: Mapped[int] = mapped_column(Integer, default=0)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     is_personal: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Максимальный балл за задание; NULL — задание без баллов (#165)
+    max_points: Mapped[float | None] = mapped_column(Float)
 
     # Relationships
     group: Mapped["Group"] = relationship("Group", back_populates="assignments")
@@ -117,6 +129,8 @@ class TaskStatus(Base, UUIDMixin, TimestampMixin):
         Enum(TaskState, native_enum=False),
         default=TaskState.TODO,
     )
+    # Сколько баллов получил студент; NULL — не проставлено (#165)
+    points: Mapped[float | None] = mapped_column(Float)
 
     # Relationships
     student: Mapped["Student"] = relationship("Student", back_populates="task_statuses")

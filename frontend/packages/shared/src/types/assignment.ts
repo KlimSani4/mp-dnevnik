@@ -13,6 +13,8 @@ export interface Assignment {
   is_verified: boolean
   is_personal: boolean
   author_id: string
+  /** Максимальный балл; null — без баллов (#165) */
+  max_points?: number | null
   subject: {
     id: string
     name: string
@@ -29,6 +31,7 @@ export interface AssignmentCreateRequest {
   priority: Priority
   link?: string
   is_personal?: boolean
+  max_points?: number | null
 }
 
 export interface AssignmentUpdateRequest {
@@ -38,6 +41,7 @@ export interface AssignmentUpdateRequest {
   priority?: Priority
   link?: string
   is_personal?: boolean
+  max_points?: number | null
 }
 
 export interface AssignmentVoteRequest {
@@ -57,12 +61,16 @@ export interface AssignmentSearchParams {
 export interface Task {
   id: string
   state: TaskState
+  /** Полученный балл (#165) */
+  points?: number | null
   assignment: Assignment
   updated_at: string
 }
 
 export interface TaskUpdateRequest {
   state: TaskState
+  /** Не передан — балл не меняется, null — стереть (#165) */
+  points?: number | null
 }
 
 export interface TaskSearchParams {

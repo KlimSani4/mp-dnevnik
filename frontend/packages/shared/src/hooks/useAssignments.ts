@@ -21,6 +21,8 @@ function refreshAssignmentViews(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: ['assignments'] }),
     queryClient.invalidateQueries({ queryKey: ['tasks'] }),
     queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+    // Баллы и дедлайны заданий видны в «Предметах» (#165)
+    queryClient.invalidateQueries({ queryKey: ['subjects'] }),
   ])
 }
 
@@ -131,7 +133,12 @@ export function useUpdateTask() {
           key,
           prev.map((t) =>
             t.assignment.id === assignmentId
-              ? { ...t, state: data.state, updated_at: new Date().toISOString() }
+              ? {
+                  ...t,
+                  state: data.state,
+                  ...('points' in data ? { points: data.points ?? null } : {}),
+                  updated_at: new Date().toISOString(),
+                }
               : t,
           ),
         )
