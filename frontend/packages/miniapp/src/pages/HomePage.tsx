@@ -130,9 +130,9 @@ export function HomePage() {
 
   // Burning deadlines: tasks not done, sorted by deadline
   const burningDeadlines = (tasks ?? [])
-    .filter((t) => t.state !== 'done')
+    .filter((t) => t.state !== 'done' && t.assignment.deadline)
     .map((t) => t.assignment)
-    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+    .sort((a, b) => new Date(a.deadline ?? 0).getTime() - new Date(b.deadline ?? 0).getTime())
     .slice(0, 3)
 
   return (
@@ -228,7 +228,7 @@ export function HomePage() {
                         fontWeight: 500,
                       }}
                     >
-                      до {formatDeadline(assignment.deadline)}
+                      {assignment.deadline ? `до ${formatDeadline(assignment.deadline)}` : 'без срока'}
                     </span>
                   </div>
                 </div>

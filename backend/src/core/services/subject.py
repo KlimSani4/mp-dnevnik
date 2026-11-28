@@ -22,7 +22,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.academic import course_of, is_autumn, term_for
-from src.core.models.assignment import Assignment, TaskStatus
+from src.core.models.assignment import Assignment, TaskState, TaskStatus
 from src.core.models.group import Group, Student, StudentRole
 from src.core.models.schedule import ScheduleEntry, Subject
 from src.core.models.subject_content import (
@@ -30,8 +30,6 @@ from src.core.models.subject_content import (
     MaterialKind,
     SubjectMaterial,
     SubjectTag,
-    SubjectWork,
-    SubjectWorkProgress,
     WorkKind,
 )
 from src.core.models.user import User
@@ -42,7 +40,6 @@ from src.core.schemas.subject import (
     MaterialIn,
     MaterialPatch,
     MaterialView,
-    ProgressIn,
     ScheduleSlot,
     SemesterOption,
     SubjectDetail,
@@ -50,11 +47,18 @@ from src.core.schemas.subject import (
     SubjectSummary,
     TagCount,
     TagView,
-    WorkIn,
-    WorkPatch,
-    WorkView,
 )
 from src.shared.exceptions import AuthorizationError, NotFoundError
+
+
+@dataclass(slots=True)
+class TaskRow:
+    """Задание предмета и своя отметка по нему."""
+
+    a: Assignment
+    state: str
+    points: float | None
+
 
 HOST_ROLES = {StudentRole.STAROSTA, StudentRole.DEPUTY, StudentRole.ASSISTANT}
 
@@ -248,30 +252,11 @@ class SubjectService:
         """Всё, что нужно для карточек и страниц предметов, одним набором запросов."""
         if not subject_ids:
             return {
-                "works": {},
+                "tasks": {},
                 "materials": {},
-                "progress": {},
                 "entries": {},
-                "assignments": {},
                 "tags": {},
             }
-        visible = or_(
-            SubjectWork.status == ContentStatus.APPROVED,
-            *([] if not viewer.is_host else [SubjectWork.status == ContentStatus.PENDING]),
-            SubjectWork.author_id == viewer.user.id,
-        )
-        works = (
-            (
-                await self.session.execute(
-                    select(SubjectWork)
-                    .where(SubjectWork.subject_id.in_(subject_ids), visible)
-                    .order_by(SubjectWork.kind, SubjectWork.number.nulls_last(), SubjectWork.title)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        works = [w for w in works if _in_semester(w.semester, selected)]
         visible_m = or_(
             SubjectMaterial.status == ContentStatus.APPROVED,
             *([] if not viewer.is_host else [SubjectMaterial.status == ContentStatus.PENDING]),
@@ -294,18 +279,6 @@ class SubjectService:
         )
         materials = [m for m in materials if _in_semester(m.semester, selected)]
 
-        progress: dict[uuid.UUID, SubjectWorkProgress] = {}
-        if works:
-            for p in (
-                await self.session.execute(
-                    select(SubjectWorkProgress).where(
-                        SubjectWorkProgress.user_id == viewer.user.id,
-                        SubjectWorkProgress.work_id.in_([w.id for w in works]),
-                    )
-                )
-            ).scalars():
-                progress[p.work_id] = p
-
         entries = (
             (
                 await self.session.execute(
@@ -317,29 +290,12 @@ class SubjectService:
             .scalars()
             .all()
         )
-        now = datetime.now(UTC)
-        assignments = (
-            (
-                await self.session.execute(
-                    select(Assignment).where(
-                        Assignment.subject_id.in_(subject_ids),
-                        Assignment.deadline >= now,
-                        or_(
-                            Assignment.is_personal.is_(False),
-                            Assignment.author_id == viewer.user.id,
-                        ),
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        # Баллы за задания с максимумом: в сумму баллов предмета (#165)
+        # Задания и работы предмета (это одно и то же) + своя отметка: статус и балл
         my_students = select(Student.id).where(Student.user_id == viewer.user.id)
-        scored: dict[uuid.UUID, list[tuple[float, float | None]]] = defaultdict(list)
-        for subject_id, max_points, got in (
+        tasks: dict[uuid.UUID, list[TaskRow]] = defaultdict(list)
+        for a, state, points in (
             await self.session.execute(
-                select(Assignment.subject_id, Assignment.max_points, TaskStatus.points)
+                select(Assignment, TaskStatus.state, TaskStatus.points)
                 .outerjoin(
                     TaskStatus,
                     (TaskStatus.assignment_id == Assignment.id)
@@ -347,7 +303,6 @@ class SubjectService:
                 )
                 .where(
                     Assignment.subject_id.in_(subject_ids),
-                    Assignment.max_points.is_not(None),
                     or_(
                         Assignment.is_personal.is_(False),
                         Assignment.author_id == viewer.user.id,
@@ -355,11 +310,10 @@ class SubjectService:
                 )
             )
         ).all():
-            scored[subject_id].append((max_points, got))
+            if _in_semester(a.semester, selected):
+                tasks[a.subject_id].append(TaskRow(a, state or TaskState.TODO, points))
         authors: dict[uuid.UUID, str] = {}
-        author_ids: set[uuid.UUID] = {w.author_id for w in works if w.author_id} | {
-            m.author_id for m in materials if m.author_id
-        }
+        author_ids: set[uuid.UUID] = {m.author_id for m in materials if m.author_id}
         if author_ids:
             for uid, name in (
                 await self.session.execute(
@@ -387,12 +341,9 @@ class SubjectService:
         )
         return {
             "tags": by_subject(list(tags)),
-            "works": by_subject(works),
+            "tasks": tasks,
             "materials": by_subject(materials),
-            "progress": progress,
             "entries": by_subject(list(entries)),
-            "assignments": by_subject(list(assignments)),
-            "scored": scored,
             "authors": authors,
         }
 
@@ -404,36 +355,30 @@ class SubjectService:
         return int(total) if isinstance(total, int | float) else None
 
     def _deadlines(self, subject_id: uuid.UUID, data: dict[str, Any]) -> list[DeadlineView]:
-        today = moscow_today()
+        """Ближайшие несделанные задания и работы."""
+        now = datetime.now(UTC)
         out = [
-            DeadlineView(title=w.title, date=w.deadline, kind="work", work_id=w.id)
-            for w in data["works"].get(subject_id, [])
-            if w.deadline and w.deadline >= today and w.status == ContentStatus.APPROVED
-        ]
-        out += [
             DeadlineView(
-                title=a.title,
-                date=(a.deadline + timedelta(hours=3)).date(),
+                title=r.a.title,
+                date=(r.a.deadline + timedelta(hours=3)).date(),
                 kind="assignment",
-                assignment_id=a.id,
+                assignment_id=r.a.id,
             )
-            for a in data["assignments"].get(subject_id, [])
-            if a.deadline
+            for r in data["tasks"].get(subject_id, [])
+            if r.a.deadline and r.a.deadline >= now and r.state != TaskState.DONE
         ]
         return sorted(out, key=lambda d: d.date)
 
+    @staticmethod
+    def _labs_done(rows: list[TaskRow]) -> int:
+        return sum(1 for r in rows if r.a.kind == WorkKind.LAB and r.state == TaskState.DONE)
+
     def _summary(self, subject: Subject, viewer: Viewer, data: dict[str, Any]) -> SubjectSummary:
-        works = [w for w in data["works"].get(subject.id, []) if w.status == ContentStatus.APPROVED]
-        progress = data["progress"]
-        passed = [w for w in works if (p := progress.get(w.id)) and p.passed]
-        points = sum((progress[w.id].points or 0) for w in works if w.id in progress)
+        rows: list[TaskRow] = data["tasks"].get(subject.id, [])
         entries = data["entries"].get(subject.id, [])
         pending = sum(
-            1
-            for x in [*data["works"].get(subject.id, []), *data["materials"].get(subject.id, [])]
-            if x.status == ContentStatus.PENDING
+            1 for m in data["materials"].get(subject.id, []) if m.status == ContentStatus.PENDING
         )
-        scored = data.get("scored", {}).get(subject.id, [])
         deadlines = self._deadlines(subject.id, data)
         return SubjectSummary(
             id=subject.id,
@@ -452,10 +397,12 @@ class SubjectService:
             lesson_types=sorted({e.lesson_type for e in entries if e.lesson_type}),
             first_semester=subject.first_semester,
             last_semester=subject.last_semester,
-            works_total=len(works),
-            works_passed=len(passed),
-            points=round(points + sum(got or 0 for _, got in scored), 2),
-            max_points=round(sum(w.max_points or 0 for w in works) + sum(m for m, _ in scored), 2),
+            works_total=len(rows),
+            works_passed=sum(1 for r in rows if r.state == TaskState.DONE),
+            labs_total=sum(1 for r in rows if r.a.kind == WorkKind.LAB),
+            labs_passed=self._labs_done(rows),
+            points=round(sum(r.points or 0 for r in rows), 2),
+            max_points=round(sum(r.a.max_points or 0 for r in rows), 2),
             required=self._required(viewer, subject.id),
             materials=sum(
                 1
@@ -475,27 +422,7 @@ class SubjectService:
         data = await self._collect([subject.id], viewer, semester)
         summary = self._summary(subject, viewer, data)
         authors: dict[uuid.UUID, str] = data.get("authors", {})
-        progress = data["progress"]
 
-        works = [
-            WorkView(
-                id=w.id,
-                kind=w.kind,
-                number=w.number,
-                title=w.title,
-                max_points=w.max_points,
-                deadline=w.deadline,
-                description=w.description,
-                url=w.url,
-                semester=w.semester,
-                status=w.status,
-                author_name=authors.get(w.author_id) if w.author_id else None,
-                is_mine=w.author_id == user.id,
-                passed=bool(progress.get(w.id) and progress[w.id].passed),
-                points=progress[w.id].points if w.id in progress else None,
-            )
-            for w in data["works"].get(subject.id, [])
-        ]
         materials = [
             MaterialView(
                 id=m.id,
@@ -559,24 +486,18 @@ class SubjectService:
                 )
 
         required = summary.required
-        labs_passed = sum(
-            1
-            for w in works
-            if w.passed and w.kind == WorkKind.LAB and w.status == ContentStatus.APPROVED
-        )
         return SubjectDetail(
             **summary.model_dump(),
             group_code=viewer.group.code if viewer.group else None,
             can_moderate=viewer.is_host,
             can_write=viewer.can_write,
             schedule=slots,
-            works=works,
             materials_list=[
                 m for m in materials if m.kind not in (MaterialKind.LECTURE, MaterialKind.RECORDING)
             ],
             lectures=lectures,
             deadlines=self._deadlines(subject.id, data),
-            required_left=max(0, required - labs_passed) if required is not None else None,
+            required_left=max(0, required - summary.labs_passed) if required is not None else None,
         )
 
     # ─── Теги ───
@@ -645,99 +566,16 @@ class SubjectService:
         await self.session.commit()
         return await self.detail(subject.id, user, semester)
 
-    # ─── Работы ───
+    # ─── Общее для материалов ───
 
     def _status(self, viewer: Viewer) -> str:
         return ContentStatus.APPROVED if viewer.is_host else ContentStatus.PENDING
 
-    async def add_work(self, subject_id: uuid.UUID, data: WorkIn, user: User) -> SubjectDetail:
-        subject, viewer = await self._subject_viewer(subject_id, user)
-        viewer.require_write()
-        work = SubjectWork(
-            subject_id=subject.id,
-            semester=data.semester or viewer.current_semester or subject.last_semester,
-            kind=data.kind,
-            number=data.number,
-            title=data.title.strip(),
-            max_points=data.max_points,
-            deadline=data.deadline,
-            description=data.description,
-            url=data.url,
-            status=self._status(viewer),
-            author_id=user.id,
-            approved_by=user.id if viewer.is_host else None,
-        )
-        self.session.add(work)
-        await self.session.commit()
-        return await self.detail(subject.id, user, work.semester)
-
-    async def _work(self, work_id: uuid.UUID, user: User) -> tuple[SubjectWork, Viewer]:
-        work = await self.session.get(SubjectWork, work_id)
-        if not work:
-            raise NotFoundError("Work not found")
-        _, viewer = await self._subject_viewer(work.subject_id, user)
-        if (
-            work.status == ContentStatus.PENDING
-            and not viewer.is_host
-            and work.author_id != user.id
-        ):
-            raise NotFoundError("Work not found")
-        return work, viewer
-
     @staticmethod
-    def _can_edit(item: SubjectWork | SubjectMaterial, viewer: Viewer) -> None:
+    def _can_edit(item: SubjectMaterial, viewer: Viewer) -> None:
         own_pending = item.author_id == viewer.user.id and item.status == ContentStatus.PENDING
         if not (viewer.is_host or own_pending):
             raise AuthorizationError("Only the group head or assistants can change this")
-
-    async def update_work(self, work_id: uuid.UUID, data: WorkPatch, user: User) -> SubjectDetail:
-        work, viewer = await self._work(work_id, user)
-        self._can_edit(work, viewer)
-        for field, value in data.model_dump(exclude_unset=True).items():
-            setattr(
-                work, field, value.strip() if isinstance(value, str) and field == "title" else value
-            )
-        await self.session.commit()
-        return await self.detail(work.subject_id, user, work.semester)
-
-    async def delete_work(self, work_id: uuid.UUID, user: User) -> SubjectDetail:
-        work, viewer = await self._work(work_id, user)
-        self._can_edit(work, viewer)
-        subject_id, semester = work.subject_id, work.semester
-        await self.session.delete(work)
-        await self.session.commit()
-        return await self.detail(subject_id, user, semester)
-
-    async def approve_work(self, work_id: uuid.UUID, user: User) -> SubjectDetail:
-        work, viewer = await self._work(work_id, user)
-        if not viewer.is_host:
-            raise AuthorizationError("Only the group head or assistants can approve")
-        work.status = ContentStatus.APPROVED
-        work.approved_by = user.id
-        await self.session.commit()
-        return await self.detail(work.subject_id, user, work.semester)
-
-    async def set_progress(self, work_id: uuid.UUID, data: ProgressIn, user: User) -> SubjectDetail:
-        work, viewer = await self._work(work_id, user)
-        viewer.require_write()
-        if work.status != ContentStatus.APPROVED:
-            raise NotFoundError("Work not found")
-        progress = (
-            await self.session.execute(
-                select(SubjectWorkProgress).where(
-                    SubjectWorkProgress.work_id == work.id, SubjectWorkProgress.user_id == user.id
-                )
-            )
-        ).scalar_one_or_none()
-        if progress is None:
-            progress = SubjectWorkProgress(work_id=work.id, user_id=user.id)
-            self.session.add(progress)
-        if data.passed and not progress.passed:
-            progress.passed_at = datetime.now(UTC)
-        progress.passed = data.passed
-        progress.points = data.points
-        await self.session.commit()
-        return await self.detail(work.subject_id, user, work.semester)
 
     # ─── Материалы ───
 
@@ -805,49 +643,47 @@ class SubjectService:
 async def mark_labs_passed(
     session: AsyncSession, subject_id: uuid.UUID, user_id: uuid.UUID, labs: list[int]
 ) -> int:
-    """«Сдал» в очереди (#62) отмечает лабы с этими номерами в «Предметах» (#165).
+    """Сдал в очереди → лабы с этими номерами отмечаются сданными («Зачтено»).
 
-    Без commit: вызывается внутри действия очереди. Возвращает, сколько отметил.
+    Берём групповые лабы предмета и свои личные. Коммит — на вызывающем.
     """
     if not labs:
         return 0
-    works = (
-        (
-            await session.execute(
-                select(SubjectWork).where(
-                    SubjectWork.subject_id == subject_id,
-                    SubjectWork.kind == WorkKind.LAB,
-                    SubjectWork.status == ContentStatus.APPROVED,
-                    SubjectWork.number.in_(labs),
-                )
+    rows = (
+        await session.execute(
+            select(Assignment, Student.id)
+            .join(
+                Student,
+                (Student.group_id == Assignment.group_id) & (Student.user_id == user_id),
+            )
+            .where(
+                Assignment.subject_id == subject_id,
+                Assignment.kind == WorkKind.LAB,
+                Assignment.number.in_(labs),
+                or_(Assignment.is_personal.is_(False), Assignment.author_id == user_id),
             )
         )
-        .scalars()
-        .all()
-    )
-    if not works:
+    ).all()
+    if not rows:
         return 0
     existing = {
-        p.work_id: p
-        for p in (
+        t.assignment_id: t
+        for t in (
             await session.execute(
-                select(SubjectWorkProgress).where(
-                    SubjectWorkProgress.user_id == user_id,
-                    SubjectWorkProgress.work_id.in_([w.id for w in works]),
+                select(TaskStatus).where(
+                    TaskStatus.assignment_id.in_([a.id for a, _ in rows]),
+                    TaskStatus.student_id.in_({sid for _, sid in rows}),
                 )
             )
         ).scalars()
     }
-    now = datetime.now(UTC)
-    for w in works:
-        p = existing.get(w.id)
-        if p is None:
-            session.add(
-                SubjectWorkProgress(work_id=w.id, user_id=user_id, passed=True, passed_at=now)
-            )
-        elif not p.passed:
-            p.passed, p.passed_at = True, now
-    return len(works)
+    for a, student_id in rows:
+        status = existing.get(a.id)
+        if status is None:
+            session.add(TaskStatus(student_id=student_id, assignment_id=a.id, state=TaskState.DONE))
+        else:
+            status.state = TaskState.DONE
+    return len(rows)
 
 
 __all__ = ["SubjectService", "mark_labs_passed"]

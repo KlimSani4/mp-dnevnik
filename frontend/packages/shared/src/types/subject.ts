@@ -1,6 +1,7 @@
 /** Раздел «Предметы» (#165) */
 
-export type WorkKind = 'lab' | 'practice' | 'homework' | 'test' | 'coursework' | 'other'
+import type { WorkKind } from './assignment'
+export type { WorkKind }
 export type MaterialKind = 'theory' | 'presentation' | 'manual' | 'lecture' | 'recording' | 'other'
 export type ContentStatus = 'approved' | 'pending'
 
@@ -15,8 +16,7 @@ export interface SemesterOption {
 export interface SubjectDeadline {
   title: string
   date: string
-  kind: 'work' | 'assignment'
-  work_id: string | null
+  kind: 'assignment'
   assignment_id: string | null
 }
 
@@ -43,8 +43,12 @@ export interface SubjectSummary {
   last_semester: number | null
   /** Таблица с оценками (#165) */
   grades_url?: string | null
+  /** Работы и задания предмета: всего и сдано (#165: работы — это задания с типом) */
   works_total: number
   works_passed: number
+  /** Лабы среди них — для допуска */
+  labs_total: number
+  labs_passed: number
   points: number
   max_points: number
   required: number | null
@@ -62,23 +66,6 @@ export interface SubjectList {
   subjects: SubjectSummary[]
   group_tags: SubjectTagCount[]
   tag_suggestions: string[]
-}
-
-export interface SubjectWorkView {
-  id: string
-  kind: WorkKind
-  number: number | null
-  title: string
-  max_points: number | null
-  deadline: string | null
-  description: string | null
-  url: string | null
-  semester: number | null
-  status: ContentStatus
-  author_name: string | null
-  is_mine: boolean
-  passed: boolean
-  points: number | null
 }
 
 export interface SubjectMaterialView {
@@ -125,22 +112,10 @@ export interface SubjectDetail extends SubjectSummary {
   /** false — заявка в группу не подтверждена: только просмотр */
   can_write: boolean
   schedule: SubjectScheduleSlot[]
-  works: SubjectWorkView[]
   materials_list: SubjectMaterialView[]
   lectures: SubjectLectureLink[]
   deadlines: SubjectDeadline[]
   required_left: number | null
-}
-
-export interface SubjectWorkInput {
-  kind: WorkKind
-  number?: number | null
-  title: string
-  max_points?: number | null
-  deadline?: string | null
-  description?: string | null
-  url?: string | null
-  semester?: number | null
 }
 
 export interface SubjectMaterialInput {

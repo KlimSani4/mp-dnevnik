@@ -210,7 +210,7 @@ export function DeadlineChip({ date, title }: { date: string; title?: string }) 
 function SubjectCard({ subject: s, semester, activeTags }: { subject: SubjectSummary; semester: number | null; activeTags: string[] }) {
   const { t } = useT()
   const ratio = s.works_total ? s.works_passed / s.works_total : 0
-  const left = s.required != null ? Math.max(0, s.required - s.works_passed) : null
+  const left = s.required != null ? Math.max(0, s.required - s.labs_passed) : null
   return (
     <Link to={`/subjects/${s.id}${semester ? `?semester=${semester}` : ''}`} className="group block">
       <Card variant="hover" className="flex h-full flex-col gap-3 transition-shadow group-hover:shadow-md">

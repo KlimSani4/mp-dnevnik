@@ -58,6 +58,11 @@ class Assignment(Base, UUIDMixin, TimestampMixin):
     is_personal: Mapped[bool] = mapped_column(Boolean, default=False)
     # Максимальный балл за задание; NULL — задание без баллов (#165)
     max_points: Mapped[float | None] = mapped_column(Float)
+    # Тип работы (WorkKind: lab, practice, …); NULL — обычное задание. Лабы идут в допуск
+    kind: Mapped[str | None] = mapped_column(String(16))
+    number: Mapped[int | None] = mapped_column(Integer)
+    # Семестр, к которому относится (по группе и дедлайну) — для фильтра «Предметов»
+    semester: Mapped[int | None] = mapped_column(Integer)
 
     # Relationships
     group: Mapped["Group"] = relationship("Group", back_populates="assignments")

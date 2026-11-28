@@ -6,6 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.core.models.assignment import TaskState
+from src.core.models.subject_content import WorkKind
 from src.core.schemas.schedule import SubjectResponse
 
 
@@ -18,6 +19,9 @@ class AssignmentBase(BaseModel):
     priority: str = Field("normal", pattern="^(low|normal|high|urgent)$")
     link: str | None = Field(None, max_length=512)
     max_points: float | None = Field(None, ge=0, le=1000)
+    # Тип работы: лаба, практика, ДЗ, КР…; None — обычное задание. Лабы идут в допуск
+    kind: WorkKind | None = None
+    number: int | None = Field(None, ge=0, le=999)
 
 
 class AssignmentCreate(AssignmentBase):
@@ -38,6 +42,8 @@ class AssignmentUpdate(BaseModel):
     link: str | None = None
     is_personal: bool | None = None
     max_points: float | None = Field(None, ge=0, le=1000)
+    kind: WorkKind | None = None
+    number: int | None = Field(None, ge=0, le=999)
 
 
 class AssignmentResponse(AssignmentBase):
@@ -53,6 +59,7 @@ class AssignmentResponse(AssignmentBase):
     votes_down: int
     is_verified: bool
     is_personal: bool
+    semester: int | None = None
     created_at: datetime
     updated_at: datetime
 

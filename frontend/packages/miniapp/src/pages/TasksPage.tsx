@@ -54,7 +54,7 @@ function TaskCard({ task, onSubmit }: { task: Task; onSubmit: (id: string) => vo
               fontSize: 12,
             }}
           >
-            до {formatDeadline(assignment.deadline)}
+            {assignment.deadline ? `до ${formatDeadline(assignment.deadline)}` : 'без срока'}
           </div>
         </div>
 

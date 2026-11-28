@@ -32,8 +32,6 @@ from src.core.models.subject_content import (
     MaterialKind,
     SubjectMaterial,
     SubjectTag,
-    SubjectWork,
-    SubjectWorkProgress,
     WorkKind,
 )
 from src.core.models.user import AuditLog, ConsentRecord, Identity, User
@@ -44,8 +42,6 @@ __all__ = [
     "MaterialKind",
     "SubjectMaterial",
     "SubjectTag",
-    "SubjectWork",
-    "SubjectWorkProgress",
     "WorkKind",
     # Base
     "Base",

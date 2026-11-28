@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useApi } from './useApi'
-import type { SubjectDetail, SubjectMaterialInput, SubjectWorkInput } from '../types'
+import type { SubjectDetail, SubjectMaterialInput } from '../types'
 
 /** Список предметов группы за семестр (#165). semester: номер, 'all' или null — текущий */
 export function useSubjectList(groupCode: string | null, semester: number | 'all' | null) {
@@ -26,11 +26,6 @@ export type SubjectAction =
   | { type: 'addTags'; tags: string[] }
   | { type: 'setGradesUrl'; url: string | null }
   | { type: 'removeTag'; key: string }
-  | { type: 'addWork'; data: SubjectWorkInput }
-  | { type: 'updateWork'; workId: string; data: Partial<SubjectWorkInput> }
-  | { type: 'deleteWork'; workId: string }
-  | { type: 'approveWork'; workId: string }
-  | { type: 'progress'; workId: string; passed: boolean; points: number | null }
   | { type: 'addMaterial'; data: SubjectMaterialInput }
   | { type: 'updateMaterial'; materialId: string; data: Partial<SubjectMaterialInput> }
   | { type: 'deleteMaterial'; materialId: string }
@@ -47,11 +42,6 @@ export function useSubjectAction(id: string, semester?: number | null) {
         case 'addTags': return s.addTags(id, a.tags, semester)
         case 'setGradesUrl': return s.setGradesUrl(id, a.url, semester)
         case 'removeTag': return s.removeTag(id, a.key, semester)
-        case 'addWork': return s.addWork(id, a.data)
-        case 'updateWork': return s.updateWork(a.workId, a.data)
-        case 'deleteWork': return s.deleteWork(a.workId)
-        case 'approveWork': return s.approveWork(a.workId)
-        case 'progress': return s.setProgress(a.workId, a.passed, a.points)
         case 'addMaterial': return s.addMaterial(id, a.data)
         case 'updateMaterial': return s.updateMaterial(a.materialId, a.data)
         case 'deleteMaterial': return s.deleteMaterial(a.materialId)

@@ -122,7 +122,7 @@ function AssignmentCard({
             </span>
             <span style={{ color: 'var(--tg-theme-hint-color)', fontSize: 12 }}>·</span>
             <span style={{ color: 'var(--tg-theme-hint-color)', fontSize: 12 }}>
-              до {formatDeadline(assignment.deadline)}
+              {assignment.deadline ? `до ${formatDeadline(assignment.deadline)}` : 'без срока'}
             </span>
           </div>
         </div>

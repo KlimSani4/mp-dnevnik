@@ -1,40 +1,25 @@
 import { format, differenceInDays, addDays, isAfter, isBefore, startOfDay } from 'date-fns'
-import { dateLocale, translatePlural, type MessageKey } from '../i18n'
+import { dateLocale, translate, translatePlural, type MessageKey } from '../i18n'
 
 /* ─── Types ─── */
 
-export type Priority = 'low' | 'normal' | 'high' | 'urgent'
-export type TaskState = 'todo' | 'review' | 'done'
+// Типы — общие с API (@nexora/shared), чтобы не расходились
+export type { Priority, TaskState, Task, Assignment, WorkKind } from '@nexora/shared'
+import type { Priority, TaskState, WorkKind } from '@nexora/shared'
 
 export interface Subject {
   id: string
   name: string
 }
 
-export interface Assignment {
-  id: string
-  title: string
-  description: string
-  deadline: string
-  priority: Priority
-  link: string | null
-  votes_up: number
-  votes_down: number
-  is_verified: boolean
-  author_id: string
-  /** Максимальный балл; null — без баллов (#165) */
-  max_points?: number | null
-  subject: Subject
-  created_at: string
-}
+/** Типы работ для формы: null — обычное задание */
+export const WORK_KINDS: WorkKind[] = ['lab', 'practice', 'homework', 'test', 'coursework', 'other']
 
-export interface Task {
-  id: string
-  state: TaskState
-  /** Полученный балл (#165) */
-  points?: number | null
-  assignment: Assignment
-  updated_at: string
+/** «ЛР 3», «КР 1»… — короткая метка работы, для обычного задания пусто */
+export function workLabel(kind?: WorkKind | null, number?: number | null): string {
+  if (!kind) return ''
+  const short = translate(`assign.kindShort.${kind}` as MessageKey)
+  return number != null ? `${short} ${number}` : short
 }
 
 /* ─── Constants ─── */
@@ -92,21 +77,25 @@ export function today() {
   return startOfDay(new Date())
 }
 
-export function isBurning(deadline: string): boolean {
+export function isBurning(deadline: string | null): boolean {
+  if (!deadline) return false
   const dl = startOfDay(new Date(deadline))
   const now = today()
   return (isBefore(dl, addDays(now, 4)) && isAfter(dl, addDays(now, -1))) || differenceInDays(dl, now) < 0
 }
 
-export function isOverdue(deadline: string): boolean {
+export function isOverdue(deadline: string | null): boolean {
+  if (!deadline) return false
   return isBefore(startOfDay(new Date(deadline)), today())
 }
 
-export function formatDeadline(deadline: string): string {
+export function formatDeadline(deadline: string | null): string {
+  if (!deadline) return translate('assign.noDeadline')
   return format(new Date(deadline), 'd MMMM yyyy', { locale: dateLocale() })
 }
 
-export function daysLeft(deadline: string): number {
+export function daysLeft(deadline: string | null): number {
+  if (!deadline) return Number.POSITIVE_INFINITY
   return differenceInDays(startOfDay(new Date(deadline)), today())
 }
 
