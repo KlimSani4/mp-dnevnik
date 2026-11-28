@@ -66,3 +66,16 @@ export interface GroupStudent {
 export interface RoleUpdateRequest {
   role: GroupRole
 }
+
+/** Ссылка-приглашение в группу (#147). URL собирается на фронтенде: /join/<token> */
+export interface GroupInvite {
+  code: string
+  token: string
+  can_reset: boolean
+}
+
+export interface GroupInvitePreview {
+  code: string
+  name: string | null
+  members: number
+}

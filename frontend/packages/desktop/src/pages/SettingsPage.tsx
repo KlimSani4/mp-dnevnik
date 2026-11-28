@@ -14,6 +14,7 @@ import {
 import type { NotificationPreferenceType } from '@nexora/shared'
 import { GroupMembers } from '../components/GroupMembers'
 import { GroupPicker } from '../components/GroupPicker'
+import { InviteBlock } from '../components/InviteBlock'
 import { SupportSection } from '../components/SupportSection'
 import { LANGUAGES, useLangStore, useT, type MessageKey } from '../i18n'
 
@@ -430,6 +431,13 @@ export function SettingsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Пригласить в группу: QR и ссылка (#147) */}
+              {memberships
+                .filter((m) => m.verified)
+                .map((m) => (
+                  <InviteBlock key={m.id} code={m.group.code} />
+                ))}
 
               {/* Вступить или создать (#146) */}
               <div className="pt-4 border-t border-surface-200 dark:border-surface-700">

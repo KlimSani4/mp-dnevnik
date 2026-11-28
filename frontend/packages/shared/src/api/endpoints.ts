@@ -11,6 +11,8 @@ import type {
   Group,
   GroupMembership,
   GroupCreateRequest,
+  GroupInvite,
+  GroupInvitePreview,
   GroupUpdateRequest,
   GroupSearchParams,
   GroupStudent,
@@ -116,6 +118,21 @@ export function createGroupsApi(client: ApiClient) {
     join(code: string, switchGroup = false) {
       return client.post<GroupMembership>(
         `/groups/${encodeURIComponent(code)}/join${switchGroup ? '?switch=true' : ''}`,
+      )
+    },
+    /** Ссылка-приглашение группы (#147) */
+    invite(code: string) {
+      return client.get<GroupInvite>(`/groups/${encodeURIComponent(code)}/invite`)
+    },
+    resetInvite(code: string) {
+      return client.post<GroupInvite>(`/groups/${encodeURIComponent(code)}/invite/reset`)
+    },
+    invitePreview(token: string) {
+      return client.get<GroupInvitePreview>(`/groups/invite/${encodeURIComponent(token)}`)
+    },
+    joinByInvite(token: string, switchGroup = false) {
+      return client.post<GroupMembership>(
+        `/groups/invite/${encodeURIComponent(token)}/join${switchGroup ? '?switch=true' : ''}`,
       )
     },
     /** Выйти из группы (#157) */

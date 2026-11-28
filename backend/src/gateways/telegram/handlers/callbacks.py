@@ -44,7 +44,7 @@ async def cancel_group_input(message: Message, state: FSMContext) -> None:
 
 
 async def _join(
-    tg_id: int, group_code: str, *, switch: bool = False
+    tg_id: int, group_code: str, *, switch: bool = False, joined_via: str = "bot"
 ) -> tuple[str, InlineKeyboardMarkup | None, bool]:
     """Вступить/создать/сменить группу. (текст, кнопки, сбросить ли ожидание ввода)."""
     from src.core.models.group import Group
@@ -53,7 +53,7 @@ async def _join(
     try:
         async with get_session() as session:
             student = await GroupService(session).join_group_by_telegram(
-                telegram_id=str(tg_id), group_code=group_code, switch=switch
+                telegram_id=str(tg_id), group_code=group_code, switch=switch, joined_via=joined_via
             )
             group = await session.get(Group, student.group_id)
             code = group.code if group else group_code

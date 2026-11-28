@@ -206,3 +206,43 @@ async def test_bot_switches_group_with_confirmation(
             .all()
         )
     assert codes == ["241-3211"]
+
+
+async def test_bot_start_with_invite(
+    maker: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """t.me/<бот>?start=join_<токен> — заявка в группу (#147)."""
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def session() -> AsyncIterator[AsyncSession]:
+        async with maker() as s:
+            yield s
+
+    monkeypatch.setattr(start, "get_session", session)
+
+    async def no_register(*_a: object, **_k: object) -> object:
+        return MagicMock(id="registered")
+
+    monkeypatch.setattr(start.AuthService, "register_from_bot", no_register)
+    async with maker() as s:
+        group = (await s.execute(select(Group).where(Group.code == "241-327"))).scalar_one()
+        group.invite_token = "invite-token-1"
+        await s.commit()
+
+    m = _message(2, "/start join_invite-token-1")
+    await start.cmd_start(m)
+    assert "Заявка в группу <b>241-327</b>" in m.answer.call_args.args[0]
+    async with maker() as s:
+        st = (
+            await s.execute(
+                select(Student)
+                .join(Identity, Identity.user_id == Student.user_id)
+                .where(Identity.external_id == "2")
+            )
+        ).scalar_one()
+    assert st.joined_via == "invite"
+
+    m = _message(2, "/start join_old-token")
+    await start.cmd_start(m)
+    assert "устарела" in m.answer.call_args.args[0]

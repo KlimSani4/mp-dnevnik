@@ -13,8 +13,14 @@ export function useGroupContext() {
   // сменил группу, #162) — иначе сайт показывал бы расписание чужой группы
   useEffect(() => {
     if (!myGroups) return
-    const stillMember = myGroups.some((m) => m.group.id === selectedGroupId)
-    if (stillMember) return
+    const selected = myGroups.find((m) => m.group.id === selectedGroupId)
+    if (selected) {
+      // Код мог не сохраниться (выбор сбрасывали по id) — подставляем из группы
+      if (selected.group.code !== useAuthStore.getState().selectedGroupCode) {
+        setSelectedGroup(selected.group.id, selected.group.code)
+      }
+      return
+    }
     if (myGroups.length) {
       const first = myGroups[0]
       setSelectedGroup(first.group.id, first.group.code)

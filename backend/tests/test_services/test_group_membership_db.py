@@ -427,3 +427,70 @@ async def test_personal_events_survive_plain_leave(ctx: Ctx) -> None:
     async with maker() as s:
         o = (await s.execute(select(ScheduleOverride))).scalar_one()
     assert o.entry_id == new_entry
+
+
+# ─── #147: ссылка-приглашение ───
+
+
+async def test_invite_link_flow(ctx: Ctx) -> None:
+    c, ids, maker = ctx
+    # Подтверждённый участник видит ссылку, токен стабилен; сбросить не может
+    r = await c.get("/groups/241-327/invite", headers=_auth(ids["student"]))
+    assert r.status_code == 200
+    token = r.json()["token"]
+    assert len(token) >= 12 and "241" not in token
+    assert r.json()["can_reset"] is False
+    again = await c.get("/groups/241-327/invite", headers=_auth(ids["starosta"]))
+    assert again.json()["token"] == token and again.json()["can_reset"] is True
+
+    # Неподтверждённый и чужой — нет
+    for who in ("applicant", "newbie"):
+        r = await c.get("/groups/241-327/invite", headers=_auth(ids[who]))
+        assert r.status_code == 403
+
+    # Превью без входа
+    r = await c.get(f"/groups/invite/{token}")
+    assert r.status_code == 200
+    assert r.json() == {"code": "241-327", "name": "241-327", "members": 3}
+
+    # Заявка по ссылке — неподтверждённая, способ «invite»
+    r = await c.post(f"/groups/invite/{token}/join", headers=_auth(ids["newbie"]))
+    assert r.status_code == 201, r.text
+    async with maker() as s:
+        st = (await s.execute(select(Student).where(Student.user_id == ids["newbie"]))).scalar_one()
+    assert (st.verified, st.joined_via) == (False, "invite")
+
+
+async def test_invite_reset(ctx: Ctx) -> None:
+    c, ids, _ = ctx
+    token = (await c.get("/groups/241-327/invite", headers=_auth(ids["student"]))).json()["token"]
+
+    r = await c.post("/groups/241-327/invite/reset", headers=_auth(ids["student"]))
+    assert r.status_code == 403
+    r = await c.post("/groups/241-327/invite/reset", headers=_auth(ids["deputy"]))
+    assert r.status_code == 200
+    new = r.json()["token"]
+    assert new != token
+
+    assert (await c.get(f"/groups/invite/{token}")).status_code == 404
+    r = await c.post(f"/groups/invite/{token}/join", headers=_auth(ids["newbie"]))
+    assert r.status_code == 404
+    assert (await c.get(f"/groups/invite/{new}")).status_code == 200
+
+
+async def test_invite_respects_one_group(ctx: Ctx) -> None:
+    c, ids, maker = ctx
+    async with maker() as s:
+        s.add(
+            Group(
+                code="241-3211",
+                name="241-3211",
+                owner_id=ids["newbie"],
+                invite_token="tok-3211-abcd",
+            )
+        )
+        await s.commit()
+    r = await c.post("/groups/invite/tok-3211-abcd/join", headers=_auth(ids["student"]))
+    assert r.status_code == 409 and r.json()["code"] == "ALREADY_IN_GROUP"
+    r = await c.post("/groups/invite/tok-3211-abcd/join?switch=true", headers=_auth(ids["student"]))
+    assert r.status_code == 201

@@ -46,7 +46,10 @@ async def cmd_start(message: Message) -> None:
     parts = text.split(maxsplit=1)
     token_arg = parts[1].strip() if len(parts) > 1 else ""
 
-    if token_arg and _AUTH_TOKEN_RE.match(token_arg):
+    # Ссылка-приглашение в группу: t.me/<бот>?start=join_<токен> (#147)
+    invite = token_arg[len("join_") :] if token_arg.startswith("join_") else None
+
+    if token_arg and not invite and _AUTH_TOKEN_RE.match(token_arg):
         # Bot-based auth flow
         try:
             async with httpx.AsyncClient(timeout=10) as http:
@@ -97,6 +100,10 @@ async def cmd_start(message: Message) -> None:
         await message.answer(f"Ошибка регистрации: {e}")
         return
 
+    if invite:
+        await _join_by_invite(message, invite)
+        return
+
     from src.gateways.telegram.handlers.settings import _my_groups
 
     groups = await _my_groups(tg_user.id) or []
@@ -133,6 +140,32 @@ async def cmd_start(message: Message) -> None:
         )
 
     await message.answer(welcome_text, parse_mode="HTML", reply_markup=keyboard)
+
+
+async def _join_by_invite(message: Message, token: str) -> None:
+    """Заявка в группу по QR или ссылке-приглашению (#147).
+
+    Дальше — тот же путь, что при вводе номера группы: заявка старосте или
+    предложение сменить группу, если человек уже в другой (#162).
+    """
+    from src.core.services.group import GroupService
+    from src.gateways.telegram.handlers.callbacks import _join
+    from src.shared.exceptions import NotFoundError
+
+    tg_user = message.from_user
+    if not tg_user:
+        return
+    try:
+        async with get_session() as session:
+            code = await GroupService(session).group_code_by_invite(token)
+    except NotFoundError:
+        await message.answer(
+            "Ссылка-приглашение устарела: староста её сбросил. Попросите новую "
+            "или укажите группу вручную — /settings."
+        )
+        return
+    text, markup, _ = await _join(tg_user.id, code, joined_via="invite")
+    await message.answer(text, reply_markup=markup)
 
 
 @router.message(Command("help"))

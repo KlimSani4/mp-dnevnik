@@ -11,6 +11,8 @@ from src.core.repositories.schedule import SubjectRepository
 from src.core.repositories.user import AuditLogRepository, UserRepository
 from src.core.schemas.group import (
     GroupCreate,
+    GroupInvite,
+    GroupInvitePreview,
     GroupResponse,
     GroupUpdate,
     StudentResponse,
@@ -28,6 +30,13 @@ from src.shared.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _new_invite_token() -> str:
+    """12 символов base64url (72 бита): не угадать, влезает в t.me/…?start=join_<токен>."""
+    import secrets
+
+    return secrets.token_urlsafe(9)
 
 
 class GroupService:
@@ -208,6 +217,7 @@ class GroupService:
         user_id: uuid.UUID,
         *,
         switch: bool = False,
+        joined_via: str = "site",
     ) -> StudentResponse:
         """Вступить в существующую группу: заявка ждёт старосту.
 
@@ -228,7 +238,7 @@ class GroupService:
             group_id=group.id,
             role=StudentRole.STUDENT,
             verified=False,
-            joined_via="site",
+            joined_via=joined_via,
         )
         await self._adopt_personal_events(user_id, group.id, student)
 
@@ -417,6 +427,7 @@ class GroupService:
         group_code: str,
         *,
         switch: bool = False,
+        joined_via: str = "bot",
     ) -> StudentResponse:
         """Вступить в группу из бота; если группы ещё нет — создать её (создатель — староста).
 
@@ -449,7 +460,7 @@ class GroupService:
             group_id=group.id,
             role=StudentRole.STUDENT,
             verified=False,
-            joined_via="bot",
+            joined_via=joined_via,
         )
         await self._adopt_personal_events(identity.user_id, group.id, student)
         await self.audit_repo.log(
@@ -462,6 +473,78 @@ class GroupService:
         await self.session.refresh(student)
         logger.info("User joined group via Telegram", extra={"group_code": group.code})
         return StudentResponse.model_validate(student)
+
+    # ─── Ссылка-приглашение (#147) ───
+
+    INVITE_MANAGERS = (StudentRole.STAROSTA, StudentRole.DEPUTY)
+
+    async def get_invite(self, group_code: str, user_id: uuid.UUID) -> GroupInvite:
+        """Ссылка группы для подтверждённых участников: её можно переслать.
+
+        Токен создаётся при первом запросе.
+        """
+        group = await self._find_group(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+        student = await self.student_repo.get_by_user_and_group(user_id, group.id)
+        user = await self.user_repo.get(user_id)
+        is_moderator = bool(user and user.is_moderator)
+        if not (student and student.verified) and not is_moderator:
+            raise AuthorizationError("Only approved group members can see the invite link")
+        if not group.invite_token:
+            group.invite_token = _new_invite_token()
+            await self.session.commit()
+        can_reset = is_moderator or bool(student and student.role in self.INVITE_MANAGERS)
+        return GroupInvite(code=group.code, token=group.invite_token, can_reset=can_reset)
+
+    async def reset_invite(self, group_code: str, user_id: uuid.UUID) -> GroupInvite:
+        """Новый токен — старая ссылка и QR перестают работать. Староста или зам."""
+        group = await self._find_group(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+        by_moderator = await self._authorize(
+            group,
+            user_id,
+            self.INVITE_MANAGERS,
+            "Only the group head or deputy can reset the invite link",
+        )
+        group.invite_token = _new_invite_token()
+        await self.audit_repo.log(
+            action=self._audit_action("invite_reset", by_moderator),
+            user_id=user_id,
+            resource="group",
+            resource_id=str(group.id),
+        )
+        await self.session.commit()
+        return GroupInvite(code=group.code, token=group.invite_token, can_reset=True)
+
+    async def _group_by_invite(self, token: str) -> Group:
+        from sqlalchemy import select
+
+        group = (
+            await self.session.execute(select(Group).where(Group.invite_token == token))
+        ).scalar_one_or_none()
+        if not token or not group:
+            raise NotFoundError("Invite link is invalid or was reset")
+        return group
+
+    async def invite_preview(self, token: str) -> GroupInvitePreview:
+        """Какая группа за ссылкой — показать до вступления."""
+        group = await self._group_by_invite(token)
+        members = await self.student_repo.get_group_students_with_users(group.id)
+        return GroupInvitePreview(
+            code=group.code, name=group.name, members=sum(1 for m in members if m.verified)
+        )
+
+    async def join_by_invite(
+        self, token: str, user_id: uuid.UUID, *, switch: bool = False
+    ) -> StudentResponse:
+        """Заявка в группу по ссылке. Старосте всё равно подтверждать (#148)."""
+        group = await self._group_by_invite(token)
+        return await self.join_group(group.code, user_id, switch=switch, joined_via="invite")
+
+    async def group_code_by_invite(self, token: str) -> str:
+        return (await self._group_by_invite(token)).code
 
     async def leave_group(self, group_code: str, user_id: uuid.UUID) -> None:
         """Выйти из группы (#157).
