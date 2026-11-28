@@ -26,12 +26,8 @@ UUID = postgresql.UUID(as_uuid=True)
 
 def _ts() -> list[sa.Column[object]]:
     return [
-        sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
-        sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     ]
 
 
@@ -42,9 +38,7 @@ def upgrade() -> None:
         op.create_table(
             "lab_queues",
             sa.Column("id", UUID, primary_key=True),
-            sa.Column(
-                "group_id", UUID, sa.ForeignKey("groups.id", ondelete="CASCADE"), nullable=False
-            ),
+            sa.Column("group_id", UUID, sa.ForeignKey("groups.id", ondelete="CASCADE"), nullable=False),
             sa.Column("subject_id", UUID, sa.ForeignKey("subjects.id", ondelete="SET NULL")),
             sa.Column("entry_id", UUID, sa.ForeignKey("schedule_entries.id", ondelete="SET NULL")),
             sa.Column("lesson_date", sa.Date, nullable=False),
@@ -69,15 +63,9 @@ def upgrade() -> None:
         op.create_table(
             "lab_queue_entries",
             sa.Column("id", UUID, primary_key=True),
-            sa.Column(
-                "queue_id", UUID, sa.ForeignKey("lab_queues.id", ondelete="CASCADE"), nullable=False
-            ),
-            sa.Column(
-                "user_id", UUID, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-            ),
-            sa.Column(
-                "student_id", UUID, sa.ForeignKey("students.id", ondelete="CASCADE"), nullable=False
-            ),
+            sa.Column("queue_id", UUID, sa.ForeignKey("lab_queues.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("user_id", UUID, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("student_id", UUID, sa.ForeignKey("students.id", ondelete="CASCADE"), nullable=False),
             sa.Column("labs", sa.JSON, nullable=False),
             sa.Column("position", sa.Integer, nullable=False, server_default="0"),
             sa.Column("status", sa.String(16), nullable=False),
@@ -86,36 +74,24 @@ def upgrade() -> None:
             *_ts(),
             sa.UniqueConstraint("queue_id", "user_id", name="uq_lab_queue_entry_user"),
         )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_lab_queue_entries_queue_id ON lab_queue_entries (queue_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_lab_queue_entries_queue_id ON lab_queue_entries (queue_id)")
 
     if "lab_queue_swaps" not in tables:
         op.create_table(
             "lab_queue_swaps",
             sa.Column("id", UUID, primary_key=True),
+            sa.Column("queue_id", UUID, sa.ForeignKey("lab_queues.id", ondelete="CASCADE"), nullable=False),
             sa.Column(
-                "queue_id", UUID, sa.ForeignKey("lab_queues.id", ondelete="CASCADE"), nullable=False
+                "from_entry_id", UUID, sa.ForeignKey("lab_queue_entries.id", ondelete="CASCADE"), nullable=False
             ),
             sa.Column(
-                "from_entry_id",
-                UUID,
-                sa.ForeignKey("lab_queue_entries.id", ondelete="CASCADE"),
-                nullable=False,
-            ),
-            sa.Column(
-                "to_entry_id",
-                UUID,
-                sa.ForeignKey("lab_queue_entries.id", ondelete="CASCADE"),
-                nullable=False,
+                "to_entry_id", UUID, sa.ForeignKey("lab_queue_entries.id", ondelete="CASCADE"), nullable=False
             ),
             sa.Column("status", sa.String(16), nullable=False),
             sa.Column("resolved_at", sa.DateTime(timezone=True)),
             *_ts(),
         )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_lab_queue_swaps_queue_id ON lab_queue_swaps (queue_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_lab_queue_swaps_queue_id ON lab_queue_swaps (queue_id)")
 
 
 def downgrade() -> None:
