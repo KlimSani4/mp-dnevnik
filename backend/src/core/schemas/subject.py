@@ -51,6 +51,7 @@ class SubjectSummary(BaseModel):
     lesson_types: list[str]
     first_semester: int | None
     last_semester: int | None
+    grades_url: str | None = None
     works_total: int
     works_passed: int
     points: float
@@ -169,6 +170,9 @@ class ScheduleSlot(BaseModel):
     location: str | None
     teacher: str | None
     link: str | None
+    # Период, в который идут эти пары (из расписания)
+    date_from: date | None = None
+    date_to: date | None = None
 
 
 class LectureLink(BaseModel):
@@ -176,6 +180,8 @@ class LectureLink(BaseModel):
     url: str
     source: str  # schedule / material
     lecture_date: date | None = None
+    # Для добавленных вручную — сам материал: статус, правка, подтверждение
+    material: MaterialView | None = None
 
 
 class SubjectDetail(SubjectSummary):
@@ -188,3 +194,11 @@ class SubjectDetail(SubjectSummary):
     lectures: list[LectureLink]
     deadlines: list[DeadlineView]
     required_left: int | None
+
+
+class GradesUrlIn(BaseModel):
+    """Ссылка на таблицу с оценками; null или пусто — убрать."""
+
+    url: str | None = Field(None, max_length=512)
+
+    _url = field_validator("url")(_clean_url)

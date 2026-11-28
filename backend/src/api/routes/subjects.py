@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 
 from src.api.deps import CurrentUser, DBSession
 from src.core.schemas.subject import (
+    GradesUrlIn,
     MaterialIn,
     MaterialPatch,
     ProgressIn,
@@ -64,6 +65,18 @@ async def remove_tag(
 ) -> SubjectDetail:
     """Убрать тег: поставивший или ведущий."""
     return await SubjectService(db).remove_tag(subject_id, key, user, semester)
+
+
+@router.put("/{subject_id}/grades-url", response_model=SubjectDetail)
+async def set_grades_url(
+    subject_id: uuid.UUID,
+    data: GradesUrlIn,
+    user: CurrentUser,
+    db: DBSession,
+    semester: int | None = Query(None, ge=1, le=12),
+) -> SubjectDetail:
+    """Ссылка на таблицу с оценками: ставит ведущий группы."""
+    return await SubjectService(db).set_grades_url(subject_id, data.url, user, semester)
 
 
 @router.post("/{subject_id}/works", response_model=SubjectDetail, status_code=201)

@@ -52,6 +52,8 @@ class Subject(Base, UUIDMixin):
     # проставляются при импорте расписания. NULL — по коду группы не понять.
     first_semester: Mapped[int | None] = mapped_column(Integer)
     last_semester: Mapped[int | None] = mapped_column(Integer)
+    # Ссылка на таблицу с оценками (Google Sheets и т.п.), ставит ведущий (#165)
+    grades_url: Mapped[str | None] = mapped_column(String(512))
 
     # Relationships
     group: Mapped["Group | None"] = relationship("Group", back_populates="subjects")

@@ -466,6 +466,12 @@ export const ru = {
   'assign.noMax': 'максимум не задан',
   'assign.overMax': 'Больше максимума — проверьте',
   'subjects.assignmentPoints': '{got} / {max} б.',
+  'subjects.slotPast': 'закончились',
+  'subjects.slotFuture': 'ещё не начались',
+  'subjects.addLecture': 'Добавить лекцию',
+  'subjects.grades': 'Таблица с оценками',
+  'subjects.gradesAdd': 'ссылка на таблицу с оценками',
+  'subjects.gradesEdit': 'Изменить ссылку',
   // roles
   'roles.deputy': 'Зам',
   'roles.starosta': 'Староста',

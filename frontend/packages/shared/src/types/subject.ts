@@ -41,6 +41,8 @@ export interface SubjectSummary {
   lesson_types: string[]
   first_semester: number | null
   last_semester: number | null
+  /** Таблица с оценками (#165) */
+  grades_url?: string | null
   works_total: number
   works_passed: number
   points: number
@@ -101,6 +103,9 @@ export interface SubjectScheduleSlot {
   location: string | null
   teacher: string | null
   link: string | null
+  /** Период, в который идут пары (YYYY-MM-DD) */
+  date_from?: string | null
+  date_to?: string | null
 }
 
 export interface SubjectLectureLink {
@@ -108,6 +113,8 @@ export interface SubjectLectureLink {
   url: string
   source: 'schedule' | 'material'
   lecture_date: string | null
+  /** Добавленная вручную лекция — сам материал (статус, правка) */
+  material?: SubjectMaterialView | null
 }
 
 export interface SubjectDetail extends SubjectSummary {

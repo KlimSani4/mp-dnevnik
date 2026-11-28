@@ -43,7 +43,8 @@ export function SubjectPage() {
   const query = useSubject(id, semester)
   const action = useSubjectAction(id, semester)
   const [workForm, setWorkForm] = useState<SubjectWorkView | 'new' | null>(null)
-  const [materialForm, setMaterialForm] = useState<SubjectMaterialView | 'new' | null>(null)
+  // 'newLecture' — добавление из блока «Лекции»: тип сразу «Лекция», а не «Теория»
+  const [materialForm, setMaterialForm] = useState<SubjectMaterialView | 'new' | 'newLecture' | null>(null)
   const s = query.data
   const run = (a: SubjectAction) => action.mutate(a)
 
@@ -60,7 +61,10 @@ export function SubjectPage() {
     return <div>{back}<LoadError error={query.error} onRetry={() => query.refetch()} /></div>
   }
 
-  const pending = s.works.filter((w) => w.status === 'pending').length + s.materials_list.filter((m) => m.status === 'pending').length
+  const pending =
+    s.works.filter((w) => w.status === 'pending').length +
+    s.materials_list.filter((m) => m.status === 'pending').length +
+    s.lectures.filter((l) => l.material?.status === 'pending').length
   const labsLeft = s.required_left
 
   return (
@@ -81,6 +85,7 @@ export function SubjectPage() {
           )}
         </div>
         <TagEditor detail={s} semester={semester} busy={action.isPending} run={run} readOnly={!s.can_write} />
+        <GradesLink url={s.grades_url ?? null} canEdit={s.can_moderate || s.is_custom} busy={action.isPending} run={run} />
       </div>
 
       {!s.can_write && <ReadOnlyNote />}
@@ -145,12 +150,14 @@ export function SubjectPage() {
         </Section>
 
         {/* Лекции */}
-        <Section title={t('subjects.lectures')} action={s.can_write && <Button size="sm" variant="ghost" onClick={() => setMaterialForm('new')}>{t('subjects.addRecording')}</Button>}>
+        <Section title={t('subjects.lectures')} action={s.can_write && <Button size="sm" variant="ghost" onClick={() => setMaterialForm('newLecture')}>{t('subjects.addRecording')}</Button>}>
           {s.lectures.length === 0 ? (
             <Empty text={t('subjects.lecturesEmpty')} />
           ) : (
             <ul className="divide-y divide-surface-100 dark:divide-surface-700">
-              {s.lectures.map((l) => (
+              {s.lectures.map((l) => l.material ? (
+                <MaterialRow key={l.material.id} m={l.material} canModerate={s.can_moderate} busy={action.isPending} run={run} onEdit={() => setMaterialForm(l.material ?? null)} />
+              ) : (
                 <li key={l.url} className="flex items-center gap-3 px-4 py-2.5">
                   <Icon name={l.source === 'schedule' ? 'video' : 'play'} size={16} className="shrink-0 text-primary-500" />
                   <a href={l.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-sm font-medium text-surface-800 hover:text-primary-600 dark:text-surface-100">
@@ -194,12 +201,27 @@ export function SubjectPage() {
             <Empty text={t('subjects.scheduleEmpty')} />
           ) : (
             <ul className="divide-y divide-surface-100 dark:divide-surface-700">
-              {s.schedule.map((slot, i) => (
-                <li key={i} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              {s.schedule.map((slot, i) => {
+                const phase = slotPhase(slot.date_from, slot.date_to)
+                return (
+                <li
+                  key={i}
+                  className={clsx('flex items-center gap-3 px-4 py-2.5 text-sm', phase === 'past' && 'opacity-45')}
+                  title={phase === 'past' ? t('subjects.slotPast') : undefined}
+                >
                   <span className="w-8 shrink-0 font-medium text-surface-900 dark:text-surface-50">{t(WEEKDAYS[slot.weekday - 1] ?? 'wd.mon')}</span>
                   <span className="w-24 shrink-0 tabular-nums text-surface-500">{slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}</span>
-                  <span className="min-w-0 flex-1 truncate text-surface-700 dark:text-surface-200">
-                    {[slot.lesson_type, slot.room || slot.location, slot.teacher].filter(Boolean).join(' · ')}
+                  <span className="min-w-0 flex-1">
+                    <span className={clsx('block truncate', phase === 'past' ? 'text-surface-500 line-through decoration-surface-300' : 'text-surface-700 dark:text-surface-200')}>
+                      {[slot.lesson_type, slot.room || slot.location, slot.teacher].filter(Boolean).join(' · ')}
+                    </span>
+                    {(slot.date_from || slot.date_to) && (
+                      <span className="block text-xs tabular-nums text-surface-400">
+                        {period(slot.date_from, slot.date_to)}
+                        {phase === 'past' && ` · ${t('subjects.slotPast')}`}
+                        {phase === 'future' && ` · ${t('subjects.slotFuture')}`}
+                      </span>
+                    )}
                   </span>
                   {slot.link && (
                     <a href={slot.link} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary-600 dark:text-primary-400" title={t('subjects.webinar')}>
@@ -207,7 +229,8 @@ export function SubjectPage() {
                     </a>
                   )}
                 </li>
-              ))}
+                )
+              })}
             </ul>
           )}
         </Section>
@@ -225,9 +248,9 @@ export function SubjectPage() {
         />
       )}
       {materialForm && (
-        <MaterialForm initial={materialForm === 'new' ? null : materialForm} canModerate={s.can_moderate} busy={action.isPending}
+        <MaterialForm initial={typeof materialForm === 'string' ? null : materialForm} defaultKind={materialForm === 'newLecture' ? 'lecture' : 'theory'} canModerate={s.can_moderate} busy={action.isPending}
           onClose={() => { setMaterialForm(null); action.reset() }}
-          onSubmit={(data) => action.mutateAsync(materialForm === 'new'
+          onSubmit={(data) => action.mutateAsync(typeof materialForm === 'string'
             ? { type: 'addMaterial', data: { ...data, semester } }
             : { type: 'updateMaterial', materialId: materialForm.id, data }).then(() => setMaterialForm(null))}
           error={action.error}
@@ -375,11 +398,76 @@ function WorkRow({ w, canModerate, readOnly, busy, run, onEdit }: { w: SubjectWo
   )
 }
 
+/** Прошёл ли период пар: past — закончились, future — ещё не начались. */
+function slotPhase(from?: string | null, to?: string | null): 'past' | 'now' | 'future' {
+  const today = format(new Date(), 'yyyy-MM-dd')
+  if (to && to < today) return 'past'
+  if (from && from > today) return 'future'
+  return 'now'
+}
+
+function period(from?: string | null, to?: string | null): string {
+  const d = (x: string) => format(parseISO(x), 'dd.MM')
+  if (from && to) return `${d(from)} – ${d(to)}`
+  return from ? `с ${d(from)}` : `по ${d(to as string)}`
+}
+
+/** Ссылка на таблицу с оценками: видят все, ставит ведущий. */
+function GradesLink({ url, canEdit, busy, run }: { url: string | null; canEdit: boolean; busy: boolean; run: (a: SubjectAction) => void }) {
+  const { t } = useT()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(url ?? '')
+  if (!url && !canEdit) return null
+  if (editing) {
+    return (
+      <form
+        className="mt-3 flex max-w-xl items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          run({ type: 'setGradesUrl', url: value.trim() || null })
+          setEditing(false)
+        }}
+      >
+        <Input autoFocus type="url" value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://docs.google.com/spreadsheets/…" />
+        <Button type="submit" size="sm" disabled={busy}>{t('subjects.save')}</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => { setEditing(false); setValue(url ?? '') }}>{t('groupLeave.cancel')}</Button>
+      </form>
+    )
+  }
+  return (
+    <div className="mt-3 flex items-center gap-2">
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-success-50 px-3 py-1.5 text-sm font-medium text-success-700 hover:bg-success-100 dark:bg-success-500/10 dark:text-success-500 dark:hover:bg-success-500/20"
+        >
+          <Icon name="chart" size={14} />{t('subjects.grades')}<Icon name="external-link" size={12} />
+        </a>
+      ) : (
+        <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 rounded-full border border-dashed border-surface-300 px-2.5 py-0.5 text-xs text-surface-500 hover:border-primary-400 hover:text-primary-600 dark:border-surface-600">
+          <Icon name="plus" size={11} />{t('subjects.gradesAdd')}
+        </button>
+      )}
+      {url && canEdit && (
+        <button type="button" onClick={() => setEditing(true)} title={t('subjects.gradesEdit')} className="rounded p-1 text-surface-400 hover:text-surface-700 dark:hover:text-surface-200">
+          <Icon name="pencil" size={14} />
+        </button>
+      )}
+    </div>
+  )
+}
+
 function MaterialRow({ m, canModerate, busy, run, onEdit }: { m: SubjectMaterialView; canModerate: boolean; busy: boolean; run: (a: SubjectAction) => void; onEdit: () => void }) {
   const { t } = useT()
   return (
     <li className={clsx('flex items-center gap-3 px-4 py-2.5', m.status === 'pending' && 'bg-warning-50/40 dark:bg-warning-500/5')}>
-      <Icon name={m.kind === 'presentation' ? 'files' : 'file'} size={16} className="shrink-0 text-surface-400" />
+      <Icon
+        name={m.kind === 'lecture' || m.kind === 'recording' ? 'play' : m.kind === 'presentation' ? 'files' : 'file'}
+        size={16}
+        className={clsx('shrink-0', m.kind === 'lecture' || m.kind === 'recording' ? 'text-primary-500' : 'text-surface-400')}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           {m.url ? (
@@ -467,18 +555,18 @@ function WorkForm({ initial, canModerate, busy, onClose, onSubmit, error }: {
   )
 }
 
-function MaterialForm({ initial, canModerate, busy, onClose, onSubmit, error }: {
-  initial: SubjectMaterialView | null; canModerate: boolean; busy: boolean; onClose: () => void
+function MaterialForm({ initial, defaultKind = 'theory', canModerate, busy, onClose, onSubmit, error }: {
+  initial: SubjectMaterialView | null; defaultKind?: MaterialKind; canModerate: boolean; busy: boolean; onClose: () => void
   onSubmit: (d: { kind: MaterialKind; title: string; url: string; lecture_date: string | null }) => Promise<void>
   error: unknown
 }) {
   const { t } = useT()
-  const [kind, setKind] = useState<MaterialKind>(initial?.kind ?? 'theory')
+  const [kind, setKind] = useState<MaterialKind>(initial?.kind ?? defaultKind)
   const [title, setTitle] = useState(initial?.title ?? '')
   const [url, setUrl] = useState(initial?.url ?? '')
   const [date, setDate] = useState(initial?.lecture_date ?? '')
   return (
-    <Modal open onClose={onClose} title={t(initial ? 'subjects.editMaterial' : 'subjects.addMaterial')}>
+    <Modal open onClose={onClose} title={t(initial ? 'subjects.editMaterial' : defaultKind === 'lecture' ? 'subjects.addLecture' : 'subjects.addMaterial')}>
       <form
         className="space-y-3"
         onSubmit={(e) => {

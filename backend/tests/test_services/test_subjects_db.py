@@ -399,6 +399,47 @@ async def test_assignment_points(ctx: Ctx) -> None:
     assert r.status_code == 422
 
 
+async def test_grades_url_lectures_and_schedule_periods(ctx: Ctx) -> None:
+    """Таблица оценок, лекции с модерацией и периоды пар в расписании (#165)."""
+    c, ids, _ = ctx
+    url = "https://docs.google.com/spreadsheets/d/abc"
+    r = await c.put(
+        f"/subjects/{ids['nets']}/grades-url", json={"url": url}, headers=_auth(ids["anna"])
+    )
+    assert r.status_code == 403
+    r = await c.put(
+        f"/subjects/{ids['nets']}/grades-url",
+        json={"url": "javascript:alert(1)"},
+        headers=_auth(ids["head"]),
+    )
+    assert r.status_code == 422
+    r = await c.put(
+        f"/subjects/{ids['nets']}/grades-url", json={"url": url}, headers=_auth(ids["head"])
+    )
+    assert r.status_code == 200 and r.json()["grades_url"] == url
+    lst = (await c.get(f"/subjects?group={CODE}", headers=_auth(ids["anna"]))).json()
+    assert next(x for x in lst["subjects"] if x["name"] == "Сети ЭВМ")["grades_url"] == url
+    r = await c.put(
+        f"/subjects/{ids['nets']}/grades-url", json={"url": ""}, headers=_auth(ids["head"])
+    )
+    assert r.json()["grades_url"] is None
+
+    # Лекция от участника: в «Лекциях» с материалом (на проверке), не в «Теории»
+    r = await c.post(
+        f"/subjects/{ids['nets']}/materials",
+        json={"kind": "lecture", "title": "Лекция 3", "url": "https://disk.example/l3"},
+        headers=_auth(ids["anna"]),
+    )
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert all(m["kind"] not in ("lecture", "recording") for m in d["materials_list"])
+    lec = next(x for x in d["lectures"] if x["title"] == "Лекция 3")
+    assert lec["material"]["status"] == "pending" and lec["material"]["is_mine"]
+
+    # Периоды у пар в расписании
+    assert all("date_from" in slot and "date_to" in slot for slot in d["schedule"])
+
+
 def test_schema_outdated_detection() -> None:
     """Неприменённая миграция узнаётся по ошибке Postgres (#165)."""
     from src.api.app import is_schema_outdated

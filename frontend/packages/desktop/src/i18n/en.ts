@@ -467,6 +467,12 @@ export const en: Messages = {
   'assign.noMax': 'no max set',
   'assign.overMax': 'Above the max — double-check',
   'subjects.assignmentPoints': '{got} / {max} pts',
+  'subjects.slotPast': 'finished',
+  'subjects.slotFuture': 'not started yet',
+  'subjects.addLecture': 'Add lecture',
+  'subjects.grades': 'Grades table',
+  'subjects.gradesAdd': 'link to grades table',
+  'subjects.gradesEdit': 'Change link',
   // roles
   'roles.deputy': 'Deputy',
   'roles.starosta': 'Group head',

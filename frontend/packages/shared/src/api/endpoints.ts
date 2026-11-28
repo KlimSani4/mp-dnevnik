@@ -375,6 +375,9 @@ export function createSubjectsApi(client: ApiClient) {
     get(id: string, semester?: number | null) {
       return client.get<SubjectDetail>(`/subjects/${id}`, s(semester))
     },
+    setGradesUrl(id: string, url: string | null, semester?: number | null) {
+      return client.put<SubjectDetail>(`/subjects/${id}/grades-url${semester ? `?semester=${semester}` : ''}`, { url })
+    },
     addTags(id: string, tags: string[], semester?: number | null) {
       return client.post<SubjectDetail>(`/subjects/${id}/tags${semester ? `?semester=${semester}` : ''}`, { tags })
     },

@@ -24,6 +24,7 @@ export function useSubject(id: string | null, semester?: number | null) {
 
 export type SubjectAction =
   | { type: 'addTags'; tags: string[] }
+  | { type: 'setGradesUrl'; url: string | null }
   | { type: 'removeTag'; key: string }
   | { type: 'addWork'; data: SubjectWorkInput }
   | { type: 'updateWork'; workId: string; data: Partial<SubjectWorkInput> }
@@ -44,6 +45,7 @@ export function useSubjectAction(id: string, semester?: number | null) {
       const s = api.subjects
       switch (a.type) {
         case 'addTags': return s.addTags(id, a.tags, semester)
+        case 'setGradesUrl': return s.setGradesUrl(id, a.url, semester)
         case 'removeTag': return s.removeTag(id, a.key, semester)
         case 'addWork': return s.addWork(id, a.data)
         case 'updateWork': return s.updateWork(a.workId, a.data)

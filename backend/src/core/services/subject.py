@@ -438,6 +438,7 @@ class SubjectService:
             id=subject.id,
             name=subject.name,
             is_custom=subject.is_custom,
+            grades_url=subject.grades_url,
             tags=[
                 TagView(
                     tag=t.tag,
@@ -511,7 +512,7 @@ class SubjectService:
         entries = data["entries"].get(subject.id, [])
         slots = sorted(
             {
-                (e.weekday, e.pair_number): ScheduleSlot(
+                (e.weekday, e.pair_number, e.date_from, e.date_to, e.lesson_type): ScheduleSlot(
                     weekday=e.weekday,
                     pair_number=e.pair_number,
                     start_time=e.start_time,
@@ -521,11 +522,13 @@ class SubjectService:
                     location=e.location,
                     teacher=e.teacher,
                     link=e.external_link,
+                    date_from=e.date_from,
+                    date_to=e.date_to,
                 )
                 for e in entries
                 if e.weekday
             }.values(),
-            key=lambda s: (s.weekday, s.pair_number),
+            key=lambda s: (s.weekday, s.pair_number, s.date_from or date.min),
         )
         lectures: list[LectureLink] = []
         seen: set[str] = set()
@@ -538,7 +541,11 @@ class SubjectService:
             if m.kind in (MaterialKind.LECTURE, MaterialKind.RECORDING) and m.url:
                 lectures.append(
                     LectureLink(
-                        title=m.title, url=m.url, source="material", lecture_date=m.lecture_date
+                        title=m.title,
+                        url=m.url,
+                        source="material",
+                        lecture_date=m.lecture_date,
+                        material=m,
                     )
                 )
 
@@ -613,6 +620,19 @@ class SubjectService:
         if not (viewer.is_host or tag.author_id == user.id):
             raise AuthorizationError("Only the author or the group head can remove a tag")
         await self.session.delete(tag)
+        await self.session.commit()
+        return await self.detail(subject.id, user, semester)
+
+    # ─── Таблица с оценками ───
+
+    async def set_grades_url(
+        self, subject_id: uuid.UUID, url: str | None, user: User, semester: int | None = None
+    ) -> SubjectDetail:
+        """Ссылку ставит ведущий (староста/зам/модератор) или владелец своего предмета."""
+        subject, viewer = await self._subject_viewer(subject_id, user)
+        if not (viewer.is_host or (subject.is_custom and subject.owner_id == user.id)):
+            raise AuthorizationError("Only the group head can set the grades table link")
+        subject.grades_url = url
         await self.session.commit()
         return await self.detail(subject.id, user, semester)
 
