@@ -576,7 +576,7 @@ function GroupsTab() {
               {isOpen && (
                 <div className="border-t border-surface-100 px-4 py-3 dark:border-surface-700">
                   <p className="mb-3 text-xs text-warning-600 dark:text-warning-500">{t('mod.groups.actingAs')}</p>
-                  <GroupMembers code={g.code} canReview canManageRoles canAppointStarosta />
+                  <GroupMembers code={g.code} canReview canManageRoles canAppointStarosta canRemove />
                 </div>
               )}
             </Card>

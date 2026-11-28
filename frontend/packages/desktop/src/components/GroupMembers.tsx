@@ -3,6 +3,8 @@ import {
   useChangeStudentRole,
   useGroupStudents,
   useRejectStudent,
+  useRemoveStudent,
+  useCurrentUser,
   useVerifyStudent,
 } from '@nexora/shared'
 import type { GroupRole, GroupStudent } from '@nexora/shared'
@@ -18,6 +20,8 @@ interface GroupMembersProps {
   canManageRoles: boolean
   /** Любая роль, включая старосту: только модератор платформы (#159) */
   canAppointStarosta?: boolean
+  /** Удалять участников: староста своей группы и модератор платформы */
+  canRemove?: boolean
 }
 
 const ROLES: GroupRole[] = ['student', 'assistant', 'deputy', 'starosta']
@@ -32,12 +36,15 @@ const ROLE_KEY: Record<GroupRole, MessageKey> = {
  * Участники и заявки группы (#148). Используется в Настройках у старосты и на странице
  * модерации, где модератор платформы работает с любой группой как староста (#150).
  */
-export function GroupMembers({ code, canReview, canManageRoles, canAppointStarosta = false }: GroupMembersProps) {
+export function GroupMembers({ code, canReview, canManageRoles, canAppointStarosta = false, canRemove = false }: GroupMembersProps) {
   const { t, locale } = useT()
   const studentsQuery = useGroupStudents(code)
   const verifyStudentMutation = useVerifyStudent()
   const rejectStudentMutation = useRejectStudent()
   const changeRoleMutation = useChangeStudentRole()
+  const removeMutation = useRemoveStudent()
+  const me = useCurrentUser().data
+  const [removing, setRemoving] = useState<GroupStudent | null>(null)
 
   const handleVerify = (userId: string) => verifyStudentMutation.mutate({ code, userId })
   const handleReject = (userId: string) => rejectStudentMutation.mutate({ code, userId })
@@ -50,6 +57,36 @@ export function GroupMembers({ code, canReview, canManageRoles, canAppointStaros
 
   return (
     <>
+      <Modal open={!!removing} onClose={() => { setRemoving(null); removeMutation.reset() }} title={t('members.removeTitle', { name: removing ? nameOf(removing) : '' })}>
+        {removing && (
+          <>
+            <ul className="space-y-1.5 text-sm text-surface-600 dark:text-surface-300">
+              <li>• {t('members.removeData', { code })}</li>
+              <li>• {t('members.removePersonal')}</li>
+              <li>• {t('members.removeNotify')}</li>
+              {removing.role === 'starosta' && <li>• {t('members.removeStarosta')}</li>}
+            </ul>
+            {removeMutation.isError && (
+              <p role="alert" className="mt-3 text-sm text-danger-600">{t('members.removeError')}</p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setRemoving(null)}>{t('groupLeave.cancel')}</Button>
+              <Button
+                variant="danger"
+                disabled={removeMutation.isPending}
+                onClick={() =>
+                  removeMutation.mutate(
+                    { code, userId: removing.user_id },
+                    { onSuccess: () => setRemoving(null) },
+                  )
+                }
+              >
+                {t('members.removeConfirm')}
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
       <Modal open={!!appoint} onClose={() => setAppoint(null)} title={t('mod.appoint.title')}>
         {appoint && (
           <>
@@ -185,6 +222,18 @@ export function GroupMembers({ code, canReview, canManageRoles, canAppointStaros
                       onClick={() => handleChangeRole(student.user_id, 'student')}
                     >
                       {t('settings.removeRole')}
+                    </Button>
+                  )}
+                  {canRemove && student.verified && student.user_id !== me?.id &&
+                    (student.role !== 'starosta' || canAppointStarosta) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-danger-600 dark:text-danger-500"
+                      disabled={isPending}
+                      onClick={() => setRemoving(student)}
+                    >
+                      {t('members.remove')}
                     </Button>
                   )}
                 </div>

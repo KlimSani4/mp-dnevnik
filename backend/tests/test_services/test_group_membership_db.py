@@ -494,3 +494,65 @@ async def test_invite_respects_one_group(ctx: Ctx) -> None:
     assert r.status_code == 409 and r.json()["code"] == "ALREADY_IN_GROUP"
     r = await c.post("/groups/invite/tok-3211-abcd/join?switch=true", headers=_auth(ids["student"]))
     assert r.status_code == 201
+
+
+# ─── Удаление участника старостой и модератором ───
+
+
+async def test_starosta_removes_member(ctx: Ctx, monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.core.services import queue as queue_service
+
+    sent: list[Any] = []
+
+    async def notify(_s: object, uid: Any, text: str, _b: object) -> None:
+        sent.append((uid, text))
+
+    monkeypatch.setattr(queue_service, "telegram_notify", notify)
+    c, ids, maker = ctx
+    r = await c.delete(f"/groups/241-327/students/{ids['student']}", headers=_auth(ids["starosta"]))
+    assert r.status_code == 204
+    assert ids["student"] not in await _roles(maker)
+    assert sent and sent[0][0] == ids["student"] and "241-327" in sent[0][1]
+    async with maker() as s:
+        actions = (await s.execute(select(AuditLog.action))).scalars().all()
+    assert "student_removed" in actions
+
+    # Заявку тоже можно убрать этим же действием
+    r = await c.delete(
+        f"/groups/241-327/students/{ids['applicant']}", headers=_auth(ids["starosta"])
+    )
+    assert r.status_code == 204
+
+
+async def test_remove_permissions(ctx: Ctx, monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.core.services import queue as queue_service
+
+    async def notify(*_a: object) -> None:
+        return None
+
+    monkeypatch.setattr(queue_service, "telegram_notify", notify)
+    c, ids, maker = ctx
+    # Обычный участник и заместитель удалять не могут
+    for who in ("student", "deputy"):
+        r = await c.delete(f"/groups/241-327/students/{ids['applicant']}", headers=_auth(ids[who]))
+        assert r.status_code == 403
+    # Себя — нельзя, для этого выход
+    r = await c.delete(
+        f"/groups/241-327/students/{ids['starosta']}", headers=_auth(ids["starosta"])
+    )
+    assert r.status_code == 409 and r.json()["code"] == "REMOVE_SELF"
+    # Чужого — 404
+    r = await c.delete(f"/groups/241-327/students/{ids['newbie']}", headers=_auth(ids["starosta"]))
+    assert r.status_code == 404
+
+    # Модератор удаляет даже старосту — роль переходит заместителю
+    r = await c.delete(
+        f"/groups/241-327/students/{ids['starosta']}", headers=_auth(ids["moderator"])
+    )
+    assert r.status_code == 204
+    roles = await _roles(maker)
+    assert ids["starosta"] not in roles
+    assert roles[ids["deputy"]] == ("starosta", True)
+    async with maker() as s:
+        actions = (await s.execute(select(AuditLog.action))).scalars().all()
+    assert "student_removed_by_moderator" in actions

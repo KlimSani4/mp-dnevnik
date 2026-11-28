@@ -184,6 +184,20 @@ async def verify_student(
     return await group_service.verify_student(code, user_id, user.id)
 
 
+@router.delete("/{code}/students/{user_id}", status_code=204)
+async def remove_student(
+    code: str,
+    user_id: uuid.UUID,
+    user: CurrentUser,
+    db: DBSession,
+) -> None:
+    """Удалить участника: староста — из своей группы, модератор — из любой.
+
+    Себя — нельзя (409 REMOVE_SELF, для этого выход); старосту — только модератор.
+    """
+    await GroupService(db).remove_student(code, user_id, user.id)
+
+
 @router.post("/{code}/reject/{user_id}", status_code=204)
 async def reject_student(
     code: str,

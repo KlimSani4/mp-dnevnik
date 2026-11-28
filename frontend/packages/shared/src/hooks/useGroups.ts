@@ -147,6 +147,21 @@ export function useRejectStudent() {
   })
 }
 
+/** Удалить участника из группы: староста или модератор платформы */
+export function useRemoveStudent() {
+  const api = useApi()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ code, userId }: { code: string; userId: string }) =>
+      api.groups.removeStudent(code, userId),
+    onSuccess: (_data, { code }) => {
+      queryClient.invalidateQueries({ queryKey: ['groups', code, 'students'] })
+      queryClient.invalidateQueries({ queryKey: ['moderation'] })
+    },
+  })
+}
+
 export function useChangeStudentRole() {
   const api = useApi()
   const queryClient = useQueryClient()

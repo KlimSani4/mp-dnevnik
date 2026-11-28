@@ -27,6 +27,7 @@ export {
   useCreateGroup,
   useJoinGroup,
   useLeaveGroup,
+  useRemoveStudent,
   useGroupInvite,
   useResetInvite,
   useInvitePreview,

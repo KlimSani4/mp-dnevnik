@@ -326,6 +326,63 @@ class GroupService:
         )
         await self.session.commit()
 
+    async def remove_student(
+        self,
+        group_code: str,
+        target_user_id: uuid.UUID,
+        admin_id: uuid.UUID,
+    ) -> None:
+        """Удалить участника из группы: староста — из своей, модератор — из любой.
+
+        Для удалённого всё как при выходе (#157): отметки заданий, прогресс и правки пар
+        группы пропадают, личные события остаются. Себя удалить нельзя — для этого
+        «Выйти». Удалить старосту может только модератор; роль тогда переходит
+        заместителю. Удалённому приходит сообщение в Telegram.
+        """
+        group = await self._find_group(group_code)
+        if not group:
+            raise NotFoundError(f"Group {group_code} not found")
+        by_moderator = await self._authorize(
+            group,
+            admin_id,
+            (StudentRole.STAROSTA,),
+            "Only the group head can remove members",
+        )
+        if target_user_id == admin_id:
+            raise ConflictError("Use leave to exit the group yourself", code="REMOVE_SELF")
+
+        await self._lock_user(target_user_id)
+        student = await self.student_repo.get_by_user_and_group(target_user_id, group.id)
+        if not student:
+            raise NotFoundError("Student not found in this group")
+        if student.role == StudentRole.STAROSTA and not by_moderator:
+            raise AuthorizationError("Only a platform moderator can remove the group head")
+
+        student_id, code = student.id, group.code
+        await self._leave(student, group, target_user_id)
+        await self.audit_repo.log(
+            action=self._audit_action("student_removed", by_moderator),
+            user_id=admin_id,
+            resource="student",
+            resource_id=str(student_id),
+        )
+        await self.session.commit()
+        logger.info("Student removed from group", extra={"group_code": code})
+
+        try:
+            from src.core.services.queue import telegram_notify
+
+            await telegram_notify(
+                self.session,
+                target_user_id,
+                f"Вас удалили из группы <b>{code}</b>. Личные события в расписании "
+                "сохранены. Если это ошибка — напишите старосте; вступить заново можно "
+                "в /settings.",
+                [],
+            )
+        except Exception:  # noqa: BLE001 — сообщение не важнее самого удаления
+            logger.warning("Failed to notify removed student", exc_info=True)
+
     async def get_group_students_with_users(self, group_code: str) -> list[StudentWithContact]:
         """Участники и заявки группы с контактом Telegram — для старосты (#148).
 

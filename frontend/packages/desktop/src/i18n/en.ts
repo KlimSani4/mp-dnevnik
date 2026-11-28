@@ -305,6 +305,16 @@ export const en: Messages = {
   'join.invalid': 'The group head reset it or the link has a typo. Ask for a new one or find the group manually.',
   'join.pickManually': 'Choose a group',
 
+  // Removing a member by the group head or a moderator
+  'members.remove': 'Remove',
+  'members.removeTitle': 'Remove {name} from the group?',
+  'members.removeData': 'Their task marks, subject progress and class edits in {code} will be removed.',
+  'members.removePersonal': 'Personal events in their schedule are kept.',
+  'members.removeNotify': 'They get a Telegram message and can only come back with a new request.',
+  'members.removeStarosta': 'This is the group head: the role goes to the deputy if there is one.',
+  'members.removeConfirm': 'Remove from group',
+  'members.removeError': 'Could not remove. Refresh the page and try again.',
+
   // roles
   'roles.deputy': 'Deputy',
   'roles.starosta': 'Group head',

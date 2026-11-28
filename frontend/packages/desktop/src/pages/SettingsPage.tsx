@@ -460,6 +460,7 @@ export function SettingsPage() {
                     code={moderatedGroupCode}
                     canReview={canReview}
                     canManageRoles={primaryGroup?.role === 'starosta'}
+                    canRemove={primaryGroup?.role === 'starosta' && !!primaryGroup.verified}
                   />
                 </div>
               )}

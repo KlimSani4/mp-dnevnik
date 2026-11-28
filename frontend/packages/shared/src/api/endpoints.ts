@@ -145,6 +145,10 @@ export function createGroupsApi(client: ApiClient) {
     reject(code: string, userId: string) {
       return client.post<void>(`/groups/${code}/reject/${userId}`)
     },
+    /** Удалить участника: староста — из своей группы, модератор — из любой */
+    removeStudent(code: string, userId: string) {
+      return client.delete<void>(`/groups/${encodeURIComponent(code)}/students/${userId}`)
+    },
     getSubjects(code: string) {
       return client.get<Subject[]>(`/groups/${code}/subjects`)
     },
