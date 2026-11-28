@@ -444,6 +444,15 @@ export const en: Messages = {
   'subjects.tags.placeholder': 'coding, infosec, core…',
   'subjects.tags.remove': 'Remove tag',
 
+  // Subjects: errors and read-only mode
+  'subjects.readOnly': 'Your group request is not approved yet: you can view subjects, and mark works, add works, materials and tags once the group head approves you.',
+  'subjects.err.network': 'No connection to the server. Check your internet and try again.',
+  'subjects.err.notMember': 'You are not a member of this group. Choose a group in Settings.',
+  'subjects.err.notFound': 'Group or subject not found.',
+  'subjects.err.server': 'The server returned an error. Try again later — contact support if it keeps happening.',
+  'subjects.err.devMigrations': 'Locally: migrations are probably not applied — run “alembic upgrade head” in backend and restart uvicorn.',
+  'subjects.err.retry': 'Try again',
+
   // roles
   'roles.deputy': 'Deputy',
   'roles.starosta': 'Group head',

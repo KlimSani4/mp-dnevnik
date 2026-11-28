@@ -8,7 +8,7 @@ import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { format, parseISO, differenceInCalendarDays } from 'date-fns'
-import { useGroupContext, useSubjectList } from '@nexora/shared'
+import { ApiClientError, useGroupContext, useSubjectList } from '@nexora/shared'
 import type { SemesterOption, SubjectList, SubjectSummary } from '@nexora/shared'
 import { Card, Icon, Skeleton } from '../components/ui'
 import { applyFilters, readFilters, SubjectFilters, type Filters } from '../components/SubjectFilters'
@@ -74,6 +74,8 @@ export function SubjectsPage() {
         </p>
       </div>
 
+      {data && !data.can_write && <ReadOnlyNote />}
+
       {semesters.length > 0 && (
         <SemesterFilter semesters={semesters} selected={selected} onSelect={setSemester} />
       )}
@@ -87,7 +89,7 @@ export function SubjectsPage() {
           {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-44 rounded-xl" />)}
         </div>
       ) : query.isError ? (
-        <Card className="py-10 text-center text-sm text-surface-500 dark:text-surface-400">{t('subjects.loadError')}</Card>
+        <LoadError error={query.error} onRetry={() => query.refetch()} />
       ) : data && data.subjects.length > 0 && shown.length === 0 ? (
         <Card className="py-12 text-center">
           <p className="font-medium text-surface-600 dark:text-surface-300">{t('subjects.filter.nothing')}</p>
@@ -290,4 +292,37 @@ function SubjectCard({ subject: s, semester, activeTags }: { subject: SubjectSum
 
 export function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',')
+}
+
+export function ReadOnlyNote() {
+  const { t } = useT()
+  return (
+    <div className="mb-4 rounded-lg bg-warning-50 px-4 py-2.5 text-sm text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
+      {t('subjects.readOnly')}
+    </div>
+  )
+}
+
+/** Почему не загрузилось — по ответу сервера, а не одно «не удалось» на всё. */
+export function LoadError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const { t } = useT()
+  const e = error instanceof ApiClientError ? error : null
+  let text = t('subjects.err.network')
+  if (e?.code === 'NOT_MEMBER') text = t('subjects.err.notMember')
+  else if (e?.status === 404) text = t('subjects.err.notFound')
+  else if (e && e.status >= 500) text = t('subjects.err.server')
+  else if (e) text = t('subjects.err.generic')
+  return (
+    <Card className="py-10 text-center">
+      <p className="text-sm text-surface-600 dark:text-surface-300">{text}</p>
+      {import.meta.env.DEV && e && e.status >= 500 && (
+        <p className="mt-2 text-xs text-surface-400">{t('subjects.err.devMigrations')}</p>
+      )}
+      {e?.code !== 'NOT_MEMBER' && (
+        <button type="button" onClick={onRetry} className="mt-3 text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">
+          {t('subjects.err.retry')}
+        </button>
+      )}
+    </Card>
+  )
 }

@@ -63,6 +63,7 @@ class SubjectSummary(BaseModel):
 
 class SubjectList(BaseModel):
     group_code: str
+    can_write: bool = True
     current_semester: int | None
     selected_semester: int | None
     semesters: list[SemesterOption]
@@ -180,6 +181,7 @@ class LectureLink(BaseModel):
 class SubjectDetail(SubjectSummary):
     group_code: str | None
     can_moderate: bool
+    can_write: bool = True
     schedule: list[ScheduleSlot]
     works: list[WorkView]
     materials_list: list[MaterialView]

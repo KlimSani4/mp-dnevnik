@@ -19,7 +19,7 @@ import type {
   WorkKind,
 } from '@nexora/shared'
 import { Button, Card, Icon, Input, Modal, Skeleton } from '../components/ui'
-import { DeadlineChip, fmt } from './SubjectsPage'
+import { DeadlineChip, fmt, LoadError, ReadOnlyNote } from './SubjectsPage'
 import { useT, type MessageKey } from '../i18n'
 
 const WEEKDAYS: MessageKey[] = ['wd.mon', 'wd.tue', 'wd.wed', 'wd.thu', 'wd.fri', 'wd.sat', 'wd.sun' as MessageKey]
@@ -56,7 +56,7 @@ export function SubjectPage() {
     return <div>{back}<Skeleton className="h-28 rounded-xl" /><div className="mt-4 grid gap-3 sm:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div></div>
   }
   if (!s) {
-    return <div>{back}<Card className="py-10 text-center text-sm text-surface-500">{t('subjects.notFound')}</Card></div>
+    return <div>{back}<LoadError error={query.error} onRetry={() => query.refetch()} /></div>
   }
 
   const pending = s.works.filter((w) => w.status === 'pending').length + s.materials_list.filter((m) => m.status === 'pending').length
@@ -79,8 +79,10 @@ export function SubjectPage() {
             </span>
           )}
         </div>
-        <TagEditor detail={s} semester={semester} busy={action.isPending} run={run} />
+        <TagEditor detail={s} semester={semester} busy={action.isPending} run={run} readOnly={!s.can_write} />
       </div>
+
+      {!s.can_write && <ReadOnlyNote />}
 
       {action.error && !workForm && !materialForm && (
         <div role="alert" className="rounded-lg bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
@@ -108,14 +110,14 @@ export function SubjectPage() {
       {/* Работы */}
       <Section
         title={t('subjects.works')}
-        action={<Button size="sm" variant="secondary" icon={<Icon name="plus" size={14} />} onClick={() => setWorkForm('new')}>{t('subjects.addWork')}</Button>}
+        action={s.can_write && <Button size="sm" variant="secondary" icon={<Icon name="plus" size={14} />} onClick={() => setWorkForm('new')}>{t('subjects.addWork')}</Button>}
       >
         {s.works.length === 0 ? (
           <Empty text={t('subjects.worksEmpty')} />
         ) : (
           <ul className="divide-y divide-surface-100 dark:divide-surface-700">
             {s.works.map((w) => (
-              <WorkRow key={w.id} w={w} canModerate={s.can_moderate} busy={action.isPending} run={run} onEdit={() => setWorkForm(w)} />
+              <WorkRow key={w.id} w={w} canModerate={s.can_moderate} readOnly={!s.can_write} busy={action.isPending} run={run} onEdit={() => setWorkForm(w)} />
             ))}
           </ul>
         )}
@@ -125,7 +127,7 @@ export function SubjectPage() {
         {/* Материалы */}
         <Section
           title={t('subjects.materials')}
-          action={<Button size="sm" variant="secondary" icon={<Icon name="plus" size={14} />} onClick={() => setMaterialForm('new')}>{t('subjects.add')}</Button>}
+          action={s.can_write && <Button size="sm" variant="secondary" icon={<Icon name="plus" size={14} />} onClick={() => setMaterialForm('new')}>{t('subjects.add')}</Button>}
         >
           {s.materials_list.length === 0 ? (
             <Empty text={t('subjects.materialsEmpty')} />
@@ -139,7 +141,7 @@ export function SubjectPage() {
         </Section>
 
         {/* Лекции */}
-        <Section title={t('subjects.lectures')} action={<Button size="sm" variant="ghost" onClick={() => setMaterialForm('new')}>{t('subjects.addRecording')}</Button>}>
+        <Section title={t('subjects.lectures')} action={s.can_write && <Button size="sm" variant="ghost" onClick={() => setMaterialForm('new')}>{t('subjects.addRecording')}</Button>}>
           {s.lectures.length === 0 ? (
             <Empty text={t('subjects.lecturesEmpty')} />
           ) : (
@@ -298,7 +300,7 @@ function ModerationButtons({ status, isMine, canModerate, busy, onApprove, onEdi
   )
 }
 
-function WorkRow({ w, canModerate, busy, run, onEdit }: { w: SubjectWorkView; canModerate: boolean; busy: boolean; run: (a: SubjectAction) => void; onEdit: () => void }) {
+function WorkRow({ w, canModerate, readOnly, busy, run, onEdit }: { w: SubjectWorkView; canModerate: boolean; readOnly: boolean; busy: boolean; run: (a: SubjectAction) => void; onEdit: () => void }) {
   const { t } = useT()
   const [points, setPoints] = useState(w.points != null ? String(w.points) : '')
   useEffect(() => setPoints(w.points != null ? String(w.points) : ''), [w.points])
@@ -313,7 +315,7 @@ function WorkRow({ w, canModerate, busy, run, onEdit }: { w: SubjectWorkView; ca
     <li className={clsx('flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3', !approved && 'bg-warning-50/40 dark:bg-warning-500/5')}>
       <button
         type="button"
-        disabled={!approved || busy}
+        disabled={!approved || busy || readOnly}
         aria-pressed={w.passed}
         title={t(w.passed ? 'subjects.unmarkPassed' : 'subjects.markPassed')}
         onClick={() => run({ type: 'progress', workId: w.id, passed: !w.passed, points: w.passed ? null : w.points })}
@@ -346,6 +348,7 @@ function WorkRow({ w, canModerate, busy, run, onEdit }: { w: SubjectWorkView; ca
       {approved && (
         <label className="flex shrink-0 items-center gap-1 text-sm tabular-nums">
           <input
+            disabled={readOnly}
             inputMode="decimal"
             value={points}
             onChange={(e) => setPoints(e.target.value)}
@@ -527,7 +530,7 @@ function RequirementEditor({ code, subjectId, current }: { code: string; subject
   )
 }
 
-function TagEditor({ detail, semester, busy, run }: { detail: SubjectDetail; semester: number | null; busy: boolean; run: (a: SubjectAction) => void }) {
+function TagEditor({ detail, semester, busy, run, readOnly }: { detail: SubjectDetail; semester: number | null; busy: boolean; run: (a: SubjectAction) => void; readOnly: boolean }) {
   const { t } = useT()
   const { groupCode } = useGroupContext()
   const list = useSubjectList(groupCode, semester ?? null).data
@@ -559,7 +562,7 @@ function TagEditor({ detail, semester, busy, run }: { detail: SubjectDetail; sem
           ) : <span className="w-1" />}
         </span>
       ))}
-      {!adding ? (
+      {readOnly ? null : !adding ? (
         <button type="button" onClick={() => setAdding(true)} className="rounded-full border border-dashed border-surface-300 px-2.5 py-0.5 text-xs text-surface-500 hover:border-primary-400 hover:text-primary-600 dark:border-surface-600">
           + {t(detail.tags.length ? 'subjects.tags.add' : 'subjects.tags.addFirst')}
         </button>

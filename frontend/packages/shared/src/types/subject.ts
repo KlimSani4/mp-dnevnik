@@ -53,6 +53,7 @@ export interface SubjectSummary {
 
 export interface SubjectList {
   group_code: string
+  can_write: boolean
   current_semester: number | null
   selected_semester: number | null
   semesters: SemesterOption[]
@@ -112,6 +113,8 @@ export interface SubjectLectureLink {
 export interface SubjectDetail extends SubjectSummary {
   group_code: string | null
   can_moderate: boolean
+  /** false — заявка в группу не подтверждена: только просмотр */
+  can_write: boolean
   schedule: SubjectScheduleSlot[]
   works: SubjectWorkView[]
   materials_list: SubjectMaterialView[]

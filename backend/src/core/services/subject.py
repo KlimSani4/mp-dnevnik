@@ -1,8 +1,8 @@
 """Раздел «Предметы» (#165): семестры, работы, материалы, личный учёт.
 
 Кто что может:
-- смотреть — подтверждённые участники группы и модератор платформы; личный предмет —
-  только его владелец;
+- смотреть — участники группы (и с неподтверждённой заявкой: расписание они тоже
+  видят) и модератор платформы; личный предмет — только его владелец;
 - добавлять работы и материалы — любой подтверждённый участник: от старосты,
   заместителя или помощника (и модератора) — сразу видно всем, от остальных — после
   подтверждения ведущим. Автор видит своё предложение с пометкой «на проверке»;
@@ -95,6 +95,11 @@ class Viewer:
     group: Group | None
     is_host: bool
     current_semester: int | None
+    can_write: bool = True
+
+    def require_write(self) -> None:
+        if not self.can_write:
+            raise AuthorizationError("Your group request is not approved yet", code="NOT_VERIFIED")
 
 
 def _in_semester(item_semester: int | None, selected: int | None) -> bool:
@@ -120,14 +125,18 @@ class SubjectService:
                 select(Student).where(Student.user_id == user.id, Student.group_id == group.id)
             )
         ).scalar_one_or_none()
+        if student is None and not user.is_moderator:
+            raise AuthorizationError("Only group members can see subjects", code="NOT_MEMBER")
         verified = bool(student and student.verified)
-        if not verified and not user.is_moderator:
-            raise AuthorizationError("Only approved group members can see subjects")
-        is_host = user.is_moderator or bool(
-            student and student.verified and student.role in HOST_ROLES
-        )
+        is_host = user.is_moderator or bool(verified and student and student.role in HOST_ROLES)
         term = term_for(group.code, moscow_today())
-        return Viewer(user, group, is_host, term.semester if term else None)
+        return Viewer(
+            user,
+            group,
+            is_host,
+            term.semester if term else None,
+            can_write=verified or user.is_moderator,
+        )
 
     async def _subject_viewer(self, subject_id: uuid.UUID, user: User) -> tuple[Subject, Viewer]:
         subject = await self.session.get(Subject, subject_id)
@@ -183,6 +192,7 @@ class SubjectService:
         group_tags = await self._group_tags([s.id for s in subjects])
         used = {t.key for t in group_tags}
         return SubjectList(
+            can_write=viewer.can_write,
             group_tags=group_tags,
             tag_suggestions=[p for p in TAG_PRESETS if p.lower() not in used],
             group_code=group.code,
@@ -518,6 +528,7 @@ class SubjectService:
             **summary.model_dump(),
             group_code=viewer.group.code if viewer.group else None,
             can_moderate=viewer.is_host,
+            can_write=viewer.can_write,
             schedule=slots,
             works=works,
             materials_list=[
@@ -534,7 +545,8 @@ class SubjectService:
         self, subject_id: uuid.UUID, tags: list[str], user: User, semester: int | None = None
     ) -> SubjectDetail:
         """Поставить теги. Уже стоящие (без учёта регистра) пропускаются."""
-        subject, _ = await self._subject_viewer(subject_id, user)
+        subject, viewer = await self._subject_viewer(subject_id, user)
+        viewer.require_write()
         existing = {
             t.key
             for t in (
@@ -587,6 +599,7 @@ class SubjectService:
 
     async def add_work(self, subject_id: uuid.UUID, data: WorkIn, user: User) -> SubjectDetail:
         subject, viewer = await self._subject_viewer(subject_id, user)
+        viewer.require_write()
         work = SubjectWork(
             subject_id=subject.id,
             semester=data.semester or viewer.current_semester or subject.last_semester,
@@ -652,7 +665,8 @@ class SubjectService:
         return await self.detail(work.subject_id, user, work.semester)
 
     async def set_progress(self, work_id: uuid.UUID, data: ProgressIn, user: User) -> SubjectDetail:
-        work, _ = await self._work(work_id, user)
+        work, viewer = await self._work(work_id, user)
+        viewer.require_write()
         if work.status != ContentStatus.APPROVED:
             raise NotFoundError("Work not found")
         progress = (
@@ -678,6 +692,7 @@ class SubjectService:
         self, subject_id: uuid.UUID, data: MaterialIn, user: User
     ) -> SubjectDetail:
         subject, viewer = await self._subject_viewer(subject_id, user)
+        viewer.require_write()
         material = SubjectMaterial(
             subject_id=subject.id,
             semester=data.semester or viewer.current_semester or subject.last_semester,

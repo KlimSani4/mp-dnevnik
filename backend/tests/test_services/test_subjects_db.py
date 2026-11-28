@@ -144,9 +144,26 @@ async def test_list_filters_by_semester(ctx: Ctx) -> None:
 
 async def test_access(ctx: Ctx) -> None:
     c, ids, _ = ctx
-    for who in ("pending", "outsider"):
-        assert (await c.get(f"/subjects?group={CODE}", headers=_auth(ids[who]))).status_code == 403
-        assert (await c.get(f"/subjects/{ids['nets']}", headers=_auth(ids[who]))).status_code == 403
+    r = await c.get(f"/subjects?group={CODE}", headers=_auth(ids["outsider"]))
+    assert r.status_code == 403 and r.json()["code"] == "NOT_MEMBER"
+    assert (
+        await c.get(f"/subjects/{ids['nets']}", headers=_auth(ids["outsider"]))
+    ).status_code == 403
+
+    # Заявка ещё не подтверждена: смотреть можно, добавлять — нет
+    r = await c.get(f"/subjects?group={CODE}", headers=_auth(ids["pending"]))
+    assert r.status_code == 200 and r.json()["can_write"] is False
+    r = await c.get(f"/subjects/{ids['nets']}", headers=_auth(ids["pending"]))
+    assert r.status_code == 200 and r.json()["can_write"] is False
+    for path, body in (
+        ("works", {"kind": "lab", "title": "x"}),
+        ("materials", {"kind": "theory", "title": "x", "url": "https://a.b/c"}),
+        ("tags", {"tags": ["x"]}),
+    ):
+        r = await c.post(
+            f"/subjects/{ids['nets']}/{path}", json=body, headers=_auth(ids["pending"])
+        )
+        assert r.status_code == 403 and r.json()["code"] == "NOT_VERIFIED", path
     assert (await c.get(f"/subjects?group={CODE}", headers=_auth(ids["mod"]))).status_code == 200
     r = await c.get(f"/subjects/{ids['mine']}", headers=_auth(ids["boris"]))
     assert r.status_code == 404
